@@ -1,0 +1,8 @@
+{
+  "appId": "app.voltio.electronica",
+  "appName": "Voltio",
+  "webDir": "www",
+  "android": {
+    "backgroundColor": "#EEF2F5"
+  }
+}
