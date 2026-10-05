@@ -122,13 +122,128 @@ const Widgets = (() => {
       svg: (p, o) => { let d = 'M20 110'; for (let k = 0; k < 4; k++) { const x = 20 + k * 60, w = 60 * p.D / 100; d += `V${p.D > 0 ? 50 : 110}H${x + w}V110H${x + 60}`; }
         return `<svg viewBox="0 0 300 170" class="viz"><path d="${d}" fill="none" stroke="var(--led)" stroke-width="3"/><path d="M20 ${110 - 60 * p.D / 100}H260" stroke="var(--muted)" stroke-dasharray="4 4"/>
           <text x="20" y="40" class="vizsm">5 V</text><text x="20" y="128" class="vizsm">0 V</text><g transform="translate(275 80)">${ledBulb(o.b)}</g>
-          <text x="20" y="155" class="vizlab">Ciclo de trabajo ${p.D} % · media ${fV(o.avg)} · analogWrite(${Math.round(p.D * 2.55)})</text></svg>`; }
+          <text x="12" y="155" class="vizlab">Ciclo ${p.D} % · media ${fV(o.avg)} · analogWrite(${Math.round(p.D * 2.55)})</text></svg>`; }
     },
+    /* --- m12 Microcontroladores --- */
+    mc_wrap: {
+      calc: p => { const m = 2 ** (p.bits || 8), v = Math.round(p.v), s = ((v % m) + m) % m; return { s, laps: Math.floor(v / m), trick: s === 4 && v > 255 ? 1 : 0 }; },
+      svg: (p, o) => {
+        const m = 2 ** (p.bits || 8), v = Math.round(p.v), cx = 218, cy = 80, r = 58, ang = x => x / m * 2 * Math.PI - Math.PI / 2;
+        let ticks = '';
+        for (let k = 0; k < 16; k++) { const b = ang(k * m / 16), r1 = k % 4 ? r - 5 : r - 10; ticks += `<path d="M${(cx + Math.cos(b) * r1).toFixed(1)} ${(cy + Math.sin(b) * r1).toFixed(1)}L${(cx + Math.cos(b) * r).toFixed(1)} ${(cy + Math.sin(b) * r).toFixed(1)}" stroke="var(--muted)" stroke-width="2"/>`; }
+        const lab = [0, 1, 2, 3].map(k => { const b = ang(k * m / 4); return `<text x="${(cx + Math.cos(b) * (r + 13)).toFixed(1)}" y="${(cy + Math.sin(b) * (r + 13) + 4).toFixed(1)}" text-anchor="middle" class="vizsm">${k * m / 4}</text>`; }).join('');
+        const a = ang(o.s), bad = o.s !== v;
+        return `<svg viewBox="0 0 300 170" class="viz"><circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="currentColor" stroke-width="2.5"/>${ticks}${lab}
+          <path d="M${cx} ${cy}L${(cx + Math.cos(a) * (r - 14)).toFixed(1)} ${(cy + Math.sin(a) * (r - 14)).toFixed(1)}" stroke="var(--led)" stroke-width="4" stroke-linecap="round"/><circle cx="${cx}" cy="${cy}" r="4" fill="var(--led)"/>
+          <text x="10" y="30" class="vizsm">Intentas guardar</text><text x="10" y="56" class="vizbig" style="font-size:24px">${v}</text>
+          <text x="10" y="86" class="vizsm">El byte guarda</text><text x="10" y="112" class="vizbig" style="font-size:24px;fill:${bad ? 'var(--err)' : 'var(--ok)'}">${o.s}</text>
+          <text x="10" y="160" class="vizlab">${o.laps ? `Ha dado ${o.laps} vuelta${o.laps > 1 ? 's' : ''}: se pierden ${o.laps * m}` : `Cabe: un byte va de 0 a ${m - 1}`}</text></svg>`;
+      }
+    },
+    mc_bounce: (() => {
+      // Dos pulsaciones reales con sus rebotes (instantes en ms en que cambia la lectura del pin)
+      const TG = [15, 15.8, 17, 18.2, 19, 21.5, 22.3, 60, 61, 62.5, 85, 85.6, 86.8, 87.5, 88.9, 130, 131, 132], END = 150;
+      const raw = t => { let v = 1; for (const x of TG) { if (t >= x) v ^= 1; else break; } return v; };
+      const X = t => (10 + t / END * 280).toFixed(1);
+      const path = (ch, yh, yl) => { let v = 1, d = `M10 ${yh}`; for (const t of ch) { v ^= 1; d += `H${X(t)}V${v ? yh : yl}`; } return d + 'H290'; };
+      return {
+        calc: p => { let acc = 1, tl = -1e9, n = 0; const ch = []; for (let i = 0; i <= END * 10; i++) { const t = i / 10, r = raw(t); if (r !== acc && t - tl > p.T) { acc = r; tl = t; ch.push(t); if (!r) n++; } } return { n, ch }; },
+        svg: (p, o) => {
+          const lock = p.T > 0 ? o.ch.map(c => `<rect x="${X(c)}" y="94" width="${(Math.min(c + p.T, END) - c) / END * 280}" height="44" fill="var(--ice)" opacity=".25"/>`).join('') : '';
+          return `<svg viewBox="0 0 300 170" class="viz"><text x="10" y="16" class="vizsm">Lo que lee el pin (con rebotes)</text><text x="290" y="16" text-anchor="end" class="vizsm">0–150 ms</text>
+            <path d="${path(TG, 26, 62)}" fill="none" stroke="var(--led)" stroke-width="2"/>
+            <text x="10" y="88" class="vizsm">Lo que acepta (sombreado: se ignora)</text>${lock}
+            <path d="${path(o.ch, 100, 134)}" fill="none" stroke="var(--ok)" stroke-width="2.5"/>
+            <text x="10" y="162" class="vizlab" style="fill:${o.n === 2 ? 'var(--ok)' : 'var(--err)'}">Detectadas: ${o.n} · reales: 2</text></svg>`;
+        }
+      };
+    })(),
     zener: {
       calc: p => { const Vout = p.Vin <= p.Vz ? p.Vin * 0.98 : p.Vz + (p.Vin - p.Vz) * 0.01; return { Vout, Iz: Math.max(0, (p.Vin - p.Vz) / 220) }; },
       svg: (p, o) => `<svg viewBox="0 0 300 170" class="viz">${hbar(40, 60, 220, p.Vin / 12, '#3E8FCB', 'Entrada ' + fV(p.Vin))}${hbar(40, 110, 220, o.Vout / 12, '#F2A900', 'Salida ' + fV(o.Vout))}
         <path d="M${40 + 220 * p.Vz / 12} 40V130" stroke="var(--err)" stroke-dasharray="4 4"/><text x="${40 + 220 * p.Vz / 12}" y="150" text-anchor="middle" class="vizsm">Vz ${fV(p.Vz)}</text>
         <text x="40" y="165" class="vizsm">Corriente por el zener ${fI(o.Iz)}</text></svg>`
+    },
+    /* --- Curso base ampliado: alterna, bobinas, osciloscopio y Schmitt --- */
+    lcResonance: {
+      calc: p => { const L = p.L * 1e-6, C = p.C * 1e-12; const f0 = 1 / (2 * Math.PI * Math.sqrt(L * C)), Q = Math.sqrt(L / C) / p.R; return { f0, Q, BW: f0 / Q }; },
+      svg: (p, o) => {
+        const lo = 5, hi = Math.log10(2e7), X = f => 30 + 255 * (Math.log10(f) - lo) / (hi - lo), Y = a => 140 - 110 * a;
+        const fs = []; for (let i = 0; i <= 140; i++) fs.push(10 ** (lo + (hi - lo) * i / 140));
+        fs.push(o.f0, o.f0 * (1 + 0.5 / o.Q), o.f0 / (1 + 0.5 / o.Q)); fs.sort((a, b) => a - b);
+        const pts = fs.map(f => { const d = f / o.f0 - o.f0 / f; return `${X(f).toFixed(1)},${Y(1 / Math.sqrt(1 + o.Q * o.Q * d * d)).toFixed(1)}`; }).join(' ');
+        const fH = f => f >= 1e6 ? num(f / 1e6, 2) + ' MHz' : num(f / 1e3, f >= 1e5 ? 0 : 1) + ' kHz';
+        const band = o.f0 >= 0.526e6 && o.f0 <= 1.7e6 ? ' · onda media' : o.f0 >= 3e6 ? ' · onda corta' : '';
+        return `<svg viewBox="0 0 300 175" class="viz"><path d="M30 25V140H288" ${st} stroke-width="1.5"/>
+          ${[1e5, 1e6, 1e7].map(f => `<path d="M${X(f).toFixed(1)} 140v4" stroke="currentColor"/><text x="${X(f).toFixed(1)}" y="156" text-anchor="middle" class="vizsm">${fH(f)}</text>`).join('')}
+          <polyline points="${pts}" fill="none" stroke="var(--led)" stroke-width="2.5"/>
+          <path d="M${X(o.f0).toFixed(1)} 30V140" stroke="var(--muted)" stroke-dasharray="4 4"/>
+          <text x="34" y="18" class="vizlab">f₀ = ${fH(o.f0)}${band}</text>
+          <text x="34" y="172" class="vizsm">Q = ${num(o.Q, 1)} · ancho de banda ${fH(o.BW)}</text></svg>`;
+      }
+    },
+    rlCurrent: {
+      calc: p => { const tau = p.L * 1e-3 / p.R; return { tau, tauMs: tau * 1000, If: p.V / p.R }; },
+      anim: true, restart: true,
+      svg: (p, o, t) => {
+        const fT = s => s >= 1 ? num(s, 2) + ' s' : s >= 1e-3 ? num(s * 1000, 2) + ' ms' : num(s * 1e6, 1) + ' µs';
+        const n = Math.round(Math.min(1, (t % 3.5) / 2.5) * 60);
+        const I = [], V = []; for (let i = 0; i <= 60; i++) { const e = Math.exp(-5 * i / 60); I.push(`${40 + i * 4},${(145 - 105 * (1 - e)).toFixed(1)}`); V.push(`${40 + i * 4},${(145 - 105 * e).toFixed(1)}`); }
+        return `<svg viewBox="0 0 300 175" class="viz"><path d="M40 30V145H285" ${st} stroke-width="1.5"/>
+          <polyline points="${I.join(' ')}" fill="none" stroke="var(--line)" stroke-width="2"/><polyline points="${V.join(' ')}" fill="none" stroke="var(--line)" stroke-width="1.5" stroke-dasharray="4 3"/>
+          <polyline points="${I.slice(0, n + 1).join(' ')}" fill="none" stroke="var(--led)" stroke-width="3"/><polyline points="${V.slice(0, n + 1).join(' ')}" fill="none" stroke="var(--ice)" stroke-width="2.5" stroke-dasharray="4 3"/>
+          <path d="M88 145V${(145 - 105 * 0.632).toFixed(1)}H40" stroke="var(--muted)" stroke-dasharray="2 4" fill="none"/><text x="88" y="158" text-anchor="middle" class="vizsm">τ</text><text x="280" y="158" text-anchor="end" class="vizsm">5τ</text>
+          <text x="45" y="20" class="vizlab">τ = L / R = ${fT(o.tau)} · final ${fI(o.If)}</text>
+          <text x="150" y="172" text-anchor="middle" class="vizsm">continua: corriente · discontinua: tensión en la bobina</text></svg>`;
+      }
+    },
+    scopeTrigger: {
+      calc: p => { const trig = Math.abs(p.lvl) < 2, cyc = 10 * p.tdiv; return { trig: trig ? 1 : 0, cyc, ok: trig && cyc >= 2 && cyc <= 5 ? 1 : 0 }; },
+      anim: true,
+      svg: (p, o, t) => {
+        const x0 = 20, y0 = 79, dx = 26, dy = 16; // 10 × 8 divisiones, 1 V/div
+        const ph = o.trig ? Math.asin(p.lvl / 2) : t * 2.7;
+        let d = ''; for (let i = 0; i <= 260; i += 2) { const ms = i / dx * p.tdiv, v = 2 * Math.sin(2 * Math.PI * ms + ph); d += (i ? 'L' : 'M') + (x0 + i) + ' ' + (y0 - v * dy).toFixed(1); }
+        let g = ''; for (let i = 0; i <= 10; i++) g += `<path d="M${x0 + i * dx} 15V143" stroke="var(--line)" stroke-width="${i === 5 ? 1.2 : 0.6}"/>`;
+        for (let j = 0; j <= 8; j++) g += `<path d="M20 ${15 + j * dy}H280" stroke="var(--line)" stroke-width="${j === 4 ? 1.2 : 0.6}"/>`;
+        const yl = y0 - p.lvl * dy;
+        return `<svg viewBox="0 0 300 175" class="viz">${g}<path d="${d}" fill="none" stroke="var(--ok)" stroke-width="2.2"/>
+          <path d="M20 ${yl.toFixed(1)}H280" stroke="var(--led)" stroke-dasharray="5 4"/><path d="M8 ${(yl - 5).toFixed(1)}l10 5l-10 5z" fill="var(--led)"/>
+          <text x="20" y="160" class="vizlab">${o.trig ? `Disparo estable · ${num(o.cyc, 1)} ciclos en pantalla` : 'Sin disparo: el nivel no corta la señal'}</text>
+          <text x="20" y="173" class="vizsm">1 V/div · ${num(p.tdiv, 2)} ms/div · señal de 1 kHz y 2 V de pico</text></svg>`;
+      }
+    },
+    schmittHyst: {
+      calc: p => {
+        const k = p.R1 / p.R2, up = 2.5 + 2.5 * k, dn = 2.5 - 2.5 * k, sig = [], outs = []; let out = 0, tr = 0;
+        for (let i = 0; i <= 240; i++) { const x = i / 240, u = (2 * x) % 1, v = 1.5 + 2 * (u < 0.5 ? 2 * u : 2 - 2 * u) + 0.12 * Math.sin(2 * Math.PI * 41 * x) + 0.07 * Math.sin(2 * Math.PI * 61 * x + 1.3); if (!out && v > up) { out = 1; tr++; } else if (out && v < dn) { out = 0; tr++; } sig.push(v); outs.push(out); }
+        return { up, dn, H: 5 * k, tr, clean: tr === 4 ? 1 : 0, sig, outs };
+      },
+      svg: (p, o) => {
+        const X = i => 30 + i * 1.05, Y = v => Math.max(6, Math.min(100, 95 - (v - 1) * 80 / 3));
+        const s = o.sig.map((v, i) => `${X(i).toFixed(1)},${Y(v).toFixed(1)}`).join(' ');
+        let q = ''; o.outs.forEach((b, i) => { q += (i ? 'L' : 'M') + X(i).toFixed(1) + ' ' + (b ? 112 : 136); });
+        return `<svg viewBox="0 0 300 175" class="viz"><path d="M30 6V100M30 140H285" ${st} stroke-width="1.2"/>
+          <polyline points="${s}" fill="none" stroke="var(--ice)" stroke-width="1.8"/>
+          <path d="M30 ${Y(o.up).toFixed(1)}H285" stroke="var(--err)" stroke-dasharray="5 4"/><path d="M30 ${Y(o.dn).toFixed(1)}H285" stroke="var(--ok)" stroke-dasharray="5 4"/>
+          <path d="${q}" fill="none" stroke="var(--led)" stroke-width="2.5"/>
+          <text x="2" y="56" class="vizsm">ent.</text><text x="2" y="128" class="vizsm">sal.</text>
+          <text x="8" y="156" class="vizlab">Sube a ${fV(o.up)} · baja a ${fV(o.dn)} · H ${fV(o.H)}</text>
+          <text x="30" y="171" class="vizsm">${o.tr === 4 ? 'Salida limpia: 4 cambios' : o.tr === 0 ? 'La entrada nunca llega al umbral de subida' : o.tr + ' cambios: el ruido hace rebotar la salida'}</text></svg>`;
+      }
+    },
+    zTriangle: {
+      calc: p => { const Z = Math.hypot(p.R, p.X), phi = Math.atan2(p.X, p.R) * 180 / Math.PI; return { Z, phi, aphi: Math.abs(phi) }; },
+      svg: (p, o) => {
+        const s = Math.min(0.22, 200 / Math.max(p.R, 1), 62 / Math.max(Math.abs(p.X), 1)), x0 = 40, y0 = 85, x1 = x0 + p.R * s, y1 = y0 - p.X * s;
+        const kind = p.X > 0 ? 'Inductiva: la corriente va retrasada' : p.X < 0 ? 'Capacitiva: la corriente va adelantada' : 'Resistiva pura: tensión y corriente en fase';
+        return `<svg viewBox="0 0 300 175" class="viz"><path d="M${x0} ${y0}H${x1.toFixed(1)}" stroke="var(--led)" stroke-width="4"/><path d="M${x1.toFixed(1)} ${y0}V${y1.toFixed(1)}" stroke="var(--ice)" stroke-width="4"/>
+          <path d="M${x0} ${y0}L${x1.toFixed(1)} ${y1.toFixed(1)}" stroke="currentColor" stroke-width="3"/>
+          <text x="${((x0 + x1) / 2).toFixed(1)}" y="${y0 + (p.X >= 0 ? 16 : -8)}" text-anchor="middle" class="vizsm">R ${num(p.R, 0)} Ω</text>
+          <text x="${(x1 + 6).toFixed(1)}" y="${((y0 + y1) / 2 + 4).toFixed(1)}" class="vizsm">X ${num(p.X, 0)} Ω</text>
+          <text x="20" y="20" class="vizlab">Z = ${num(o.Z, 0)} Ω · φ = ${num(o.phi, 1)}°</text>
+          <text x="20" y="168" class="vizsm">${kind}</text></svg>`;
+      }
     },
     battery: {
       calc: p => ({ h: p.mAh / p.mA }),
@@ -172,7 +287,7 @@ const Widgets = (() => {
     el.querySelectorAll('input[data-k]').forEach(inp => inp.addEventListener('input', () => {
       const k = inp.dataset.k, d = defs[k], list = d.list || (d.fmt === 'R' ? E12.filter(r => r >= (d.min || 10) && r <= (d.max || 1e6)) : null);
       p[k] = list ? list[+inp.value] : +inp.value; el.querySelector(`[data-out="${k}"]`).textContent = fmtParam(k, p[k], d); paint();
-      if (viz.anim && ex.viz === 'rc') t0 = performance.now();
+      if (viz.anim && (ex.viz === 'rc' || viz.restart)) t0 = performance.now();
     }));
     paint();
     if (viz.anim) { const loop = () => { paint(); raf = requestAnimationFrame(loop); }; raf = requestAnimationFrame(loop); }
@@ -519,7 +634,7 @@ const Widgets = (() => {
     if (ex.img) viz = IMG[ex.img].svg('');
     if (ex.gate) viz = gateSym(ex.gate);
     if (ex.svg) viz = ex.svg;
-    el.innerHTML = `<div class="info">${viz}${ex.text.split('\n').map(p => `<p>${p}</p>`).join('')}</div>`;
+    el.innerHTML = `<div class="info">${viz}${ex.text.split('\n').map(p => `<p>${p}</p>`).join('')}${ex.code ? `<pre class="code">${esc(ex.code)}</pre>` : ''}</div>`;
     let inner = null;
     if (ex.tune) { const d = document.createElement('div'); el.querySelector('.info').prepend(d); inner = tune({ viz: ex.tune.viz, params: ex.tune.params }, d, { ready() { } }); }
     ctx.ready(true);
@@ -529,5 +644,7 @@ const Widgets = (() => {
   const REG = { mc, num: numw, res: resw, sym: symw, pick, tune, meter, match, order, truth, bits, bbtap, pin, tap, bands: bandsw, info };
   function render(ex, el, ctx) { return REG[ex.t](ex, el, ctx); }
   const KIND = { mc: 'Elige la respuesta', num: 'Calcula', res: 'Lee el código de colores', sym: '¿Qué símbolo es este?', pick: 'Elige el esquema', tune: 'Experimenta', meter: 'Usa el multímetro', match: 'Une las parejas', order: 'Ordena los pasos', truth: 'Completa la tabla de verdad', bits: 'Enciende los bits', bbtap: 'Explora la protoboard', pin: 'Elige el pin', tap: 'Toca la parte correcta', bands: 'Pinta las bandas', info: 'Descubre' };
-  return { render, KIND, SCENES, VIZ, IMG };
+  // Utilidades de dibujo para que las especialidades añadan sus propias visualizaciones (Object.assign(Widgets.VIZ, …)).
+  const H = { esc, num, fR, fI, fV, st, batt, resBody, ledBulb, npnSym, flowPath, stackBar, hbar, heat, BANDHEX };
+  return { render, KIND, SCENES, VIZ, IMG, H };
 })();

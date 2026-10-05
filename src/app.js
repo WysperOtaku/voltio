@@ -1,5 +1,12 @@
 /* Voltio · aplicación (vistas, lecciones, repaso, retos, proyectos y laboratorio) */
-const ALL = UNITS.flatMap((u, ui) => u.nodes.map(n => ({ ...n, unit: u.id, ui })));
+/* Cada nodo pertenece a una secuencia: el curso base ('base') o una especialidad (su id).
+   Dentro de cada secuencia el avance es lineal; las especialidades se abren al terminar GATE_UNIT. */
+const GATE_UNIT = 'm12';
+const flatUnits = (units, track) => units.flatMap((u, ui) => u.nodes.map(n => ({ ...n, unit: u.id, ui, utitle: u.title, track: track ? track.id : null, seq: track ? track.id : 'base' })));
+const ALL = [...flatUnits(UNITS, null), ...TRACKS.flatMap(t => flatUnits(t.units, t))];
+const NODE = Object.fromEntries(ALL.map(n => [n.id, n]));
+const SEQ = {}; ALL.forEach(n => (SEQ[n.seq] = SEQ[n.seq] || []).push(n));
+const TRACK = Object.fromEntries(TRACKS.map(t => [t.id, t]));
 const LESSON = Object.fromEntries(ALL.filter(n => n.kind === 'lesson').map(n => [n.id, n]));
 
 /* ===================== ESTADO ===================== */
@@ -85,17 +92,24 @@ function repair(method) {
   S.lost = null; save(); return true;
 }
 
+// Pasos del módulo puerta que faltan para abrir las especialidades (los proyectos no cuentan)
+const gateLeft = () => UNITS.find(u => u.id === GATE_UNIT).nodes.filter(n => n.kind !== 'project' && !S.done[n.id]).length;
+const tracksOpen = () => gateLeft() === 0;
 function isUnlocked(id) {
-  const i = ALL.findIndex(n => n.id === id);
-  for (let j = i - 1; j >= 0; j--) { if (ALL[j].kind === 'project') continue; return !!S.done[ALL[j].id]; }
-  return true;
+  if (S.done[id]) return true;
+  const n = NODE[id], seq = SEQ[n.seq], i = seq.indexOf(n);
+  for (let j = i - 1; j >= 0; j--) { if (seq[j].kind === 'project') continue; return !!S.done[seq[j].id]; }
+  return n.seq === 'base' || tracksOpen();
 }
+const firstOpenIn = seq => SEQ[seq].find(n => n.kind !== 'project' && isUnlocked(n.id) && !S.done[n.id]);
 const meterAutoOn = () => !!(S.meterAuto && S.done.f6);
 
 /* ===================== IDENTIDAD ===================== */
 // Cada módulo lleva el color de la banda de su número, como en el código de colores.
 const BAND = ['#2B2B2B', '#7B4A21', '#D22B2B', '#F07D10', '#E3B505', '#2E9B3C', '#2A5BD7', '#8A3FC9', '#8A8A8A', '#ECECEC'];
 const unitColor = ui => BAND[ui % 10];
+// En las especialidades los módulos se numeran desde 1, con su banda de color.
+const nodeColor = n => n.track ? BAND[(n.ui + 1) % 10] : unitColor(n.ui);
 function unitResistor(ui) {
   const d = String(ui).padStart(2, '0').split('').map(Number);
   return `<svg viewBox="0 0 120 40" width="96" height="32" aria-hidden="true"><path d="M0 20h22M98 20h22" stroke="#9AA3B2" stroke-width="3"/><rect x="22" y="8" width="76" height="24" rx="11" fill="#E7D3A8"/>${d.map((x, i) => `<rect x="${38 + i * 14}" y="8" width="8" height="24" fill="${BAND[x]}" ${x === 9 ? 'stroke="#bbb"' : ''}/>`).join('')}<rect x="80" y="8" width="6" height="24" fill="#C9A227"/></svg>`;
@@ -147,6 +161,18 @@ const ICONS = {
   pcb: '<rect x="3" y="3" width="18" height="18" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M7 7h5v5h5v5" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="7" cy="7" r="1.8" fill="currentColor"/><circle cx="17" cy="17" r="1.8" fill="currentColor"/>',
   sim: '<rect x="2" y="5" width="20" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M6 15l4-6 3 4 2-2 3 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>',
   proj: '<path d="M14 3l7 7-11 11H3v-7z" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/><path d="M11 6l7 7" stroke="currentColor" stroke-width="2.2"/>',
+  wifi: '<path d="M2 9a15 15 0 0 1 20 0M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><circle cx="12" cy="19.5" r="1.8" fill="currentColor"/>',
+  antenna: '<path d="M12 10v12M8 22h8M12 10L6 3M12 10l6-7M12 10V2" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><path d="M4.5 8.5a9 9 0 0 1 0-6M19.5 8.5a9 9 0 0 0 0-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
+  wave: '<path d="M2 12c2.5-7 4.5-7 7 0s4.5 7 7 0 4-5 6-3" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>',
+  cloud: '<path d="M7 19h10a4.5 4.5 0 0 0 .5-9A6 6 0 0 0 6 9.5 4.8 4.8 0 0 0 7 19z" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/>',
+  code: '<path d="M8 6l-6 6 6 6M16 6l6 6-6 6M14 4l-4 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>',
+  timer: '<circle cx="12" cy="13" r="8" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M12 13V9M9 2h6M12 2v3" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>',
+  bus: '<path d="M2 7h20M2 12h20M2 17h20" stroke="currentColor" stroke-width="2"/><circle cx="7" cy="7" r="2" fill="currentColor"/><circle cx="13" cy="12" r="2" fill="currentColor"/><circle cx="18" cy="17" r="2" fill="currentColor"/>',
+  shield: '<path d="M12 2l8 3v6c0 5-3.5 9-8 11-4.5-2-8-6-8-11V5z" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/><path d="M8.5 12l2.5 2.5 4.5-5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>',
+  memory: '<rect x="3" y="7" width="18" height="10" rx="1.5" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M7 7v10M11 7v10M15 7v10M5 17v3M9 17v3M13 17v3M17 17v3" stroke="currentColor" stroke-width="1.6"/>',
+  sleep: '<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/>',
+  gauge: '<path d="M3 17a9 9 0 1 1 18 0" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><path d="M12 17l5-6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><circle cx="12" cy="17" r="2" fill="currentColor"/>',
+  rocket: '<path d="M12 2c4 3 5 8 3 13H9C7 10 8 5 12 2z" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/><circle cx="12" cy="9" r="2" fill="currentColor"/><path d="M9 15l-3 3v3l4-2M15 15l3 3v3l-4-2" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>',
   check: '<path d="M5 13l4 4 10-10" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>',
   lock: '<rect x="5" y="11" width="14" height="10" rx="2" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M8 11V8a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="2.2"/>'
 };
@@ -154,23 +180,19 @@ const ICONS = {
 /* ===================== VISTAS ===================== */
 function render() {
   header();
-  document.querySelectorAll('.nav button').forEach(b => { if (b.dataset.go === view) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current'); });
+  const navView = view === 'track' ? 'learn' : view;
+  document.querySelectorAll('.nav button').forEach(b => { if (b.dataset.go === navView) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current'); });
   if (labApi && view !== 'lab') { labApi.destroy(); labApi = null; }
-  ({ learn: renderLearn, review: renderReview, lab: renderLab, streak: renderStreak, profile: renderProfile })[view]();
+  ({ learn: renderLearn, track: renderTrack, review: renderReview, lab: renderLab, streak: renderStreak, profile: renderProfile })[view]();
 }
 
-function renderLearn() {
+/* Ruta de nodos de una lista de módulos. Los del curso base se numeran desde start; los de una especialidad, desde 1. */
+function pathHTML(units, { firstOpen, track = null, start = 0 }) {
   const offsets = [0, -70, -100, -70, 0, 70, 100, 70];
-  let html = '';
-  if (repairAvailable()) html += repairCard(true);
-  else if (S.hist[today()] !== 'done') html += `<div class="card hello"><div class="row">${chispa(S.streak ? 'happy' : 'think', 48)}<div class="grow"><h3>${S.streak > 0 ? 'Mantén encendida tu racha' : 'Enciende tu primera racha'}</h3><p style="margin:0">Completa una lección, un repaso o un reto hoy para ${S.streak > 0 ? 'llegar a ' + (S.streak + 1) + ' días' : 'empezar'}.</p></div></div></div>`;
-  const nm = Object.keys(S.miss).length;
-  if (nm) html += `<button class="card revcta" id="revcta"><span class="revn">${nm}</span><span><b>Repasa tus fallos</b><br><small>Con explicaciones distintas a la primera vez</small></span></button>`;
-  const firstOpen = ALL.find(n => n.kind !== 'project' && isUnlocked(n.id) && !S.done[n.id]);
-  let idx = 0;
-  UNITS.forEach((u, ui) => {
-    const dn = u.nodes.filter(n => S.done[n.id]).length, col = unitColor(ui);
-    html += `<section class="unit" id="u-${u.id}" style="--uc:${col}"><div class="uhead">${unitResistor(ui)}<span class="unum">Módulo ${ui}</span></div><h2>${esc(u.title)}</h2><p>${esc(u.desc)}</p><div class="uprog"><i style="width:${dn / u.nodes.length * 100}%"></i></div><small class="ucount">${dn} de ${u.nodes.length}</small></section><div class="path" style="--uc:${col}">`;
+  let html = '', idx = 0;
+  units.forEach((u, ui) => {
+    const num = track ? ui + 1 : start + ui, dn = u.nodes.filter(n => S.done[n.id]).length, col = BAND[num % 10];
+    html += `<section class="unit" id="u-${u.id}" style="--uc:${col}"><div class="uhead">${unitResistor(num)}<span class="unum">Módulo ${num}</span></div><h2>${esc(u.title)}</h2><p>${esc(u.desc)}</p><div class="uprog"><i style="width:${dn / u.nodes.length * 100}%"></i></div><small class="ucount">${dn} de ${u.nodes.length}</small></section><div class="path" style="--uc:${col}">`;
     let prevOff = null, prevDone = false;
     u.nodes.forEach(n => {
       const off = offsets[idx % offsets.length]; idx++;
@@ -184,28 +206,92 @@ function renderLearn() {
     });
     html += '</div>';
   });
-  main.innerHTML = html;
+  return html;
+}
+function bindNodes() {
   main.querySelectorAll('[data-node]').forEach(b => b.addEventListener('click', () => {
-    const n = ALL.find(x => x.id === b.dataset.node);
-    if (!isUnlocked(n.id)) { toast('Completa el paso anterior primero'); return; }
+    const n = NODE[b.dataset.node];
+    if (!isUnlocked(n.id)) { toast(n.track && !tracksOpen() ? 'Termina el módulo de Microcontroladores para abrir las especialidades' : 'Completa el paso anterior primero'); return; }
     nodeSheet(n);
   }));
+}
+
+function renderLearn() {
+  let html = '';
+  if (repairAvailable()) html += repairCard(true);
+  else if (S.hist[today()] !== 'done') html += `<div class="card hello"><div class="row">${chispa(S.streak ? 'happy' : 'think', 48)}<div class="grow"><h3>${S.streak > 0 ? 'Mantén encendida tu racha' : 'Enciende tu primera racha'}</h3><p style="margin:0">Completa una lección, un repaso o un reto hoy para ${S.streak > 0 ? 'llegar a ' + (S.streak + 1) + ' días' : 'empezar'}.</p></div></div></div>`;
+  const nm = Object.keys(S.miss).length;
+  if (nm) html += `<button class="card revcta" id="revcta"><span class="revn">${nm}</span><span><b>Repasa tus fallos</b><br><small>Con explicaciones distintas a la primera vez</small></span></button>`;
+  const firstOpen = firstOpenIn('base');
+  // El carrusel de especialidades va justo después del módulo puerta; el curso base sigue debajo.
+  const gi = UNITS.findIndex(u => u.id === GATE_UNIT);
+  html += pathHTML(UNITS.slice(0, gi + 1), { firstOpen });
+  if (TRACKS.length) html += tracksCarousel();
+  html += pathHTML(UNITS.slice(gi + 1), { firstOpen, start: gi + 1 });
+  main.innerHTML = html;
+  bindNodes();
+  bindCarousel();
   const rc = $('#revcta'); rc && (rc.onclick = () => startReview());
   bindRepair();
   if (firstOpen && !renderLearn.scrolled) { renderLearn.scrolled = true; const el = main.querySelector(`[data-node="${firstOpen.id}"]`); el && setTimeout(() => el.scrollIntoView({ block: 'center' }), 60); }
 }
 
+/* ===================== ESPECIALIDADES ===================== */
+const RANKS = [[0, 'Aprendiz'], [1, 'Iniciado'], [3, 'Técnico'], [6, 'Especialista'], [10, 'Experto']];
+function trackStats(t) {
+  const nodes = SEQ[t.id] || [], proj = nodes.filter(n => n.kind === 'project'), steps = nodes.filter(n => n.kind !== 'project');
+  const pd = proj.filter(n => S.done[n.id] === true).length, sd = steps.filter(n => S.done[n.id]).length;
+  const all = nodes.length && nodes.every(n => S.done[n.id] === true);
+  let rank = RANKS[0][1], ri = 0; RANKS.forEach(([k, r], i) => { if (pd >= k) { rank = r; ri = i; } });
+  if (all) { rank = 'Maestro'; ri = RANKS.length; }
+  return { nodes, pd, pt: proj.length, sd, st: steps.length, done: nodes.filter(n => S.done[n.id]).length, rank, ri, hours: proj.reduce((a, n) => a + ((PROJECTS[n.project] || {}).hours || 0), 0) };
+}
+function trackBadge(t, size = 44) { return `<span class="tbadge" style="--tc:${t.color};width:${size}px;height:${size}px"><svg viewBox="0 0 24 24">${ICONS[t.icon] || ICONS.chip}</svg></span>`; }
+function tracksCarousel() {
+  const open = tracksOpen(), left = gateLeft();
+  return `<section class="tracks" id="tracks" aria-label="Especialidades">
+    <div class="trhead"><h2>Especialidades</h2><p>${open ? 'Elige una y profundiza: cada una es un curso entero con muchos proyectos reales.' : `Se abren al terminar Microcontroladores. ${left === 1 ? 'Te falta 1 paso' : 'Te faltan ' + left + ' pasos'}.`}</p></div>
+    <div class="carousel" role="list">${TRACKS.map(t => {
+      const s = trackStats(t), pct = s.nodes.length ? s.done / s.nodes.length * 100 : 0;
+      return `<button class="tcard ${open ? '' : 'locked'}" role="listitem" data-track="${t.id}" style="--tc:${t.color}" aria-label="${esc(t.title)}${open ? '' : ', bloqueada'}">
+        <div class="tctop">${trackBadge(t)}${open ? `<span class="trank">${esc(s.rank)}</span>` : `<span class="tlock"><svg viewBox="0 0 24 24">${ICONS.lock}</svg></span>`}</div>
+        <h3>${esc(t.title)}</h3><p>${esc(t.desc)}</p>
+        <div class="tmeta"><span>${t.units.length} módulos</span><span>${s.pt} proyectos</span>${s.hours ? `<span>+${s.hours} h</span>` : ''}</div>
+        <div class="uprog"><i style="width:${pct}%"></i></div><small>${s.done} de ${s.nodes.length}${t.level ? ' · ' + esc(t.level) : ''}</small></button>`;
+    }).join('')}</div>
+    <p class="small trmore">Desliza para ver todas · el curso base sigue debajo</p></section>`;
+}
+function bindCarousel() { main.querySelectorAll('[data-track]').forEach(b => b.addEventListener('click', () => { curTrack = b.dataset.track; go('track'); })); }
+
+let curTrack = null;
+function renderTrack() {
+  const t = TRACK[curTrack]; if (!t) { view = 'learn'; return renderLearn(); }
+  const s = trackStats(t), open = tracksOpen(), firstOpen = open ? firstOpenIn(t.id) : null;
+  const nextRank = RANKS.find(([k]) => k > s.pd);
+  main.innerHTML = `<button class="backlink" id="tback"><svg viewBox="0 0 24 24" width="20" height="20"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>Curso base</button>
+    <section class="thero" style="--tc:${t.color}">${trackBadge(t, 56)}<div><span class="unum">Especialidad</span><h1>${esc(t.title)}</h1></div><p>${esc(t.desc)}${t.level ? `<small class="tlevel">${esc(t.level)}</small>` : ''}</p>
+      <div class="tstats"><div><b>${esc(s.rank)}</b><span>${nextRank ? `${nextRank[0] - s.pd} ${nextRank[0] - s.pd === 1 ? 'proyecto' : 'proyectos'} para ${nextRank[1]}` : s.ri === RANKS.length ? 'Especialidad completa' : 'Completa todo para Maestro'}</span></div><div><b>${s.pd}/${s.pt}</b><span>Proyectos</span></div><div><b>${s.sd}/${s.st}</b><span>Lecciones y retos</span></div></div>
+      <div class="uprog"><i style="width:${s.nodes.length ? s.done / s.nodes.length * 100 : 0}%"></i></div></section>
+    ${open ? '' : `<div class="card lockcard"><div class="row">${chispa('think', 44)}<div class="grow"><h3>Aún bloqueada</h3><p style="margin:0">Puedes echar un vistazo al temario. Se abre al terminar el módulo de Microcontroladores (${gateLeft() === 1 ? 'te falta 1 paso' : 'te faltan ' + gateLeft() + ' pasos'}).</p></div></div></div>`}
+    ${pathHTML(t.units, { firstOpen, track: t })}`;
+  $('#tback').onclick = () => go('learn', 'tracks');
+  bindNodes();
+  renderTrack.scrolled = renderTrack.scrolled || {};
+  if (firstOpen && !renderTrack.scrolled[t.id] && firstOpen !== SEQ[t.id][0]) { renderTrack.scrolled[t.id] = true; const el = main.querySelector(`[data-node="${firstOpen.id}"]`); el && setTimeout(() => el.scrollIntoView({ block: 'center' }), 60); }
+}
+
 const KINDNAME = { lesson: 'Lección', sim: 'Reto de simulador', project: 'Proyecto real', route: 'Reto de rutado' };
 function nodeSheet(n) {
-  const u = UNITS[n.ui], done = !!S.done[n.id];
+  const done = !!S.done[n.id], where = n.track ? TRACK[n.track].short + ' · ' + n.utitle : n.utitle;
   const gens = n.kind === 'lesson' ? [...new Set(n.ex.filter(e => e.t === 'gen').map(e => e.g))] : [];
   const alts = n.kind === 'lesson' ? (n.c || []).filter(c => CONCEPTS[c]) : [];
   const graded = n.kind === 'lesson' ? n.ex.filter(e => e.t !== 'info').length : 0;
   const bg = document.createElement('div'); bg.className = 'modal-bg';
-  bg.innerHTML = `<div class="modal nsheet" role="dialog" aria-modal="true" style="--uc:${unitColor(n.ui)}">
-    <div class="nsh"><span class="nkind">${KINDNAME[n.kind]} · ${esc(u.title)}</span><button class="close" aria-label="Cerrar">×</button></div>
+  bg.innerHTML = `<div class="modal nsheet" role="dialog" aria-modal="true" style="--uc:${nodeColor(n)}">
+    <div class="nsh"><span class="nkind">${KINDNAME[n.kind]} · ${esc(where)}</span><button class="close" aria-label="Cerrar">×</button></div>
     <h2>${esc(n.title)}</h2>
     <p>${n.kind === 'lesson' ? `${n.ex.length} pasos · ${graded} ejercicios${done ? ' · completada' : ''}` : esc(n.brief || (n.kind === 'project' ? PROJECTS[n.project].intro : ''))}</p>
+    ${n.kind === 'project' ? projMeta(PROJECTS[n.project]) : ''}
     <button class="btn amber" data-a="start">${done ? (n.kind === 'lesson' ? 'Repetir lección' : 'Abrir de nuevo') : 'Empezar'}</button>
     ${alts.length ? `<button class="btn ghost" data-a="alt">Otra forma de verlo</button>` : ''}
     ${gens.length ? `<button class="btn ghost" data-a="practice">Practicar con números nuevos</button>` : ''}
@@ -294,6 +380,7 @@ function renderProfile() {
   main.innerHTML = `<h2 class="ptitle">Tu progreso</h2>
    <div class="kv"><div><b>${S.xp}</b><span>XP total</span></div><div><b>${done}/${total}</b><span>Pasos completados</span></div><div><b>${S.streak}</b><span>Racha actual</span></div><div><b>${Object.keys(S.miss).length}</b><span>Por repasar</span></div></div>
    <div class="card"><h3>Módulos</h3>${UNITS.map((u, ui) => { const d = u.nodes.filter(n => S.done[n.id]).length; return `<div class="mprog" style="--uc:${unitColor(ui)}"><span>${ui}. ${esc(u.title)}</span><div class="uprog"><i style="width:${d / u.nodes.length * 100}%"></i></div><small>${d}/${u.nodes.length}</small></div>`; }).join('')}</div>
+   ${TRACKS.length ? `<div class="card"><h3>Especialidades</h3>${tracksOpen() ? '' : `<p>Se abren al terminar Microcontroladores (${gateLeft() === 1 ? 'te falta 1 paso' : 'te faltan ' + gateLeft() + ' pasos'}).</p>`}${TRACKS.map(t => { const s = trackStats(t); return `<button class="mprog trow" data-track="${t.id}" style="--uc:${t.color}"><span>${esc(t.title)}<small>${esc(s.rank)} · ${s.pd}/${s.pt} proyectos</small></span><div class="uprog"><i style="width:${s.nodes.length ? s.done / s.nodes.length * 100 : 0}%"></i></div><small>${s.done}/${s.nodes.length}</small></button>`; }).join('')}</div>` : ''}
    <div class="card"><h3>Multímetro</h3><p>${autoUnlocked ? 'Ya dominas el multímetro manual. Puedes pasar al automático en el resto de ejercicios.' : 'Completa la lección “Multímetro automático” del módulo 5 para desbloquear el autorrango.'}</p>
     <label class="switch"><input type="checkbox" id="mauto" ${S.meterAuto && autoUnlocked ? 'checked' : ''} ${autoUnlocked ? '' : 'disabled'}><span>Usar multímetro automático</span></label></div>
    <div class="card"><h3>Herramientas de prueba</h3><p>Fecha simulada: <b>${parse(today()).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })}</b>${S.offset ? ' (+' + S.offset + ' días)' : ''}.</p>
@@ -302,6 +389,7 @@ function renderProfile() {
     <button class="btn" id="bkExp">Exportar progreso</button><button class="btn ghost" id="bkImp">Importar progreso</button>
     <p class="small" style="margin:10px 0 0">${NativePrefs ? 'Estás en la app: el progreso se guarda en el almacenamiento del móvil.' : 'Estás en la versión web: el progreso se guarda en este navegador.'}</p></div>
    <div class="card"><h3>Sobre el temario</h3><p style="margin:0">El orden sigue la progresión de <i>Getting Started in Electronics</i> (Forrest Mims III), con la profundidad de <i>The Art of Electronics</i> e ideas prácticas de <i>Make: Electronics</i>. Las explicaciones, ejercicios y simulaciones son originales.</p></div>`;
+  main.querySelectorAll('[data-track]').forEach(x => x.onclick = () => { curTrack = x.dataset.track; go('track'); });
   const m = $('#mauto'); m && m.addEventListener('change', () => { S.meterAuto = m.checked; save(); toast(m.checked ? 'Multímetro automático activado' : 'Multímetro manual activado'); });
   $('#d1').onclick = () => { S.offset++; save(); evaluate(); render(); flush(); toast('Ahora es ' + parse(today()).toLocaleDateString('es-ES', { weekday: 'long' })); };
   $('#d3').onclick = () => { S.offset += 3; save(); evaluate(); render(); flush(); };
@@ -356,6 +444,7 @@ function finishScreen(L, close, node, { xp, gems, extra = '' }) {
   const graded = !node.extra;
   const first = graded && (!S.done[node.id] || S.done[node.id] === 'skip');
   if (graded && !first) gems = Math.round(gems / 3);
+  const wasOpen = tracksOpen();
   S.xp += xp; S.gems += gems; if (graded) S.done[node.id] = true; save();
   const before = S.streak, r = practicedToday(), lt = S.perDay[today()];
   L.innerHTML = `<div class="lesson-in"><div class="center">${chispa('happy', 92)}
@@ -363,10 +452,11 @@ function finishScreen(L, close, node, { xp, gems, extra = '' }) {
     <h1>${r.extended ? (before === 0 ? '¡Racha encendida!' : '¡' + S.streak + ' días seguidos!') : esc(node.review ? 'Repaso completado' : node.extra ? 'Práctica completada' : node.kind === 'project' ? 'Proyecto completado' : node.kind === 'lesson' ? 'Lección completada' : 'Reto superado')}</h1>
     <p>${r.extended ? 'Has practicado hoy. Vuelve mañana para que siga creciendo.' : 'Tu racha de hoy ya estaba asegurada.'}${repairAvailable() && lt <= CHALLENGE_LESSONS ? ' Reto de recuperación: ' + lt + '/' + CHALLENGE_LESSONS + '.' : ''}</p>
     <div class="chips"><div class="chip"><b>+${xp}</b><span>XP</span></div><div class="chip"><b>+${gems}</b><span>gemas</span></div>${extra}</div>
-    ${r.newMiles.map(([n, g]) => `<p><b>Hito de ${n} días:</b> +${g} gemas</p>`).join('')}${node.id === 'f6' ? '<p><b>Desbloqueado:</b> multímetro automático (actívalo en Perfil).</p>' : ''}</div>
+    ${r.newMiles.map(([n, g]) => `<p><b>Hito de ${n} días:</b> +${g} gemas</p>`).join('')}${node.id === 'f6' ? '<p><b>Desbloqueado:</b> multímetro automático (actívalo en Perfil).</p>' : ''}${!wasOpen && tracksOpen() && TRACKS.length ? `<div class="unlocked"><b>¡Especialidades desbloqueadas!</b><span>${TRACKS.map(t => esc(t.short || t.title)).join(' · ')}</span><small>Las tienes en el carrusel, debajo de Microcontroladores.</small></div>` : ''}</div>
     <div class="foot"><button class="btn amber" id="end">Continuar</button></div></div>`;
   vib([30, 50, 30, 50, 80]);
-  L.querySelector('#end').onclick = close;
+  const justOpened = !wasOpen && tracksOpen() && TRACKS.length;
+  L.querySelector('#end').onclick = () => { close(); if (justOpened) go('learn', 'tracks'); };
 }
 
 /* ===================== LECCIÓN, REFUERZO Y REPASO ===================== */
@@ -394,7 +484,7 @@ function startLesson(lesson) {
   function frame(inner, foot) {
     if (w && w.destroy) w.destroy(); w = null;
     const pct = doneCount / Math.max(1, doneCount + queue.length) * 100;
-    L.innerHTML = `<div class="lesson-in" style="--uc:${lesson.ui != null ? unitColor(lesson.ui) : 'var(--led)'}"><div class="lbar"><button class="close" aria-label="Salir">×</button><div class="prog"><i style="width:${pct}%"></i></div></div><div class="q">${inner}</div><div class="foot">${foot}</div></div>`;
+    L.innerHTML = `<div class="lesson-in" style="--uc:${lesson.ui != null ? nodeColor(lesson) : 'var(--led)'}"><div class="lbar"><button class="close" aria-label="Salir">×</button><div class="prog"><i style="width:${pct}%"></i></div></div><div class="q">${inner}</div><div class="foot">${foot}</div></div>`;
     L.querySelector('.close').onclick = () => { if (doneCount === 0 || confirm('¿Salir? Perderás el progreso de esta sesión.')) { if (w && w.destroy) w.destroy(); close(); } };
   }
   function ask() {
@@ -446,13 +536,13 @@ const pickOne = a => a[Math.floor(Math.random() * a.length)];
 function startSim(node) {
   const { L, close } = overlay();
   const cfg = node.sim;
-  L.innerHTML = `<div class="lesson-in simscreen" style="--uc:${unitColor(node.ui)}"><div class="lbar"><button class="close" aria-label="Salir del reto">×</button><h2 class="stitle">${esc(node.title)}</h2></div>
+  L.innerHTML = `<div class="lesson-in simscreen" style="--uc:${nodeColor(node)}"><div class="lbar"><button class="close" aria-label="Salir del reto">×</button><h2 class="stitle">${esc(node.title)}</h2></div>
     <div class="q"><p class="brief">${esc(node.brief)}</p>
     ${cfg.sch ? `<details class="det"><summary>Ver esquema</summary><div class="schbox">${Schem.draw(SCH[cfg.sch])}</div></details>` : ''}
-    ${cfg.code ? `<details class="det"><summary>Ver programa cargado</summary><pre class="code">${esc(SKETCHES[cfg.arduino].code)}</pre></details>` : ''}
+    ${cfg.code ? `<details class="det"><summary>Ver programa cargado</summary><pre class="code">${esc((SKETCHES[cfg.arduino] || ESP_SKETCHES[cfg.arduino]).code)}</pre></details>` : ''}
     <div class="simhost"></div><div class="checks" aria-live="polite"></div></div>
     <div class="foot"><button class="btn" id="chk">Comprobar</button></div></div>`;
-  const api = Sim.open(L.querySelector('.simhost'), { battery: cfg.battery, arduino: cfg.arduino, board: 'uno', parts: cfg.parts, hint: cfg.hint, initial: S.circ[node.id] }, { toast, onChange: m => { S.circ[node.id] = m; save(); } });
+  const api = Sim.open(L.querySelector('.simhost'), { battery: cfg.battery, arduino: cfg.arduino, board: cfg.board || 'uno', parts: cfg.parts, hint: cfg.hint, initial: S.circ[node.id] }, { toast, onChange: m => { S.circ[node.id] = m; save(); } });
   L.querySelector('.close').onclick = () => { api.destroy(); close(); };
   L.querySelector('#chk').onclick = () => {
     const res = CHECKS[node.checks](api), ok = res.every(r => r.ok);
@@ -464,24 +554,48 @@ function startSim(node) {
 }
 
 /* ===================== PROYECTO REAL ===================== */
+// Un proyecto tiene pasos y comprobaciones planos (formato antiguo) o fases, cada una con los suyos.
+// Las comprobaciones se guardan aplanadas en S.chk[id], en orden.
+const projPhases = p => p.phases || [{ title: null, steps: p.steps, checks: p.checks }];
+const projReward = p => ({ xp: 40 + 15 * (p.level || 0), gems: 50 + 20 * (p.level || 0) });
+function projMeta(p) {
+  if (!p.level && !p.hours) return '';
+  return `<div class="pmeta">${p.level ? `<span class="plevel" aria-label="Dificultad ${p.level} de 5">${'<i class="on"></i>'.repeat(p.level)}${'<i></i>'.repeat(5 - p.level)}</span>` : ''}${p.hours ? `<span>≈ ${p.hours} h</span>` : ''}${p.phases ? `<span>${p.phases.length} fases</span>` : ''}</div>`;
+}
 function startProject(node) {
   const { L, close } = overlay();
-  const p = PROJECTS[node.project];
-  const chk = S.chk[node.id] || (S.chk[node.id] = p.checks.map(() => false));
-  function paint() {
-    const all = chk.every(Boolean);
-    L.innerHTML = `<div class="lesson-in" style="--uc:${unitColor(node.ui)}"><div class="lbar"><button class="close" aria-label="Cerrar">×</button><h2 class="stitle">${esc(node.title)}</h2></div>
-      <div class="q proj"><p class="brief">${esc(p.intro)}</p><div class="schbox">${Schem.draw(SCH[p.sch])}</div>
-      <h3>Material</h3><ul class="bom">${p.bom.map(b => `<li>${esc(b)}</li>`).join('')}</ul>
-      <h3>Montaje</h3><ol class="steps">${p.steps.map(s => `<li>${esc(s)}</li>`).join('')}</ol>
-      <h3>Comprobaciones</h3><div class="pchk">${p.checks.map((c, i) => `<label><input type="checkbox" data-c="${i}" ${chk[i] ? 'checked' : ''}><span>${esc(c)}</span></label>`).join('')}</div>
-      <p class="small">Antes de montarlo puedes probar el circuito en el Laboratorio.</p></div>
-      <div class="foot"><button class="btn ${all ? 'amber' : ''}" id="fin" ${all && S.done[node.id] !== true ? '' : 'disabled'}>${S.done[node.id] === true ? 'Proyecto completado' : all ? 'Marcar como completado' : 'Marca todas las comprobaciones'}</button></div></div>`;
-    L.querySelector('.close').onclick = close;
-    L.querySelectorAll('[data-c]').forEach(c => c.addEventListener('change', () => { chk[+c.dataset.c] = c.checked; save(); const y = L.querySelector('.q').scrollTop; paint(); L.querySelector('.q').scrollTop = y; }));
-    L.querySelector('#fin').onclick = () => finishScreen(L, close, node, { xp: 40, gems: 50 });
+  const p = PROJECTS[node.project], phases = projPhases(p);
+  const total = phases.reduce((a, ph) => a + ph.checks.length, 0);
+  const chk = S.chk[node.id] || (S.chk[node.id] = []);
+  while (chk.length < total) chk.push(false);
+  let k = 0; const base = phases.map(ph => { const b = k; k += ph.checks.length; return b; });
+  const phaseDone = i => phases[i].checks.every((_, j) => chk[base[i] + j]);
+  const firstTodo = Math.max(0, phases.findIndex((_, i) => !phaseDone(i)));
+  const ph = (x, i) => `<details class="phase ${phaseDone(i) ? 'pdone' : ''}" data-ph="${i}" ${i === firstTodo || phases.length === 1 ? 'open' : ''}>
+      <summary><span class="pnum">${phaseDone(i) ? '✓' : i + 1}</span><span class="grow">${esc(x.title || 'Montaje')}</span><small>${x.checks.filter((_, j) => chk[base[i] + j]).length}/${x.checks.length}</small></summary>
+      <ol class="steps">${x.steps.map(st => `<li>${esc(st)}</li>`).join('')}</ol>
+      ${x.code ? `<pre class="code">${esc(x.code)}</pre>` : ''}
+      <h4>Comprobaciones</h4><div class="pchk">${x.checks.map((c, j) => `<label><input type="checkbox" data-c="${base[i] + j}" ${chk[base[i] + j] ? 'checked' : ''}><span>${esc(c)}</span></label>`).join('')}</div></details>`;
+  L.innerHTML = `<div class="lesson-in" style="--uc:${nodeColor(node)}"><div class="lbar"><button class="close" aria-label="Cerrar">×</button><h2 class="stitle">${esc(node.title)}</h2></div>
+    <div class="q proj"><p class="brief">${esc(p.intro)}</p>${projMeta(p)}
+    ${p.skills && p.skills.length ? `<h3>Lo que aprenderás</h3><ul class="skills">${p.skills.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
+    ${p.sch && SCH[p.sch] ? `<div class="schbox">${Schem.draw(SCH[p.sch])}</div>` : ''}
+    <h3>Material</h3><ul class="bom">${p.bom.map(b => `<li>${esc(b)}</li>`).join('')}</ul>
+    <h3>${phases.length > 1 ? 'Fases' : 'Montaje'}</h3>${phases.map(ph).join('')}
+    ${p.extra && p.extra.length ? `<h3>Para ir más allá</h3><ul class="bom">${p.extra.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
+    <p class="small">${node.track ? 'Tu avance se guarda solo: puedes dejarlo a medias y seguir otro día.' : 'Antes de montarlo puedes probar el circuito en el Laboratorio.'}</p></div>
+    <div class="foot"><button class="btn" id="fin"></button></div></div>`;
+  const fin = L.querySelector('#fin');
+  function update() {
+    const n = chk.filter(Boolean).length, all = n >= total, completed = S.done[node.id] === true;
+    fin.className = 'btn' + (all && !completed ? ' amber' : ''); fin.disabled = !all || completed;
+    fin.textContent = completed ? 'Proyecto completado' : all ? 'Marcar como completado' : `Comprobaciones: ${n} de ${total}`;
+    phases.forEach((x, i) => { const d = L.querySelector(`[data-ph="${i}"]`); d.classList.toggle('pdone', phaseDone(i)); d.querySelector('.pnum').textContent = phaseDone(i) ? '✓' : i + 1; d.querySelector('summary small').textContent = `${x.checks.filter((_, j) => chk[base[i] + j]).length}/${x.checks.length}`; });
   }
-  paint();
+  L.querySelector('.close').onclick = close;
+  L.querySelectorAll('[data-c]').forEach(c => c.addEventListener('change', () => { chk[+c.dataset.c] = c.checked; save(); update(); }));
+  fin.onclick = () => finishScreen(L, close, node, projReward(p));
+  update();
 }
 
 /* ===================== RUTADO ===================== */
@@ -523,6 +637,7 @@ window.addEventListener('pagehide', flushSave);
     App.addListener('backButton', () => {
       const m = document.querySelector('.modal-bg'); if (m) { m.remove(); return; }
       const c = document.querySelector('.lesson .close'); if (c) { c.click(); return; }
+      if (view === 'track') { go('learn', 'tracks'); return; }
       if (view !== 'learn') { go('learn'); return; }
       flushSave(); App.exitApp();
     });

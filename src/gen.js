@@ -13,8 +13,84 @@ const Gen = (() => {
   const N = (q, a, u, e, tol) => ({ t: 'num', q, a, u, e, tol });
   const E = [10, 22, 33, 47, 68, 100, 150, 220, 330, 470, 680, 1000, 1500, 2200, 3300, 4700, 6800, 10000, 22000, 47000, 100000];
   const PREF = [['p', -12], ['n', -9], ['µ', -6], ['m', -3], ['', 0], ['k', 3], ['M', 6]];
+  // Curso base ampliado: formato de ingeniería (3 cifras significativas y prefijo)
+  const engU = (x, u) => {
+    if (!x) return '0 ' + u;
+    let e = Math.max(-12, Math.min(12, Math.floor(Math.log10(Math.abs(x)) / 3) * 3));
+    let v = Number((x / 10 ** e).toPrecision(3));
+    if (Math.abs(v) >= 1000 && e < 12) { v = Number((v / 1000).toPrecision(3)); e += 3; }
+    return fmt(v, 3) + ' ' + { '-12': 'p', '-9': 'n', '-6': 'µ', '-3': 'm', '0': '', '3': 'k', '6': 'M', '9': 'G', '12': 'T' }[e] + u;
+  };
+  const capU = c => c >= 0.1 ? fmt(c, 3) + ' F' : c >= 1e-7 ? fmt(c * 1e6, 3) + ' µF' : c >= 1e-10 ? fmt(c * 1e9, 3) + ' nF' : fmt(c * 1e12, 3) + ' pF';
 
   const G = {
+    xlInd: () => { let f, L, x; do { f = pick([50, 1000, 10000, 100000, 1e6, 1e7]); L = pick([1e-6, 10e-6, 100e-6, 1e-3, 10e-3, 100e-3]); x = 2 * Math.PI * f * L; } while (x < 0.5 || x > 2e5); return MC(`¿Qué reactancia tiene una bobina de ${engU(L, 'H')} a ${engU(f, 'Hz')}?`, engU(x, 'Ω'), [engU(x / (2 * Math.PI), 'Ω'), engU(1 / x, 'Ω'), engU(x * 1000, 'Ω'), engU(x / 1000, 'Ω')], `XL = 2π · f · L = 2π × ${engU(f, 'Hz')} × ${engU(L, 'H')} ≈ ${engU(x, 'Ω')}. Al revés que en el condensador: a más frecuencia, más reactancia.`); },
+    zSeries: () => {
+      const [r, x] = pick([[3, 4], [6, 8], [30, 40], [300, 400], [120, 160], [50, 120], [100, 100], [80, 60], [500, 1200], [200, 150]]); const k = pick([1, 10]); const R = r * k, X = x * k, Z = Math.hypot(R, X); const bob = Math.random() < 0.5;
+      if (Math.random() < 0.55) return MC(`Una resistencia de ${fR(R)} en serie con ${bob ? 'una bobina' : 'un condensador'} de reactancia ${fR(X)}. ¿Impedancia total?`, fR(Math.round(Z * 10) / 10), [fR(R + X), fR(Math.abs(X - R)), fR(Math.round(R * X / (R + X) * 10) / 10)], `Las tensiones de R y de X están desfasadas 90°: no se suman, se combinan como los catetos de un triángulo rectángulo. Z = √(R² + X²) = ${fR(Math.round(Z * 10) / 10)}.`);
+      const ph = Math.atan2(X, R) * 180 / Math.PI; return N(`R = ${fR(R)} y ${bob ? 'XL' : 'XC'} = ${fR(X)} en serie. ¿Desfase entre tensión y corriente, en grados (sin signo)?`, ph, '°', `φ = arctan(X / R) = arctan(${fmt(X / R, 3)}) ≈ ${fmt(ph, 1)}°. ${bob ? 'Con bobina, la corriente va retrasada respecto a la tensión.' : 'Con condensador, la corriente va adelantada respecto a la tensión.'}`, 1);
+    },
+    lcRes: () => { const L = pick([10e-6, 47e-6, 100e-6, 220e-6, 1e-3, 10e-3]), C = pick([100e-12, 220e-12, 1e-9, 10e-9, 100e-9, 1e-6]); const f = 1 / (2 * Math.PI * Math.sqrt(L * C)); return MC(`Bobina de ${engU(L, 'H')} y condensador de ${capU(C)}. ¿Frecuencia de resonancia?`, engU(f, 'Hz'), [engU(1 / Math.sqrt(L * C), 'Hz'), engU(1 / (2 * Math.PI * L * C), 'Hz'), engU(f * 1000, 'Hz'), engU(f / 1000, 'Hz')], `f₀ = 1 / (2π · √(L · C)) ≈ ${engU(f, 'Hz')}. A esa frecuencia XL = XC. Errores típicos: olvidar el 2π o la raíz.`); },
+    qRes: () => {
+      if (Math.random() < 0.5) { const XL = pick([200, 500, 1000, 1500, 2000]), R = pick([5, 10, 20, 50]); const Q = XL / R; return N(`Circuito RLC serie en resonancia: XL = ${fR(XL)} y R = ${fR(R)}. ¿Factor de calidad Q?`, Q, '', `Q = XL / R = ${fmt(Q)}. Cuanta menos resistencia, más estrecho y alto es el pico de resonancia.`, Q * 0.02); }
+      const f0 = pick([455e3, 1e6, 10.7e6, 7e6, 100e3]), Q = pick([10, 20, 50, 100]); const bw = f0 / Q; return N(`Un circuito resuena a ${engU(f0, 'Hz')} con Q = ${Q}. ¿Ancho de banda en kHz?`, bw / 1000, 'kHz', `BW = f₀ / Q = ${engU(bw, 'Hz')}: la distancia entre los dos puntos de −3 dB.`, bw / 1000 * 0.02);
+    },
+    tauRL: () => { const L = pick([1e-3, 10e-3, 100e-3, 1]), R = pick([10, 47, 100, 1000]); const tau = L / R, us = tau < 1e-3, val = us ? tau * 1e6 : tau * 1000; return N(`Bobina de ${engU(L, 'H')} con ${fR(R)} en serie. ¿Constante de tiempo τ en ${us ? 'µs' : 'ms'}?`, val, us ? 'µs' : 'ms', `τ = L / R = ${engU(tau, 's')}. Ojo: en RC se multiplica; en RL se divide. Tras 5τ la corriente ya es prácticamente la final.`, val * 0.02); },
+    riseT: () => {
+      if (Math.random() < 0.5) { const bw = pick([10e6, 20e6, 50e6, 100e6, 200e6]); const tr = 0.35 / bw * 1e9; return N(`Un osciloscopio tiene ${engU(bw, 'Hz')} de ancho de banda. ¿Tiempo de subida propio aproximado, en ns?`, tr, 'ns', `tr ≈ 0,35 / BW = ${fmt(tr, 2)} ns. Un flanco más rápido que eso lo verás más lento de lo que es.`, tr * 0.03); }
+      const R = pick([100, 1000, 4700, 10000]), C = pick([1e-9, 10e-9, 100e-9]); const tr = 2.2 * R * C * 1e6; return N(`Un RC con ${fR(R)} y ${capU(C)}. ¿Tiempo de subida (del 10 % al 90 %) en µs?`, tr, 'µs', `tr ≈ 2,2 · R · C = ${fmt(tr, 3)} µs (ln 9 ≈ 2,2 veces τ).`, Math.max(tr * 0.03, 0.002));
+    },
+    capJ: () => { const [C, V] = pick([[100e-6, 25], [470e-6, 16], [1000e-6, 35], [2200e-6, 50], [10e-6, 400], [1, 2.7], [10, 2.7], [100e-6, 400]]); const E = 0.5 * C * V * V; return MC(`¿Cuánta energía guarda un condensador de ${capU(C)} cargado a ${fmt(V)} V?`, engU(E, 'J'), [engU(C * V * V, 'J'), engU(0.5 * C * V, 'J'), engU(E * 1000, 'J'), engU(E / 1000, 'J')], `E = ½ · C · V² = ½ × ${capU(C)} × (${fmt(V)} V)² = ${engU(E, 'J')}. La tensión va al cuadrado: el doble de tensión, cuatro veces más energía.`); },
+    coilJ: () => { const L = pick([10e-6, 100e-6, 1e-3, 10e-3, 100e-3]), I = pick([0.1, 0.5, 1, 2, 3]); const E = 0.5 * L * I * I; return MC(`Por una bobina de ${engU(L, 'H')} pasan ${fmt(I)} A. ¿Energía guardada en su campo magnético?`, engU(E, 'J'), [engU(L * I * I, 'J'), engU(0.5 * L * I, 'J'), engU(E * 1e6, 'J'), engU(E / 1000, 'J')], `E = ½ · L · I² = ${engU(E, 'J')}. Es la energía que la bobina suelta de golpe (el pico) si cortas la corriente.`); },
+    schmitt: () => {
+      const vcc = pick([5, 9, 12]), R1 = pick([1000, 2200, 4700, 10000]), R2 = pick([47000, 100000, 220000]); const vr = vcc / 2, H = vcc * R1 / R2, up = vr * (R1 + R2) / R2, dn = up - H; const c = pick(['H', 'up', 'dn']);
+      return N(`Schmitt no inversor con comparador rail-to-rail a ${vcc} V: referencia de ${fmt(vr, 2)} V en IN−, entrada por R1 = ${fR(R1)} hasta IN+ y realimentación R2 = ${fR(R2)} desde la salida a IN+. ¿Cuánto vale ${{ H: 'la histéresis (subida − bajada)', up: 'el umbral de subida', dn: 'el umbral de bajada' }[c]}, en V?`, { H, up, dn }[c], 'V', `Subida = Vref · (R1 + R2) / R2 = ${fmt(up, 3)} V. Histéresis = Vcc · R1 / R2 = ${fmt(H, 3)} V. Bajada = subida − histéresis = ${fmt(dn, 3)} V.`, 0.02);
+    },
+    adcStep: () => {
+      if (Math.random() < 0.6) { const n = pick([8, 10, 12, 16]), vr = pick([3.3, 5, 2.5, 4.096, 1.1]); const lsb = vr / 2 ** n * 1000; return N(`ADC de ${n} bits con referencia de ${fmt(vr, 3)} V. ¿Cuánto vale un escalón (1 LSB) en mV?`, lsb, 'mV', `LSB = Vref / 2${sup(n)} = ${fmt(vr, 3)} V / ${2 ** n} = ${fmt(lsb, 4)} mV. Es lo más fino que puede distinguir.`, Math.max(lsb * 0.02, 0.0005)); }
+      const [vr, step, n] = pick([[4.096, 1, 12], [4.096, 0.25, 14], [2.048, 0.5, 12], [1.024, 1, 10], [5, 20, 8]]); return MC(`Necesitas distinguir escalones de ${fmt(step, 2)} mV con una referencia de ${fmt(vr, 3)} V. ¿Cuántos bits como mínimo?`, `${n} bits`, [`${n - 2} bits`, `${n + 2} bits`, `${n - 1} bits`, `${Math.round(vr * 1000 / step)} bits`], `Escalones necesarios = ${fmt(vr * 1000, 0)} / ${fmt(step, 2)} = ${fmt(vr * 1000 / step, 0)}. 2${sup(n)} = ${2 ** n} es la primera potencia de 2 que llega.`);
+    },
+    r2r: () => { const n = pick([4, 8]), vr = pick([5, 3.3, 2.5]); const code = ri(1, 2 ** n - 1); const b = code.toString(2).padStart(n, '0'); const v = vr * code / 2 ** n; return N(`DAC R-2R de ${n} bits con referencia de ${fmt(vr, 2)} V. Le escribes ${b}. ¿Tensión de salida en V?`, v, 'V', `Vsal = Vref · código / 2${sup(n)} = ${fmt(vr, 2)} × ${code} / ${2 ** n} = ${fmt(v, 3)} V. Con todo unos se queda a un escalón de Vref.`, Math.max(0.01, vr / 2 ** n / 2)); },
+    buckRip: () => {
+      const vin = pick([12, 24, 9]), vo = pick([5, 3.3]), L = pick([10e-6, 22e-6, 47e-6]), f = pick([150e3, 500e3, 1e6]); const D = vo / vin, dI = (vin - vo) * D / (L * f);
+      if (Math.random() < 0.35) return N(`Buck ideal de ${vin} V a ${fmt(vo)} V. ¿Ciclo de trabajo en %?`, D * 100, '%', `En un buck ideal D = Vsal / Vent = ${fmt(D * 100, 1)} %. En la práctica, algo más, por las pérdidas.`, 1);
+      return N(`Buck de ${vin} V a ${fmt(vo)} V con bobina de ${engU(L, 'H')} a ${engU(f, 'Hz')}. ¿Rizado de corriente pico a pico en la bobina, en mA?`, dI * 1000, 'mA', `D = ${fmt(D, 3)}; ΔI = (Vent − Vsal) · D / (L · f) = ${fmt(dI * 1000, 0)} mA. Más inductancia o más frecuencia, menos rizado.`, dI * 1000 * 0.03);
+    },
+    tjHeat: () => {
+      const c = pick(['bare', 'sink', 'pmax']);
+      if (c === 'bare') { const P = pick([0.5, 1, 1.5, 2]), Ta = pick([25, 40]), R = pick([50, 62, 65]); const Tj = Ta + P * R; return N(`Un regulador en TO-220 sin disipador (RθJA = ${R} °C/W) disipa ${fmt(P)} W con ${Ta} °C de ambiente. ¿Temperatura de la unión en °C?`, Tj, '°C', `Tj = Ta + P · RθJA = ${Ta} + ${fmt(P)} × ${R} = ${fmt(Tj, 1)} °C. ${Tj > 125 ? 'Demasiado: necesita disipador.' : 'Aguanta, pero quema al tacto.'}`, 1); }
+      if (c === 'sink') { const P = pick([2, 5, 8, 10]), Ta = pick([25, 35]), jc = pick([3, 5]), sa = pick([4, 6, 10]); const Tj = Ta + P * (jc + 0.5 + sa); return N(`Un transistor disipa ${P} W. RθJC = ${jc} °C/W, pasta térmica 0,5 °C/W y disipador de ${sa} °C/W, con ${Ta} °C de ambiente. ¿Tj en °C?`, Tj, '°C', `Las resistencias térmicas en serie se suman: ${jc} + 0,5 + ${sa} = ${fmt(jc + 0.5 + sa, 1)} °C/W. Tj = ${Ta} + ${P} × ${fmt(jc + 0.5 + sa, 1)} = ${fmt(Tj, 1)} °C.${Tj > 125 ? ' Demasiado: hace falta un disipador mejor.' : ''}`, 1); }
+      const Tjm = pick([125, 150]), Ta = pick([25, 40]), R = pick([10, 20, 50, 62]); const P = (Tjm - Ta) / R; return N(`Tj máxima ${Tjm} °C, ambiente ${Ta} °C y resistencia térmica total de ${R} °C/W. ¿Potencia máxima en W?`, P, 'W', `P = (Tjmax − Ta) / Rθ = ${Tjm - Ta} / ${R} = ${fmt(P, 2)} W. En la práctica, quédate bastante por debajo.`, Math.max(0.02, P * 0.02));
+    },
+    engNot: () => {
+      if (Math.random() < 0.35) { const [s, n] = pick([['0,00470', 3], ['4,70 × 10³', 3], ['0,0022', 2], ['1,000', 4], ['3,30', 3], ['0,105', 3], ['12,5', 3], ['0,5', 1], ['2,200', 4]]); return MC(`¿Cuántas cifras significativas tiene ${s}?`, String(n), ['1', '2', '3', '4', '5'].filter(x => x !== String(n)), 'Los ceros de la izquierda no cuentan (solo colocan la coma). Los ceros finales después de la coma sí: dicen que se midió con esa precisión.'); }
+      const [s, v, u] = pick([['0,000047', 47e-6, 'F'], ['2 200 000', 2.2e6, 'Ω'], ['0,0033', 3.3e-3, 'A'], ['0,00000015', 150e-9, 'F'], ['47 000', 47e3, 'Ω'], ['0,00012', 120e-6, 's'], ['16 000 000', 16e6, 'Hz'], ['0,022', 22e-3, 'V']]);
+      return MC(`Escribe ${s} ${u} con el prefijo adecuado.`, engU(v, u), [engU(v * 1000, u), engU(v / 1000, u), engU(v * 10, u)], 'Notación de ingeniería: exponentes múltiplos de 3, que son justo los prefijos (p, n, µ, m, k, M, G). Cuenta los saltos de tres cifras.');
+    },
+    norton: () => {
+      if (Math.random() < 0.5) { const V = pick([5, 9, 12, 3.3]), R = pick([100, 220, 470, 1000, 2200]); const I = V / R; return N(`Fuente Thévenin de ${fmt(V)} V con Rth = ${fR(R)}. ¿Corriente de la fuente Norton equivalente, en mA?`, I * 1000, 'mA', `IN = Vth / Rth = ${fmt(I * 1000, 2)} mA (la corriente de cortocircuito), con RN = Rth = ${fR(R)} en paralelo.`, Math.max(0.05, I * 10)); }
+      const I = pick([0.001, 0.002, 0.005]), R = pick([470, 1000, 2200]); return N(`Fuente Norton de ${fA(I)} con ${fR(R)} en paralelo. ¿Tensión en vacío (Vth) en V?`, I * R, 'V', `Sin carga, toda la corriente pasa por RN: Vth = IN · RN = ${fmt(I * R, 2)} V.`, 0.02);
+    },
+    maxPow: () => { const V = pick([5, 9, 12, 1.5]), R = pick([4, 8, 50, 100, 600]); const P = V * V / (4 * R); return MC(`Fuente de ${fmt(V)} V con resistencia interna de ${fR(R)}. ¿Potencia máxima que puede entregar a una carga?`, engU(P, 'W'), [engU(V * V / R, 'W'), engU(V * V / (2 * R), 'W'), engU(V / (4 * R), 'W')], `La máxima potencia sale con la carga igual a la resistencia interna (${fR(R)}): la mitad de la tensión cae dentro y la otra mitad fuera. Pmax = V² / (4R) = ${engU(P, 'W')}.`); },
+    gbwBand: () => {
+      if (Math.random() < 0.6) { const gbw = pick([0.7e6, 1e6, 3e6, 10e6]), G = pick([10, 20, 50, 100, 1000]); const bw = gbw / G; return N(`Operacional con producto ganancia–ancho de banda de ${engU(gbw, 'Hz')}, montado con ganancia ${G}. ¿Ancho de banda aproximado en kHz?`, bw / 1000, 'kHz', `BW ≈ GBW / G = ${engU(bw, 'Hz')}. Si necesitas mucha ganancia y mucho ancho de banda, reparte la ganancia en dos etapas.`, bw / 1000 * 0.02); }
+      const sr = pick([0.3, 0.5, 13, 20]), vp = pick([1, 2, 5, 10]); const f = sr * 1e6 / (2 * Math.PI * vp); return N(`Slew rate de ${fmt(sr)} V/µs y una senoide de ${vp} V de pico. ¿Frecuencia máxima sin deformarla, en kHz?`, f / 1000, 'kHz', `La pendiente máxima de una senoide es 2π · f · Vp. fmax = SR / (2π · Vp) = ${fmt(f / 1000, 1)} kHz.`, f / 1000 * 0.03);
+    },
+    pfPower: () => { const V = 230, I = pick([0.5, 1, 2, 4]), pf = pick([0.5, 0.6, 0.8, 0.9]); const P = V * I * pf; return MC(`Un aparato a ${V} V consume ${fmt(I)} A eficaces con factor de potencia ${fmt(pf)}. ¿Potencia real?`, `${fmt(P, 0)} W`, [`${fmt(V * I, 0)} W`, `${fmt(V * I / pf, 0)} W`, `${fmt(V * I * pf * pf, 0)} W`], `P = V · I · cos φ = ${fmt(P, 0)} W. El producto V · I (${fmt(V * I, 0)} VA) es la potencia aparente.`); },
+    nodeV: () => { const [V1, V2] = pick([[9, 5], [12, 6], [10, 2], [5, 5], [12, 3]]), [R1, R2, R3] = pick([[1000, 1000, 1000], [1000, 2000, 2000], [2000, 1000, 2000], [1000, 1000, 2000], [4700, 4700, 4700]]); const Vn = (V1 / R1 + V2 / R2) / (1 / R1 + 1 / R2 + 1 / R3); return N(`Nudo A: R1 = ${fR(R1)} lo une a una fuente de ${V1} V, R2 = ${fR(R2)} a otra de ${V2} V y R3 = ${fR(R3)} a masa. ¿Tensión del nudo A?`, Vn, 'V', `Ecuación del nudo (lo que entra = lo que sale): (${V1} − VA)/R1 + (${V2} − VA)/R2 = VA/R3 → VA = ${fmt(Vn, 2)} V. Por superposición sale lo mismo.`, 0.03); },
+    gateQ: () => {
+      if (Math.random() < 0.5) { const Q = pick([10, 20, 50, 100]), t = pick([50, 100, 200, 1000]); const I = Q / t; return N(`Un MOSFET tiene ${Q} nC de carga de puerta. Quieres encenderlo en ${t} ns. ¿Corriente media de puerta en mA?`, I * 1000, 'mA', `I = Q / t = ${Q} nC / ${t} ns = ${fmt(I * 1000, 1)} mA. Un pin de microcontrolador da unos 20 mA: por eso existen los drivers de puerta.`, I * 1000 * 0.02); }
+      const Q = pick([20, 50, 100]), f = pick([20e3, 100e3, 500e3]), V = pick([10, 12]); const P = Q * 1e-9 * V * f; return N(`PWM a ${engU(f, 'Hz')} sobre un MOSFET con ${Q} nC de puerta, excitado a ${V} V. ¿Potencia que gasta el driver en cargar la puerta, en mW?`, P * 1000, 'mW', `P = Qg · V · f = ${fmt(P * 1000, 2)} mW: en cada ciclo carga la puerta y luego la descarga a masa.`, Math.max(0.01, P * 1000 * 0.02));
+    },
+    isrc: () => {
+      if (Math.random() < 0.5) { const I = pick([0.005, 0.01, 0.02, 0.1, 0.5]); const R = 1.25 / I; return N(`LM317 como fuente de corriente (resistencia entre OUT y ADJ). ¿Qué resistencia da ${fA(I)}?`, R, 'Ω', `El LM317 mantiene unos 1,25 V entre OUT y ADJ: R = 1,25 / I = ${fmt(R, 2)} Ω. Disipa ${engU(1.25 * I, 'W')}.`, Math.max(0.05, R * 0.01)); }
+      const Vz = pick([3.3, 4.7, 5.1]), Re = pick([100, 220, 470, 1000]); const I = (Vz - 0.65) / Re; return N(`Fuente de corriente con NPN: zener de ${fmt(Vz)} V en la base, Vbe ≈ 0,65 V y ${fR(Re)} en el emisor. ¿Corriente de colector en mA?`, I * 1000, 'mA', `El emisor queda a ${fmt(Vz, 2)} − 0,65 = ${fmt(Vz - 0.65, 2)} V, así que Ie = ${fmt(Vz - 0.65, 2)} / ${Re} = ${fmt(I * 1000, 2)} mA, e Ic ≈ Ie sea cual sea la carga del colector (mientras no sature).`, Math.max(0.05, I * 1000 * 0.04));
+    },
+    cRate: () => {
+      const cap = pick([500, 1000, 2000, 2500, 3000]), c = pick([0.2, 0.5, 1]);
+      if (Math.random() < 0.5) return N(`Celda de litio de ${cap} mAh. ¿Corriente de carga a ${fmt(c)}C, en mA?`, cap * c, 'mA', `1C es la corriente que la vaciaría en una hora: ${cap} mA. A ${fmt(c)}C → ${fmt(cap * c, 0)} mA. Mira siempre la corriente máxima de carga en la hoja de datos de la celda.`, 1);
+      const I = cap * c; return N(`Cargador de ${fmt(I, 0)} mA en corriente constante y celda de ${cap} mAh vacía. ¿Tiempo mínimo hasta llenarla, en horas, sin contar la fase final de tensión constante?`, cap / I, 'h', `${cap} / ${fmt(I, 0)} = ${fmt(cap / I, 2)} h. En la realidad tarda más: la fase de tensión constante del final añade bastante.`, 0.05);
+    },
     pow10: () => { const a = ri(-6, 6), b = ri(-6, 6); return MC(`¿Cuánto es 10${sup(a)} × 10${sup(b)}?`, '10' + sup(a + b), ['10' + sup(a * b), '10' + sup(a - b), '10' + sup(a + b + 1), '10' + sup(a + b - 1), '10' + sup(-(a + b) + 2)], 'Al multiplicar potencias de la misma base, los exponentes se suman.'); },
     pow10div: () => { const a = ri(-3, 6), b = ri(-6, 3); return MC(`¿Cuánto es 10${sup(a)} ÷ 10${sup(b)}?`, '10' + sup(a - b), ['10' + sup(a + b), '10' + sup(b - a), '10' + sup(a * b), '10' + sup(a - b + 1), '10' + sup(a - b - 1)], 'Al dividir, se resta el exponente de abajo al de arriba.'); },
     sci: () => { const m = pick([4.7, 2.2, 3.3, 1.5, 6.8]), e = pick([-6, -5, -4, -3, 3, 4, 5]); const val = m * 10 ** e; const s = val < 1 ? fmt(val, 8) : String(Math.round(val)); return MC(`¿Cómo se escribe ${s} en notación científica?`, `${fmt(m)} × 10${sup(e)}`, [`${fmt(m)} × 10${sup(-e)}`, `${fmt(m)} × 10${sup(e + 1)}`, `${fmt(m * 10)} × 10${sup(e + 1)}`], 'Mueve la coma hasta dejar una sola cifra delante; cada salto es una potencia de 10.'); },
@@ -79,9 +155,54 @@ const Gen = (() => {
     beta: () => { const b = pick([100, 150, 200]), ib = pick([0.05, 0.1, 0.2]); return N(`β = ${b} y una corriente de base de ${fmt(ib)} mA. ¿Corriente de colector máxima en mA?`, b * ib, 'mA', `Ic = β × Ib = ${fmt(b * ib)} mA (si la carga lo permite).`); },
     adc: () => { const esp = Math.random() < 0.4; const max = esp ? 4095 : 1023, vr = esp ? 3.3 : 5; const n = ri(50, max); return N(`${esp ? 'ESP32 (12 bits, 3,3 V)' : 'Arduino Uno (10 bits, 5 V)'}: analogRead devuelve ${n}. ¿Tensión aproximada en V?`, n / max * vr, 'V', `V = ${n} / ${max} × ${fmt(vr)} = ${fmt(n / max * vr, 2)} V.`, 0.03); },
     pwm: () => { const v = pick([64, 128, 191, 255, 25]); return N(`analogWrite(pin, ${v}) en una Uno. ¿Ciclo de trabajo en %?`, v / 255 * 100, '%', `${v} / 255 = ${fmt(v / 255 * 100, 1)} %.`, 0.6); },
+    /* --- m12 Microcontroladores --- */
+    mcOverflow: () => {
+      const k = pick(['add', 'sub', 'uint']);
+      if (k === 'add') { const a = ri(200, 255), b = ri(60, 150), s = a + b; return MC('¿Cuánto vale x al final?', String(s % 256), [String(s), '255', String(s - 255), String(b)], `Un byte guarda de 0 a 255. ${s} no cabe: da la vuelta y queda ${s} − 256 = ${s % 256}.`, { code: `byte x = ${a};\nx = x + ${b};` }); }
+      if (k === 'sub') { const a = ri(0, 20), b = ri(21, 60); return MC('¿Cuánto vale x al final?', String(a - b + 256), [String(a - b), '0', String(b - a), String(a - b + 255)], `Un byte no tiene negativos: ${a} − ${b} = ${a - b} da la vuelta hasta ${a - b} + 256 = ${a - b + 256}.`, { code: `byte x = ${a};\nx = x - ${b};` }); }
+      const a = ri(65000, 65535), b = ri(1000, 5000), s = a + b;
+      return MC('En una Uno (unsigned int de 16 bits), ¿cuánto vale x al final?', String(s % 65536), [String(s), '65535', String(s - 65535), '0'], `Un unsigned int de la Uno llega a 65535. ${s} no cabe: ${s} − 65536 = ${s % 65536}.`, { code: `unsigned int x = ${a};\nx = x + ${b};` });
+    },
+    mcIntDiv: () => {
+      const b = ri(3, 9); let a = ri(10, 99); if (a % b === 0) a++;
+      const q = Math.trunc(a / b), k = pick(['int', 'float', 'prec']);
+      if (k === 'int') return MC('¿Cuánto vale r?', String(q), [fmt(a / b, 2), String(q + 1), String(a % b)], `División entera: ${a} / ${b} = ${q} y sobran ${a % b}. Los decimales se descartan, no se redondea.`, { code: `int r = ${a} / ${b};` });
+      if (k === 'float') return MC('¿Qué guarda f?', `${q},0`, [fmt(a / b, 2), `${q + 1},0`, '0,0'], `${a} / ${b} se calcula entre enteros (${q}) y después se convierte a float. Escribe ${a}.0 / ${b} para tener decimales.`, { code: `float f = ${a} / ${b};` });
+      const c = ri(1, 9);
+      return MC('¿Cuánto vale r?', String(c + q), [String(Math.trunc((c + a) / b)), fmt(c + a / b, 2), String(c + a)], `Primero la división (${a} / ${b} = ${q}, entera) y luego la suma: ${c} + ${q} = ${c + q}.`, { code: `int r = ${c} + ${a} / ${b};` });
+    },
+    mcModulo: () => {
+      if (Math.random() < 0.5) { const x = ri(10, 200), y = ri(2, 12); return N(`¿Cuánto vale ${x} % ${y}?`, x % y, '', `${x} = ${y} × ${Math.floor(x / y)} + ${x % y}. El resto es ${x % y}.`); }
+      const n = ri(3, 8), k = ri(n + 1, 40);
+      return N(`paso empieza en 0 y cada vez se hace paso = (paso + 1) % ${n}. ¿Cuánto vale tras ${k} veces?`, k % n, '', `Recorre 0, 1, …, ${n - 1} y vuelve a 0. Tras ${k} pasos: ${k} % ${n} = ${k % n}.`);
+    },
+    mcMillisTask: () => {
+      if (Math.random() < 0.5) { const T = pick([20, 50, 100, 200, 250, 500, 1000, 2000]), S = pick([10, 30, 60]); return N(`Una tarea usa if (millis() - t >= ${T}). ¿Cuántas veces se ejecuta en ${S} s?`, S * 1000 / T, 'veces', `${S * 1000} ms / ${T} ms = ${S * 1000 / T}.`); }
+      const iv = pick([100, 250, 500, 1000]), antes = ri(10, 500) * 100, d = ri(Math.round(iv * 0.4), Math.round(iv * 1.6)), ahora = antes + d, ok = d >= iv;
+      const si = `Sí: han pasado ${d} ms`, no = `No: solo han pasado ${d} ms`;
+      return MC(`antes = ${antes}, ahora = ${ahora} e intervalo = ${iv} ms. ¿Se ejecuta la tarea en esta vuelta?`, ok ? si : no, [ok ? no : si, `Sí: ${ahora} es mayor que ${iv}`, 'No se puede saber sin delay()'], `ahora − antes = ${d} ms, que ${ok ? 'llega' : 'no llega'} a ${iv} ms.`);
+    },
+    mcArrayBytes: () => {
+      const [t, sz] = pick([['byte', 1], ['int', 2], ['long', 4], ['float', 4], ['unsigned long', 4], ['bool', 1], ['char', 1], ['int', 2]]), n = pick([8, 10, 16, 20, 32, 50, 64, 100, 128, 200]), esp = t === 'int' && Math.random() < 0.35, s = esp ? 4 : sz;
+      return N(`¿Cuántos bytes de RAM ocupa ${t} datos[${n}]; en ${esp ? 'un ESP32' : 'una Uno'}?`, n * s, 'bytes', `${n} × ${s} bytes = ${n * s} bytes.${esp ? ' En el ESP32, int ocupa 4 bytes (en la Uno, 2).' : ''}`);
+    },
+    mcBits: () => {
+      const k = ri(0, 7), c = pick(['set', 'clr', 'read', 'shift']);
+      let v = ri(0, 255); if (c === 'set') v &= ~(1 << k); if (c === 'clr') v |= 1 << k;   // que la operación cambie algo
+      const b = '0b' + v.toString(2).padStart(8, '0');
+      if (c === 'set') return { ...N('¿Cuánto vale x en decimal?', v | (1 << k), '', `1 << ${k} es ${1 << k}; con | ese bit queda a 1: ${v | (1 << k)}.`), code: `byte x = ${b};\nx |= (1 << ${k});` };
+      if (c === 'clr') return { ...N('¿Cuánto vale x en decimal?', v & ~(1 << k) & 255, '', `~(1 << ${k}) tiene todos los bits a 1 menos el ${k}; con & ese bit queda a 0: ${v & ~(1 << k) & 255}.`), code: `byte x = ${b};\nx &= ~(1 << ${k});` };
+      if (c === 'read') return { ...N(`¿Qué devuelve bitRead(x, ${k})?`, (v >> k) & 1, '', `El bit ${k} (contando desde 0 por la derecha) de ${b} es ${(v >> k) & 1}.`), code: `byte x = ${b};` };
+      return N(`¿Cuánto vale 1 << ${k}?`, 1 << k, '', `Desplazar un 1 ${k} posiciones a la izquierda es multiplicar por 2${sup(k)}: ${1 << k}.`);
+    },
+    mcBaud: () => { const bd = pick([9600, 19200, 57600, 115200]), n = pick([10, 20, 32, 50, 64, 100, 200]), ms = n * 10 / bd * 1000; return N(`A ${bd} baudios, ¿cuántos ms tarda en enviarse un mensaje de ${n} caracteres?`, ms, 'ms', `Cada carácter son 10 bits (8 de datos más inicio y parada): ${n} × 10 / ${bd} = ${fmt(ms, 2)} ms.`, Math.max(0.05, ms * 0.03)); },
+    mcDuty: () => { const I1 = pick([10, 20, 40, 80]), t1 = pick([0.5, 1, 2]), I2 = pick([0.005, 0.01, 0.05, 0.1]), T = pick([10, 30, 60]), avg = (I1 * t1 + I2 * (T - t1)) / T; return N(`Cada ${T} s, el aparato está despierto ${fmt(t1)} s a ${I1} mA y el resto dormido a ${fmt(I2, 3)} mA. ¿Consumo medio en mA?`, avg, 'mA', `(${I1} × ${fmt(t1)} + ${fmt(I2, 3)} × ${fmt(T - t1)}) / ${T} = ${fmt(avg, 3)} mA.`, Math.max(0.005, avg * 0.03)); },
+    mcEeprom: () => { const m = pick([1, 2, 5, 10, 30, 60]), d = 100000 * m / 1440; return N(`Grabas en la misma celda de EEPROM cada ${m} min. ¿Cuántos días tardas en llegar a las 100 000 escrituras que garantiza el fabricante?`, d, 'días', `100 000 × ${m} min = ${100000 * m} min; entre 1440 min por día: ${fmt(d, 1)} días.`, Math.max(0.5, d * 0.02)); },
     millis: () => { const ms = pick([500, 2000, 60000, 250]); return N(`¿Cuántos segundos son ${ms} ms?`, ms / 1000, 's', '1 s = 1000 ms.'); }
   };
   function make(key) { const e = G[key](); if (e.o === undefined && e.t === 'mc') delete e.o; return { ...e, _gen: key, c: e.c || CONCEPT_OF[key] }; }
-  const CONCEPT_OF = { pow10: 'pow10', pow10div: 'pow10', sci: 'pow10', prefixName: 'prefix', prefixConv: 'prefix', rearrange: 'algebra', proportion: 'algebra', percent: 'algebra', tolerance: 'algebra', ohmV: 'ohm', ohmI: 'ohm', ohmR: 'ohm', ohmMC: 'ohm', power: 'power', rating: 'power', series: 'series', parallel2: 'parallel', parallelN: 'parallel', parallelMC: 'parallel', mixed: 'parallel', divider: 'divider', currentDiv: 'parallel', kcl: 'kcl', kvl: 'kvl', ledR: 'led', tau: 'rc', rcPct: 'rc', bin2dec: 'binary', dec2bin: 'binary', f555: 'ic555', gainNI: 'opamp', gainInv: 'opamp', vrms: 'ac', period: 'ac', xc: 'ac', fc: 'filter', db: 'log', log10: 'log', exp: 'log', rb: 'bjt', beta: 'bjt', adc: 'adc', pwm: 'pwm', colorRead: 'color', colorBuild: 'color', capCode: 'cap', capSeries: 'cap' };
-  return { make, keys: Object.keys(G) };
+  const CONCEPT_OF = { xlInd: 'inductor', zSeries: 'impedance', lcRes: 'resonance', qRes: 'resonance', tauRL: 'inductor', riseT: 'scope', capJ: 'cap', coilJ: 'inductor', schmitt: 'hyst', adcStep: 'quant', r2r: 'quant', buckRip: 'smps', tjHeat: 'thermal', engNot: 'engnum', norton: 'network', maxPow: 'network', gbwBand: 'opamp', pfPower: 'impedance', nodeV: 'network', gateQ: 'mosfet', isrc: 'bjt', cRate: 'libat', pow10: 'pow10', pow10div: 'pow10', sci: 'pow10', prefixName: 'prefix', prefixConv: 'prefix', rearrange: 'algebra', proportion: 'algebra', percent: 'algebra', tolerance: 'algebra', ohmV: 'ohm', ohmI: 'ohm', ohmR: 'ohm', ohmMC: 'ohm', power: 'power', rating: 'power', series: 'series', parallel2: 'parallel', parallelN: 'parallel', parallelMC: 'parallel', mixed: 'parallel', divider: 'divider', currentDiv: 'parallel', kcl: 'kcl', kvl: 'kvl', ledR: 'led', tau: 'rc', rcPct: 'rc', bin2dec: 'binary', dec2bin: 'binary', f555: 'ic555', gainNI: 'opamp', gainInv: 'opamp', vrms: 'ac', period: 'ac', xc: 'ac', fc: 'filter', db: 'log', log10: 'log', exp: 'log', rb: 'bjt', beta: 'bjt', adc: 'adc', pwm: 'pwm', colorRead: 'color', colorBuild: 'color', capCode: 'cap', capSeries: 'cap', mcOverflow: 'mc_types', mcIntDiv: 'mc_intmath', mcModulo: 'mc_intmath', mcMillisTask: 'mc_millis', mcArrayBytes: 'mc_memory', mcBits: 'binary', mcBaud: 'mc_serial', mcDuty: 'mc_sleep', mcEeprom: 'mc_memory', millis: 'mc_millis' };
+  // Las especialidades registran sus propios generadores con Gen.add(clave, fn, concepto).
+  function add(key, fn, concept) { if (G[key]) throw new Error('Generador repetido: ' + key); G[key] = fn; if (concept) CONCEPT_OF[key] = concept; }
+  return { make, add, get keys() { return Object.keys(G); }, helpers: { pick, ri, fmt, fR, fA, fV, sup, uniq, MC, N } };
 })();

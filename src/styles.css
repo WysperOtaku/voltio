@@ -356,3 +356,65 @@ body{background-color:var(--bg);background-image:radial-gradient(circle,var(--pe
 .chispa{display:inline-block}
 
 .bkta{width:100%;min-height:120px;font:13px/1.4 ui-monospace,Menlo,Consolas,monospace;padding:10px;border-radius:10px;border:2px solid var(--line);background:var(--bg);color:var(--ink);resize:vertical;word-break:break-all;margin-bottom:6px}
+
+/* especialidades: carrusel tras el módulo de Microcontroladores */
+.tracks{margin:26px -18px 8px;padding:20px 0 12px;background:linear-gradient(180deg,color-mix(in srgb,var(--board) 6%,transparent),transparent);border-top:2px dashed var(--trace);border-bottom:2px dashed var(--trace)}
+.trhead{padding:0 18px}
+.trhead h2{font-size:24px;letter-spacing:-.01em}
+.trhead p{margin:4px 0 0;color:var(--muted);font-size:15px}
+.carousel{display:flex;gap:12px;overflow-x:auto;scroll-snap-type:x mandatory;padding:14px 18px 10px;scroll-padding-inline:18px;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.carousel::-webkit-scrollbar{display:none}
+.tcard{flex:0 0 min(78%,300px);scroll-snap-align:start;text-align:left;background:var(--surface);border:1px solid var(--line);border-top:6px solid var(--tc);border-radius:18px;padding:16px;display:flex;flex-direction:column;gap:6px;box-shadow:0 5px 0 var(--line);min-height:250px}
+.tcard:active{transform:translateY(3px);box-shadow:0 2px 0 var(--line)}
+.tcard h3{font-size:20px;line-height:1.15}
+.tcard p{margin:0;color:var(--muted);font-size:14.5px;line-height:1.4;flex:1}
+.tcard small{color:var(--muted);font-size:12.5px}
+.tcard .uprog{background:var(--line);flex:none;margin-top:4px}
+.tcard .uprog i{background:var(--tc)}
+.tcard.locked{background:color-mix(in srgb,var(--surface) 85%,var(--bg))}
+.tcard.locked .tbadge{filter:grayscale(.7);opacity:.7}
+.tctop{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px}
+.tbadge{display:grid;place-items:center;border-radius:14px;background:color-mix(in srgb,var(--tc) 18%,var(--surface));color:var(--tc);flex:none}
+.tbadge svg{width:58%;height:58%}
+.trank{font-size:12.5px;font-weight:800;background:color-mix(in srgb,var(--tc) 16%,var(--surface));color:var(--ink);border-radius:999px;padding:3px 10px}
+.tlock{width:30px;height:30px;color:var(--muted)}.tlock svg{width:100%;height:100%}
+.tmeta{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
+.tmeta span{font-size:12.5px;font-weight:700;border:1px solid var(--line);border-radius:999px;padding:2px 9px;color:var(--muted)}
+.trmore{text-align:center;margin:2px 0 0}
+/* vista de una especialidad */
+.backlink{display:inline-flex;align-items:center;gap:4px;background:none;border:0;font-weight:700;color:var(--muted);padding:10px 4px 6px;min-height:44px}
+.thero{position:relative;overflow:hidden;border-radius:18px;padding:18px;background:linear-gradient(135deg,var(--board) 55%,color-mix(in srgb,var(--tc) 45%,var(--board)));color:#E8EDF5;display:grid;grid-template-columns:auto 1fr;gap:6px 14px;align-items:center;margin-bottom:8px}
+.thero::after{content:"";position:absolute;right:-40px;bottom:-40px;width:160px;height:160px;border-radius:50%;border:2px dashed rgba(255,255,255,.1)}
+.thero .tbadge{background:color-mix(in srgb,var(--tc) 30%,var(--board));color:#fff}
+.thero h1{font-size:26px;letter-spacing:-.02em;line-height:1.1}
+.thero>p{grid-column:1/-1;margin:6px 0 0;color:#B8C3D8;font-size:15px}
+.thero .uprog{grid-column:1/-1;margin-top:6px}
+.thero .uprog i{background:var(--tc)}
+.tstats{grid-column:1/-1;display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:8px;margin-top:10px}
+.tstats div{background:rgba(255,255,255,.07);border-radius:10px;padding:8px 10px}
+.tstats b{display:block;font-family:var(--display);font-size:18px;color:#fff}
+.tstats span{font-size:12px;color:#B8C3D8;line-height:1.25;display:block}
+.lockcard .row{align-items:center}
+.trow{width:100%;background:none;border:0;text-align:left;padding:8px 0;border-top:1px solid var(--line)}
+.trow small{display:block;color:var(--muted);font-size:12px}
+.unlocked{display:flex;flex-direction:column;gap:2px;margin:14px auto 0;max-width:340px;border:2px solid var(--led);background:color-mix(in srgb,var(--led) 14%,var(--surface));border-radius:14px;padding:12px 14px}
+.unlocked span{font-weight:700}.unlocked small{color:var(--muted)}
+/* proyectos por fases */
+.pmeta{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:4px 0 8px;font-size:13.5px;font-weight:700;color:var(--muted)}
+.pmeta>span{border:1px solid var(--line);border-radius:999px;padding:3px 10px;background:var(--surface)}
+.plevel{display:inline-flex;gap:3px;align-items:center}
+.plevel i{width:9px;height:9px;border-radius:50%;background:var(--line);display:inline-block}
+.plevel i.on{background:var(--uc,var(--led))}
+.skills{margin:0;padding-left:22px}.skills li{margin:3px 0}
+.phase{background:var(--surface);border:1px solid var(--line);border-left:5px solid var(--line);border-radius:12px;padding:0 14px;margin:0 0 10px}
+.phase[open]{padding-bottom:14px;border-left-color:var(--uc,var(--led))}
+.phase.pdone{border-left-color:var(--ok)}
+.phase summary{display:flex;align-items:center;gap:10px;font-weight:700;padding:12px 0;cursor:pointer;min-height:48px;list-style:none}
+.phase summary::-webkit-details-marker{display:none}
+.phase summary small{color:var(--muted);font-weight:700}
+.pnum{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:var(--bg);border:2px solid var(--line);font-size:14px;flex:none}
+.phase.pdone .pnum{background:var(--ok);border-color:var(--ok);color:#fff}
+.phase h4{margin:12px 0 8px;font-size:15px}
+.phase .code{margin:10px 0 0;font-size:13px}
+.phase .steps{margin-top:2px}
+.tlevel{display:block;margin-top:4px;font-weight:700;color:#E8EDF5;font-size:13px}
