@@ -36,6 +36,8 @@ function checkEx(ex, where, lessonC) {
   const c = ex.c || lessonC;
   if (ex.t !== 'info' && c && !CONCEPTS[c]) E(where, 'concepto inexistente ' + c);
   if (ex.c && !CONCEPTS[ex.c]) E(where, 'concepto inexistente ' + ex.c);
+  // Cada ejercicio puntuable dice qué concepto practica: es lo que decide la explicación alternativa al fallar.
+  if (ex.t !== 'info' && ex.t !== 'gen' && !ex.c && !where.startsWith('concept/')) E(where, 'ejercicio sin concepto explícito (c): ' + String(ex.q || ex.t).slice(0, 60));
   if (ex.t === 'mc') { if (!Array.isArray(ex.o) || ex.o.length < 2) E(where, 'mc sin opciones'); else if (new Set(ex.o).size !== ex.o.length) E(where, 'mc con opciones repetidas: ' + ex.q); if (!ex.q) E(where, 'mc sin pregunta'); }
   if (ex.t === 'num') { if (typeof ex.a !== 'number' || !isFinite(ex.a)) E(where, 'num sin respuesta numérica: ' + ex.q); }
   if (ex.t === 'gen') { if (!Gen.keys.includes(ex.g)) E(where, 'generador inexistente ' + ex.g); }
@@ -110,7 +112,7 @@ for (const k of Gen.keys) {
     if (e.t === 'mc' && (!e.o || e.o.length < 2 || new Set(e.o).size !== e.o.length)) { E('gen/' + k, 'opciones repetidas o insuficientes'); break; }
     const txt = JSON.stringify(e); if (/NaN|undefined|Infinity/.test(txt)) { E('gen/' + k, 'NaN/undefined en ' + txt.slice(0, 120)); break; }
     if (e.c && !CONCEPTS[e.c]) { E('gen/' + k, 'concepto inexistente ' + e.c); break; }
-    if (!e.c && i === 0) W('gen/' + k, 'sin concepto en CONCEPT_OF (hereda el de la lección)');
+    if (!e.c) { E('gen/' + k, 'sin concepto: añádelo a CONCEPT_OF o devuélvelo en el ejercicio (c)'); break; }
   }
 }
 // Programas del ESP32: se ejecutan 20 s simulados sin errores

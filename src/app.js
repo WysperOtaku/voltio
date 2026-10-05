@@ -330,15 +330,27 @@ function renderReview() {
   items.forEach(m => { const c = m.c || 'otros'; (byC[c] = byC[c] || []).push(m); });
   if (!items.length) {
     main.innerHTML = `<h2 class="ptitle">Repasar</h2><div class="card center-card">${chispa('happy', 80)}<h3>Nada pendiente</h3><p>Cuando falles un ejercicio aparecerá aquí, y podrás repasarlo con explicaciones distintas hasta que lo domines.</p></div>
-      <h3 class="sub">Explicaciones alternativas</h3><div class="clist2">${Object.entries(CONCEPTS).map(([k, c]) => `<button class="cbtn" data-c="${k}">${esc(c.name)}<small>${c.alts.length} ${c.alts.length === 1 ? 'enfoque' : 'enfoques'}</small></button>`).join('')}</div>`;
+      <h3 class="sub">Explicaciones alternativas</h3>${conceptLists()}`;
   } else {
     main.innerHTML = `<h2 class="ptitle">Repasar</h2><p class="small" style="margin:0 0 6px">Cada ejercicio sale de la lista cuando lo aciertas dos veces seguidas.</p>
       <button class="btn amber" id="revgo" style="margin:12px 0">Repasar ahora (${Math.min(items.length, 10)} ${Math.min(items.length, 10) === 1 ? 'ejercicio' : 'ejercicios'})</button>
       <h3 class="sub">Por tema</h3>${Object.entries(byC).map(([c, ms]) => `<div class="card revrow"><div class="grow"><b>${esc(CONCEPTS[c] ? CONCEPTS[c].name : 'Otros')}</b><br><small>${ms.length} ${ms.length === 1 ? 'ejercicio pendiente' : 'ejercicios pendientes'} · ${ms.reduce((a, m) => a + m.n, 0)} fallos</small></div>${CONCEPTS[c] ? `<button class="sbtn" data-c="${c}">Otra forma de verlo</button>` : ''}</div>`).join('')}
-      <h3 class="sub">Todas las explicaciones alternativas</h3><div class="clist2">${Object.entries(CONCEPTS).map(([k, c]) => `<button class="cbtn" data-c="${k}">${esc(c.name)}<small>${c.alts.length} ${c.alts.length === 1 ? 'enfoque' : 'enfoques'}</small></button>`).join('')}</div>`;
+      <h3 class="sub">Todas las explicaciones alternativas</h3>${conceptLists()}`;
     $('#revgo').onclick = () => startReview();
   }
   main.querySelectorAll('[data-c]').forEach(b => b.onclick = () => { const c = b.dataset.c; startLesson({ id: 'alt:' + c, title: 'Otra forma de verlo: ' + CONCEPTS[c].name, extra: true, c: [c], ex: CONCEPTS[c].alts.flatMap((a, i) => altPair(c, i)) }); });
+}
+/* Todas las explicaciones alternativas, agrupadas por el curso donde se usa cada concepto por primera vez
+   (curso base y luego cada especialidad); los conceptos que ya no usa ningún ejercicio no se listan. */
+function conceptLists() {
+  const area = {}, groups = [];
+  const add = (key, title, c) => { if (!c || !CONCEPTS[c] || area[c]) return; area[c] = key; let g = groups.find(x => x.key === key); if (!g) groups.push(g = { key, title, cs: [] }); g.cs.push(c); };
+  ALL.forEach(n => {
+    const key = n.track || 'base', title = n.track ? TRACK[n.track].title : 'Curso base';
+    (n.c || []).forEach(c => add(key, title, c));
+    (n.ex || []).forEach(e => add(key, title, e.c || (e.t === 'gen' ? Gen.make(e.g).c : null)));
+  });
+  return groups.map((g, i) => `<details class="cgroup" ${i === 0 ? 'open' : ''}><summary>${esc(g.title)} <small>${g.cs.length}</small></summary><div class="clist2">${g.cs.map(k => { const c = CONCEPTS[k]; return `<button class="cbtn" data-c="${k}">${esc(c.name)}<small>${c.alts.length} ${c.alts.length === 1 ? 'enfoque' : 'enfoques'}</small></button>`; }).join('')}</div></details>`).join('');
 }
 function startReview() {
   const items = Object.values(S.miss).sort((a, b) => b.n - a.n || (b.t > a.t ? 1 : -1)).slice(0, 10);
@@ -464,10 +476,29 @@ function altPair(c, i) {
   const a = CONCEPTS[c].alts[i];
   return [{ t: 'info', _alt: c, title: a.title, text: a.text, tune: a.tune, svg: a.svg, sch: a.sch }, { ...a.q, c, _alt: c, _key: 'alt:' + c + ':' + i }];
 }
-function nextAlt(c) {
-  if (!CONCEPTS[c]) return null;
-  const i = (S.altIdx[c] || 0) % CONCEPTS[c].alts.length; S.altIdx[c] = (S.altIdx[c] || 0) + 1; save();
-  return altPair(c, i);
+/* Elegir la explicación alternativa: entre las que aún no se han visto en esta sesión, la que más
+   palabras comparte con el ejercicio fallado; a igualdad, la siguiente en el turno de S.altIdx. */
+const STOP = new Set('para como cuando donde entre sobre desde hasta porque pero tiene tienen esta este esto estos estas eso esos esas cual cuales cuanto cuanta cuantos cuantas puede pueden hace hacer mismo misma todo toda todos todas otro otra otros otras solo tambien mucho muchos muy mas menos sin con una uno unos unas del los las que por sus ese esa aqui alli siempre nunca algo nada cada vale'.split(' '));
+function words(...xs) {
+  const t = xs.flat(3).filter(x => typeof x === 'string').join(' ').toLowerCase().normalize('NFD').replace(/\p{M}/gu, '').replace(/<[^>]+>/g, ' ');
+  return new Set(t.split(/[^a-z0-9µω]+/).filter(w => w.length >= 4 && !STOP.has(w)).map(w => w.slice(0, 6)));
+}
+function exWords(ex) { return words(ex.q, ex.e, ex.text, ex.t === 'mc' && ex.o ? ex.o[ex.a || 0] : null, ex.pairs, ex.items, ex.code); }
+function nextAlt(c, ex, seen) {
+  const C = CONCEPTS[c]; if (!C) return null;
+  const n = C.alts.length, start = (S.altIdx[c] || 0) % n, w = ex ? exWords(ex) : new Set();
+  let best = -1, bestScore = -1;
+  for (let k = 0; k < n; k++) {
+    const i = (start + k) % n; if (seen && seen.has(c + ':' + i)) continue;
+    const a = C.alts[i], aw = words(a.title, a.text, a.q && a.q.q, a.q && a.q.o && a.q.o[0]);
+    let hit = 0; w.forEach(x => { if (aw.has(x)) hit++; });
+    const score = hit / Math.sqrt(aw.size + 4);
+    if (score > bestScore + 1e-9) { best = i; bestScore = score; }
+  }
+  if (best < 0) return null;
+  seen && seen.add(c + ':' + best);
+  S.altIdx[c] = best + 1; save();
+  return altPair(c, best);
 }
 function recordMiss(ex, lessonId, c) {
   const k = ex._key; if (!k || k.startsWith('alt:')) return;
@@ -480,7 +511,7 @@ function startLesson(lesson) {
   const { L, close } = overlay();
   const queue = lesson.ex.map((e, i) => ({ ...e, _idx: e._idx ?? i, _key: e._key || (lesson.extra ? null : lesson.id + ':' + i) }));
   let doneCount = 0, mistakes = 0, w = null;
-  const altRounds = {};
+  const altRounds = {}, seenAlts = new Set();
   function frame(inner, foot) {
     if (w && w.destroy) w.destroy(); w = null;
     const pct = doneCount / Math.max(1, doneCount + queue.length) * 100;
@@ -517,7 +548,7 @@ function startLesson(lesson) {
         mistakes++; vib([60, 40, 60]);
         const c = ex.c || (lesson.c || [])[0];
         recordMiss(ex, lesson.id, c);
-        if (c && CONCEPTS[c] && (altRounds[c] || 0) < CONCEPTS[c].alts.length) { altRounds[c] = (altRounds[c] || 0) + 1; remedial = nextAlt(c); }
+        if (c && CONCEPTS[c] && (altRounds[c] || 0) < CONCEPTS[c].alts.length) { altRounds[c] = (altRounds[c] || 0) + 1; remedial = nextAlt(c, ex, seenAlts); }
         if (!ex._alt) queue.push(ex);
       }
       const prog = L.querySelector('.prog i'); prog.style.width = (doneCount / Math.max(1, doneCount + queue.length + (remedial ? 2 : 0)) * 100) + '%';
