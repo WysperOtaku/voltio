@@ -13,7 +13,7 @@ const LESSON = Object.fromEntries(ALL.filter(n => n.kind === 'lesson').map(n => 
 const KEY = 'voltio-v1';
 const MILESTONES = [[3, 20], [7, 50], [14, 80], [30, 150], [50, 200], [100, 500], [365, 1000]];
 const FREEZE_PRICE = 100, FREEZE_MAX = 2, REPAIR_PRICE = 200, REPAIR_DAYS = 3, CHALLENGE_LESSONS = 3;
-function fresh() { return { v: 3, offset: 0, streak: 0, longest: 0, covered: null, hist: {}, freezes: 1, gems: 300, xp: 0, done: {}, perDay: {}, lost: null, miles: [], pending: [], circ: {}, chk: {}, labMode: 'battery', meterAuto: false, miss: {}, altIdx: {} }; }
+function fresh() { return { v: 3, offset: 0, streak: 0, longest: 0, covered: null, hist: {}, freezes: 1, gems: 300, xp: 0, done: {}, perDay: {}, lost: null, miles: [], pending: [], circ: {}, chk: {}, labMode: 'battery', meterAuto: false, miss: {}, altIdx: {}, sound: true, mascot: true }; }
 let S;
 try { S = JSON.parse(localStorage.getItem(KEY)) || fresh(); } catch (e) { S = fresh(); }
 if (S.v !== 3) S = { ...fresh(), ...S, v: 3, done: {}, chk: {}, circ: {} };
@@ -136,7 +136,7 @@ function ledSVG(on, size = 150) {
   return `<svg viewBox="0 0 150 150" width="${size}" height="${size}" aria-hidden="true"><defs><radialGradient id="${id}" cx="50%" cy="42%" r="55%"><stop offset="0" stop-color="${on ? '#FFE9A8' : '#9AA7BF'}"/><stop offset=".6" stop-color="${on ? '#FFB000' : '#5B6782'}"/><stop offset="1" stop-color="${on ? '#E08A00' : '#3B4660'}"/></radialGradient></defs>
    ${on ? '<circle cx="75" cy="68" r="62" fill="#FFB000" opacity=".22"/>' : ''}<path d="M35 112V66a40 40 0 0 1 80 0v46z" fill="url(#${id})"/><rect x="28" y="108" width="94" height="12" rx="3" fill="${on ? '#E08A00' : '#3B4660'}"/><path d="M60 120v26M90 120v20" stroke="#8A94A8" stroke-width="5" stroke-linecap="round"/></svg>`;
 }
-function go(v, anchor) { view = v; render(); main.scrollTop = 0; if (anchor) setTimeout(() => { const el = document.getElementById(anchor); el && el.scrollIntoView({ behavior: 'smooth' }); }, 50); }
+function go(v, anchor) { view = v; Mascot.hide(); render(); Fx.anim(main, 'enter'); main.scrollTop = 0; if (anchor) setTimeout(() => { const el = document.getElementById(anchor); el && el.scrollIntoView({ behavior: 'smooth' }); }, 50); }
 document.querySelectorAll('[data-go]').forEach(b => b.addEventListener('click', () => go(b.dataset.go, b.dataset.anchor)));
 const ICONS = {
   bolt: '<path d="M13 2L5 14h6l-1 8 8-12h-6z" fill="currentColor"/>',
@@ -197,7 +197,7 @@ function pathHTML(units, { firstOpen, track = null, start = 0 }) {
     u.nodes.forEach(n => {
       const off = offsets[idx % offsets.length]; idx++;
       const done = !!S.done[n.id], open = isUnlocked(n.id), cur = firstOpen && firstOpen.id === n.id;
-      const cls = [done ? 'done' : cur ? 'current' : open ? '' : 'locked', 'k-' + n.kind].join(' ');
+      const cls = [done ? 'done' : cur ? 'current' : open ? '' : 'locked', 'k-' + n.kind, n.id === justDone ? 'just-done' : '', cur && justDone ? 'just-open' : ''].join(' ');
       const icon = done ? ICONS.check : open ? ICONS[n.icon] || ICONS.bolt : ICONS.lock;
       const trace = prevOff === null ? '' : `<svg class="trace" viewBox="-150 -152 300 210" aria-hidden="true"><path d="M${prevOff} -94V-60L${off} -20V20" class="${prevDone ? 'on' : ''}"/><circle cx="${prevOff}" cy="-60" r="4" class="via ${prevDone ? 'on' : ''}"/><circle cx="${off}" cy="-20" r="4" class="via ${prevDone ? 'on' : ''}"/></svg>`;
       html += `<div class="node-row">${trace}<button class="node ${cls}" style="transform:translateX(${off}px)${n.kind === 'project' ? ' rotate(45deg)' : ''}" data-node="${n.id}" aria-label="${esc(n.title)}${done ? ', completado' : ''}${open ? '' : ', bloqueado'}">
@@ -233,7 +233,8 @@ function renderLearn() {
   bindCarousel();
   const rc = $('#revcta'); rc && (rc.onclick = () => startReview());
   bindRepair();
-  if (firstOpen && !renderLearn.scrolled) { renderLearn.scrolled = true; const el = main.querySelector(`[data-node="${firstOpen.id}"]`); el && setTimeout(() => el.scrollIntoView({ block: 'center' }), 60); }
+  if (firstOpen && (!renderLearn.scrolled || justDone)) { renderLearn.scrolled = true; const el = main.querySelector(`[data-node="${firstOpen.id}"]`); el && setTimeout(() => el.scrollIntoView({ block: 'center', behavior: justDone ? 'smooth' : 'auto' }), 60); }
+  if (justDone) { setTimeout(() => { Fx.sound('step'); Fx.burstAt(main.querySelector('.node.just-open'), { n: 18 }); }, 700); justDone = null; }
 }
 
 /* ===================== ESPECIALIDADES ===================== */
@@ -277,7 +278,8 @@ function renderTrack() {
   $('#tback').onclick = () => go('learn', 'tracks');
   bindNodes();
   renderTrack.scrolled = renderTrack.scrolled || {};
-  if (firstOpen && !renderTrack.scrolled[t.id] && firstOpen !== SEQ[t.id][0]) { renderTrack.scrolled[t.id] = true; const el = main.querySelector(`[data-node="${firstOpen.id}"]`); el && setTimeout(() => el.scrollIntoView({ block: 'center' }), 60); }
+  if (justDone) { const jo = main.querySelector('.node.just-open'); jo && setTimeout(() => { jo.scrollIntoView({ block: 'center', behavior: 'smooth' }); Fx.sound('step'); Fx.burstAt(jo, { n: 18 }); }, 500); justDone = null; }
+  else if (firstOpen && !renderTrack.scrolled[t.id] && firstOpen !== SEQ[t.id][0]) { renderTrack.scrolled[t.id] = true; const el = main.querySelector(`[data-node="${firstOpen.id}"]`); el && setTimeout(() => el.scrollIntoView({ block: 'center' }), 60); }
 }
 
 const KINDNAME = { lesson: 'Lección', sim: 'Reto de simulador', project: 'Proyecto real', route: 'Reto de rutado' };
@@ -285,7 +287,8 @@ function nodeSheet(n) {
   const done = !!S.done[n.id], where = n.track ? TRACK[n.track].short + ' · ' + n.utitle : n.utitle;
   const gens = n.kind === 'lesson' ? [...new Set(n.ex.filter(e => e.t === 'gen').map(e => e.g))] : [];
   const alts = n.kind === 'lesson' ? (n.c || []).filter(c => CONCEPTS[c]) : [];
-  const graded = n.kind === 'lesson' ? n.ex.filter(e => e.t !== 'info').length : 0;
+  const graded = n.kind === 'lesson' ? n.ex.filter(e => !Widgets.UNGRADED.has(e.t)).length : 0;
+  Fx.sound('open');
   const bg = document.createElement('div'); bg.className = 'modal-bg';
   bg.innerHTML = `<div class="modal nsheet" role="dialog" aria-modal="true" style="--uc:${nodeColor(n)}">
     <div class="nsh"><span class="nkind">${KINDNAME[n.kind]} · ${esc(where)}</span><button class="close" aria-label="Cerrar">×</button></div>
@@ -356,8 +359,13 @@ function startReview() {
   const items = Object.values(S.miss).sort((a, b) => b.n - a.n || (b.t > a.t ? 1 : -1)).slice(0, 10);
   const ex = items.map(m => {
     if (m.g) return { t: 'gen', g: m.g, _key: m.k };
-    const l = LESSON[m.l]; const e = l && l.ex[m.i]; return e ? { ...e, _key: m.k, c: e.c || m.c || (l.c || [])[0] } : null;
+    // Si la lección se ha reescrito, se busca el ejercicio por su enunciado; si ya no existe, se olvida.
+    const l = LESSON[m.l]; let e = l && l.ex[m.i];
+    if (l && (!e || Widgets.UNGRADED.has(e.t) || (m.q && e.q !== m.q))) { const j = m.q ? l.ex.findIndex(x => x.q === m.q) : -1; e = j >= 0 ? l.ex[j] : null; if (j >= 0) m.i = j; }
+    if (!e) { delete S.miss[m.k]; return null; }
+    return { ...e, _idx: m.i, _key: m.k, c: e.c || m.c || (l.c || [])[0] };
   }).filter(Boolean);
+  save();
   if (!ex.length) { S.miss = {}; save(); render(); return; }
   startLesson({ id: 'review', title: 'Repaso', review: true, extra: true, ex });
 }
@@ -393,6 +401,7 @@ function renderProfile() {
    <div class="kv"><div><b>${S.xp}</b><span>XP total</span></div><div><b>${done}/${total}</b><span>Pasos completados</span></div><div><b>${S.streak}</b><span>Racha actual</span></div><div><b>${Object.keys(S.miss).length}</b><span>Por repasar</span></div></div>
    <div class="card"><h3>Módulos</h3>${UNITS.map((u, ui) => { const d = u.nodes.filter(n => S.done[n.id]).length; return `<div class="mprog" style="--uc:${unitColor(ui)}"><span>${ui}. ${esc(u.title)}</span><div class="uprog"><i style="width:${d / u.nodes.length * 100}%"></i></div><small>${d}/${u.nodes.length}</small></div>`; }).join('')}</div>
    ${TRACKS.length ? `<div class="card"><h3>Especialidades</h3>${tracksOpen() ? '' : `<p>Se abren al terminar Microcontroladores (${gateLeft() === 1 ? 'te falta 1 paso' : 'te faltan ' + gateLeft() + ' pasos'}).</p>`}${TRACKS.map(t => { const s = trackStats(t); return `<button class="mprog trow" data-track="${t.id}" style="--uc:${t.color}"><span>${esc(t.title)}<small>${esc(s.rank)} · ${s.pd}/${s.pt} proyectos</small></span><div class="uprog"><i style="width:${s.nodes.length ? s.done / s.nodes.length * 100 : 0}%"></i></div><small>${s.done}/${s.nodes.length}</small></button>`; }).join('')}</div>` : ''}
+   <div class="card"><h3>Sonido y mascota</h3><label class="switch"><input type="checkbox" id="psound" ${S.sound ? 'checked' : ''}><span>Sonidos</span></label><label class="switch"><input type="checkbox" id="pmascot" ${S.mascot ? 'checked' : ''}><span>Chispa en pantalla (tócala para pedir pistas)</span></label></div>
    <div class="card"><h3>Multímetro</h3><p>${autoUnlocked ? 'Ya dominas el multímetro manual. Puedes pasar al automático en el resto de ejercicios.' : 'Completa la lección “Multímetro automático” del módulo 5 para desbloquear el autorrango.'}</p>
     <label class="switch"><input type="checkbox" id="mauto" ${S.meterAuto && autoUnlocked ? 'checked' : ''} ${autoUnlocked ? '' : 'disabled'}><span>Usar multímetro automático</span></label></div>
    <div class="card"><h3>Herramientas de prueba</h3><p>Fecha simulada: <b>${parse(today()).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })}</b>${S.offset ? ' (+' + S.offset + ' días)' : ''}.</p>
@@ -402,6 +411,8 @@ function renderProfile() {
     <p class="small" style="margin:10px 0 0">${NativePrefs ? 'Estás en la app: el progreso se guarda en el almacenamiento del móvil.' : 'Estás en la versión web: el progreso se guarda en este navegador.'}</p></div>
    <div class="card"><h3>Sobre el temario</h3><p style="margin:0">El orden sigue la progresión de <i>Getting Started in Electronics</i> (Forrest Mims III), con la profundidad de <i>The Art of Electronics</i> e ideas prácticas de <i>Make: Electronics</i>. Las explicaciones, ejercicios y simulaciones son originales.</p></div>`;
   main.querySelectorAll('[data-track]').forEach(x => x.onclick = () => { curTrack = x.dataset.track; go('track'); });
+  $('#psound').onchange = e => { S.sound = e.target.checked; Fx.setSound(S.sound); save(); Fx.sound('select'); };
+  $('#pmascot').onchange = e => { S.mascot = e.target.checked; Mascot.setEnabled(S.mascot); save(); };
   const m = $('#mauto'); m && m.addEventListener('change', () => { S.meterAuto = m.checked; save(); toast(m.checked ? 'Multímetro automático activado' : 'Multímetro manual activado'); });
   $('#d1').onclick = () => { S.offset++; save(); evaluate(); render(); flush(); toast('Ahora es ' + parse(today()).toLocaleDateString('es-ES', { weekday: 'long' })); };
   $('#d3').onclick = () => { S.offset += 3; save(); evaluate(); render(); flush(); };
@@ -450,25 +461,32 @@ function flush() {
 /* ===================== PANTALLA COMPLETA ===================== */
 function overlay() {
   const L = document.createElement('div'); L.className = 'lesson'; document.body.appendChild(L); document.body.style.overflow = 'hidden';
-  return { L, close() { L.remove(); document.body.style.overflow = ''; render(); } };
+  Fx.sound('open'); Mascot.place();
+  return { L, close() { L.remove(); document.body.style.overflow = ''; Mascot.provider = defaultTip; Mascot.place(); render(); } };
 }
-function finishScreen(L, close, node, { xp, gems, extra = '' }) {
+function finishScreen(L, close, node, { xp, gems, extra = '', perfect = false }) {
   const graded = !node.extra;
   const first = graded && (!S.done[node.id] || S.done[node.id] === 'skip');
   if (graded && !first) gems = Math.round(gems / 3);
   const wasOpen = tracksOpen();
   S.xp += xp; S.gems += gems; if (graded) S.done[node.id] = true; save();
   const before = S.streak, r = practicedToday(), lt = S.perDay[today()];
-  L.innerHTML = `<div class="lesson-in"><div class="center">${chispa('happy', 92)}
+  if (graded) justDone = node.id;
+  L.innerHTML = `<div class="lesson-in finish"><div class="center"><div class="fchispa">${chispa('happy', 92)}</div>${perfect ? '<div class="perfect">¡Sin fallos! +5 XP</div>' : ''}
     <div class="streakpill">${ledSVG(true, 34)}<b>${S.streak}</b> ${S.streak === 1 ? 'día' : 'días'}</div>
     <h1>${r.extended ? (before === 0 ? '¡Racha encendida!' : '¡' + S.streak + ' días seguidos!') : esc(node.review ? 'Repaso completado' : node.extra ? 'Práctica completada' : node.kind === 'project' ? 'Proyecto completado' : node.kind === 'lesson' ? 'Lección completada' : 'Reto superado')}</h1>
     <p>${r.extended ? 'Has practicado hoy. Vuelve mañana para que siga creciendo.' : 'Tu racha de hoy ya estaba asegurada.'}${repairAvailable() && lt <= CHALLENGE_LESSONS ? ' Reto de recuperación: ' + lt + '/' + CHALLENGE_LESSONS + '.' : ''}</p>
-    <div class="chips"><div class="chip"><b>+${xp}</b><span>XP</span></div><div class="chip"><b>+${gems}</b><span>gemas</span></div>${extra}</div>
+    <div class="chips"><div class="chip"><b data-cu="${xp}">+0</b><span>XP</span></div><div class="chip gemchip"><b data-cu="${gems}">+0</b><span>gemas</span></div>${extra}</div>
     ${r.newMiles.map(([n, g]) => `<p><b>Hito de ${n} días:</b> +${g} gemas</p>`).join('')}${node.id === 'f6' ? '<p><b>Desbloqueado:</b> multímetro automático (actívalo en Perfil).</p>' : ''}${!wasOpen && tracksOpen() && TRACKS.length ? `<div class="unlocked"><b>¡Especialidades desbloqueadas!</b><span>${TRACKS.map(t => esc(t.short || t.title)).join(' · ')}</span><small>Las tienes en el carrusel, debajo de Microcontroladores.</small></div>` : ''}</div>
     <div class="foot"><button class="btn amber" id="end">Continuar</button></div></div>`;
   vib([30, 50, 30, 50, 80]);
   const justOpened = !wasOpen && tracksOpen() && TRACKS.length;
-  L.querySelector('#end').onclick = () => { close(); if (justOpened) go('learn', 'tracks'); };
+  // Celebración: confeti, sonido, contadores que suben y las fichas apareciendo una a una
+  Mascot.react('party'); Fx.sound(justOpened ? 'unlock' : 'complete'); setTimeout(() => Fx.confetti(perfect || justOpened ? 160 : 90), 120);
+  if (r.extended) setTimeout(() => { Fx.sound('streak'); Fx.anim(L.querySelector('.streakpill'), 'ignite'); }, 700);
+  L.querySelectorAll('.chips .chip').forEach((c, k) => { c.style.animationDelay = (0.25 + k * 0.12) + 's'; c.classList.add('chipin'); });
+  L.querySelectorAll('[data-cu]').forEach((b, k) => setTimeout(() => { Fx.countUp(b, +b.dataset.cu, { ms: 650 }); if (k === 1) setTimeout(() => Fx.sound('coin'), 650); }, 450 + k * 250));
+  L.querySelector('#end').onclick = () => { Fx.sound('tap'); close(); if (justOpened) go('learn', 'tracks'); };
 }
 
 /* ===================== LECCIÓN, REFUERZO Y REPASO ===================== */
@@ -503,65 +521,131 @@ function nextAlt(c, ex, seen) {
 function recordMiss(ex, lessonId, c) {
   const k = ex._key; if (!k || k.startsWith('alt:')) return;
   const m = S.miss[k] || (S.miss[k] = { k, l: lessonId, i: ex._idx, g: ex._gen || null, c: ex.c || c || null, n: 0, ok: 0 });
+  if (!m.g && ex.q) m.q = ex.q;
   m.n++; m.ok = 0; m.t = today(); save();
 }
 function recordHit(ex) { const m = S.miss[ex._key]; if (!m) return; m.ok++; if (m.ok >= 2) delete S.miss[ex._key]; save(); }
 
+/* Pistas de Chispa: primero la pista del ejercicio (h) o una estrategia según el tipo; si vuelves a
+   tocar, un recordatorio del concepto. Nunca la respuesta. */
+const TYPE_HINT = {
+  mc: 'Descarta primero las opciones que no pueden ser: casi siempre quedan dos, y entonces piensa en qué se diferencian.',
+  num: 'Escribe la fórmula antes de tocar números, pasa todo a unidades base (V, A, Ω, s) y estima el resultado para saber si tiene sentido.',
+  match: 'Empieza por la pareja que tengas más clara: las demás se van quedando solas.',
+  order: 'Busca primero qué va al principio y qué va al final; lo de en medio suele caer por su peso.',
+  tune: 'Mueve un deslizador cada vez y mira qué cambia en el dibujo: así ves qué controla cada uno.',
+  meter: 'Repasa las tres decisiones: qué magnitud mide el selector, en qué borne va la punta roja y dónde tocan las puntas.',
+  pin: 'Busca en el código el número del pin o la función que se usa.',
+  truth: 'Prueba las combinaciones una a una: ¿qué tiene que pasar para que salga 1?',
+  bits: 'Cada bit vale el doble que el de su derecha: 1, 2, 4, 8, 16… Suma los que necesitas.',
+  res: 'Las dos primeras bandas son cifras y la tercera dice cuántos ceros añadir.',
+  bands: 'Escribe el valor como dos cifras y una cantidad de ceros: esas son las tres bandas.',
+  bbtap: 'Dentro de cada mitad, las columnas de cinco agujeros están unidas; las filas de los bordes, a lo largo.',
+  tap: 'Fíjate en las marcas físicas: la pata larga, la franja, la cara plana…',
+  sym: 'Piensa en qué representa cada trazo del símbolo.',
+  pick: 'Sigue la corriente desde el + en cada esquema y busca el que tiene un camino correcto y protegido.',
+  explore: 'Mueve los deslizadores despacio y mira el dibujo: el reto marcado dice qué tienes que conseguir.',
+  steps: 'Ve paso a paso: cada paso se apoya en el anterior.',
+  info: 'Léelo con calma y, si quieres más detalle, abre «Cuéntame más» cuando lo haya.'
+};
+function hintFor(ex, level) {
+  if (!ex) return null;
+  const C = ex.c && CONCEPTS[ex.c];
+  if (ex.t === 'explore') { const t = ex.tasks && ex.tasks.find((x, i) => !document.querySelector(`.tasks [data-t="${i}"].ok`)); return { title: 'Pista', text: t && t.hint ? t.hint : TYPE_HINT.explore }; }
+  if (Widgets.UNGRADED.has(ex.t)) return { title: 'Un consejo', text: TYPE_HINT[ex.t] || TYPE_HINT.info, mood: 'happy' };
+  if (level === 0) return { title: 'Pista', text: ex.h || TYPE_HINT[ex.t] || TYPE_HINT.mc };
+  if (C) { const first = String(C.alts[0].text).replace(/<[^>]+>/g, '').split(/(?<=[.!?])\s/)[0]; return { title: 'Recuerda: ' + C.name, text: first, ms: 9000 }; }
+  return { title: 'Pista', text: TYPE_HINT[ex.t] || TYPE_HINT.mc };
+}
+
 function startLesson(lesson) {
   const { L, close } = overlay();
   const queue = lesson.ex.map((e, i) => ({ ...e, _idx: e._idx ?? i, _key: e._key || (lesson.extra ? null : lesson.id + ':' + i) }));
-  let doneCount = 0, mistakes = 0, w = null;
+  let doneCount = 0, mistakes = 0, w = null, combo = 0, best = 0, cur = null, hintLevel = 0;
   const altRounds = {}, seenAlts = new Set();
+  Mascot.provider = () => { const h = hintFor(cur, hintLevel); if (cur && !Widgets.UNGRADED.has(cur.t)) hintLevel++; return h; };
+  const end = () => { Mascot.provider = defaultTip; close(); };
   function frame(inner, foot) {
     if (w && w.destroy) w.destroy(); w = null;
     const pct = doneCount / Math.max(1, doneCount + queue.length) * 100;
-    L.innerHTML = `<div class="lesson-in" style="--uc:${lesson.ui != null ? nodeColor(lesson) : 'var(--led)'}"><div class="lbar"><button class="close" aria-label="Salir">×</button><div class="prog"><i style="width:${pct}%"></i></div></div><div class="q">${inner}</div><div class="foot">${foot}</div></div>`;
-    L.querySelector('.close').onclick = () => { if (doneCount === 0 || confirm('¿Salir? Perderás el progreso de esta sesión.')) { if (w && w.destroy) w.destroy(); close(); } };
+    L.innerHTML = `<div class="lesson-in" style="--uc:${lesson.ui != null ? nodeColor(lesson) : 'var(--led)'}"><div class="lbar"><button class="close" aria-label="Salir">×</button><div class="prog"><i style="width:${pct}%"></i></div><span class="combo" hidden></span></div><div class="q">${inner}</div><div class="foot">${foot}</div></div>`;
+    L.querySelector('.close').onclick = () => { if (doneCount === 0 || confirm('¿Salir? Perderás el progreso de esta sesión.')) { if (w && w.destroy) w.destroy(); Fx.sound('close'); end(); } };
+    showCombo();
   }
+  function showCombo() { const c = L.querySelector('.combo'); if (!c) return; c.hidden = combo < 2; c.textContent = '×' + combo; }
   function ask() {
-    if (!queue.length) return finishScreen(L, () => close(), lesson, { xp: lesson.extra ? 8 : 10 + (mistakes === 0 ? 5 : 0), gems: lesson.extra ? 8 : 15, extra: `<div class="chip"><b>${mistakes}</b><span>fallos</span></div>` });
+    if (!queue.length) return finishScreen(L, end, lesson, { xp: lesson.extra ? 8 : 10 + (mistakes === 0 ? 5 : 0), gems: lesson.extra ? 8 : 15, perfect: !lesson.extra && mistakes === 0, extra: `<div class="chip"><b>${mistakes}</b><span>fallos</span></div><div class="chip"><b>×${best}</b><span>mejor racha</span></div>` });
     let ex = queue[0];
     if (ex.t === 'gen') { const g = Gen.make(ex.g); ex = queue[0] = { ...g, _key: ex._key || 'gen:' + ex.g, _gen: ex.g, _idx: ex._idx }; if (!lesson.extra) ex._key = 'gen:' + ex._gen; }
-    const isInfo = ex.t === 'info';
-    const kind = ex._alt ? (isInfo ? 'Otra forma de verlo' : 'Comprueba si ahora encaja') : Widgets.KIND[ex.t];
-    const title = isInfo ? (ex.title || '') : ex.t === 'res' ? '¿Qué valor tiene esta resistencia?' : ex.q || '';
-    frame(`<div class="kind ${ex._alt ? 'altk' : ''}">${kind}</div>${title ? `<h2>${esc(title)}</h2>` : ''}<div class="wbox"></div>`, `<button class="btn ${isInfo ? 'amber' : ''}" id="chk" ${isInfo ? '' : 'disabled'}>${isInfo ? 'Continuar' : 'Comprobar'}</button>`);
-    const chk = L.querySelector('#chk');
-    const ctx = { ready: v => { chk.disabled = !v; }, submit: () => !chk.disabled && chk.click(), meterAuto: meterAutoOn() };
-    w = Widgets.render(ex, L.querySelector('.wbox'), ctx);
+    cur = ex; hintLevel = 0; Mascot.hide(); Mascot.mood(ex._alt ? 'think' : 'happy');
+    const ungraded = Widgets.UNGRADED.has(ex.t);
+    const kind = ex._alt ? (ungraded ? 'Otra forma de verlo' : 'Comprueba si ahora encaja') : ex.predict ? 'Predice' : Widgets.KIND[ex.t];
+    const title = ungraded ? (ex.title || '') : ex.t === 'res' ? '¿Qué valor tiene esta resistencia?' : ex.q || '';
+    frame(`<div class="kind ${ex._alt ? 'altk' : ''} ${ex.predict ? 'predk' : ''}">${kind}</div>${title ? `<h2>${esc(title)}</h2>` : ''}<div class="wbox"></div>`, `<button class="btn ${ungraded ? 'amber' : ''}" id="chk" disabled>${ungraded ? 'Continuar' : ex.predict ? 'Ver qué pasa' : 'Comprobar'}</button>`);
+    const chk = L.querySelector('#chk'), wbox = L.querySelector('.wbox');
+    Fx.anim(L.querySelector('.q'), 'enter');
+    const ctx = { ready: v => { const was = chk.disabled; chk.disabled = !v; if (was && v && ungraded && ex.t !== 'info') Fx.anim(chk, 'pop'); }, submit: () => !chk.disabled && chk.click(), meterAuto: meterAutoOn() };
+    w = Widgets.render(ex, wbox, ctx);
     chk.addEventListener('click', () => {
-      if (isInfo) { queue.shift(); doneCount++; return ask(); }
+      if (ungraded) { Fx.sound('tap'); queue.shift(); doneCount++; return ask(); }
       const r = w.check();
       if (!r.ok && ex.t === 'meter') {
-        mistakes++; vib([60, 40, 60]);
+        mistakes++; combo = 0; showCombo(); vib([60, 40, 60]); Fx.sound('wrong'); Fx.anim(wbox, 'shake'); Mascot.react('wrong');
         let s = L.querySelector('.hintbar'); if (!s) { s = document.createElement('div'); s.className = 'hintbar'; L.querySelector('.q').appendChild(s); }
-        s.innerHTML = `${chispa('think', 32)}<span>${esc(r.msg)}</span>`; s.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        s.innerHTML = `<span class="hbicon">!</span><span>${esc(r.msg)}</span>`; s.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
         if (!ex._miss) { ex._miss = true; recordMiss(ex, lesson.id, ex.c || (lesson.c || [])[0]); }
         return;
       }
       const hb = L.querySelector('.hintbar'); if (hb) hb.remove();
       w.lock && w.lock();
       queue.shift();
-      let remedial = null;
-      if (r.ok) { doneCount++; vib(25); if (ex.t !== 'meter' || !ex._miss) recordHit(ex); }
-      else {
-        mistakes++; vib([60, 40, 60]);
+      let remedial = null, head, tone;
+      if (ex.predict) {
+        // Predecir no penaliza: lo importante es pensar antes de ver el resultado
+        doneCount++; tone = r.ok ? 'ok' : 'pred';
+        head = r.ok ? '¡Bien predicho!' : 'Lo que de verdad pasa: ' + (r.right || '');
+        Fx.sound(r.ok ? 'correct' : 'step', combo); Mascot.react(r.ok ? 'right' : 'wow');
+        if (r.ok) Fx.burstAt(chk, { n: 16 });
+      } else if (r.ok) {
+        doneCount++; combo++; best = Math.max(best, combo); vib(25); tone = 'ok';
+        if (ex.t !== 'meter' || !ex._miss) recordHit(ex);
+        head = combo >= 3 ? pickOne(['¡Imparable!', '¡Sigue así!', '¡En racha!', '¡Qué nivel!']) : pickOne(['¡Correcto!', '¡Bien visto!', '¡Exacto!', '¡Eso es!']);
+        Fx.sound('correct', combo - 1); Fx.burstAt(chk, { n: 14 + Math.min(combo, 6) * 4 }); Mascot.react('right');
+        if (combo === 3 || combo === 5 || combo % 10 === 0) { setTimeout(() => Fx.sound('combo', combo), 260); toast(`¡${combo} seguidas!`); }
+      } else {
+        mistakes++; combo = 0; vib([60, 40, 60]); tone = 'bad';
+        Fx.sound('wrong'); Fx.anim(wbox, 'shake'); Mascot.react('wrong');
         const c = ex.c || (lesson.c || [])[0];
         recordMiss(ex, lesson.id, c);
         if (c && CONCEPTS[c] && (altRounds[c] || 0) < CONCEPTS[c].alts.length) { altRounds[c] = (altRounds[c] || 0) + 1; remedial = nextAlt(c, ex, seenAlts); }
         if (!ex._alt) queue.push(ex);
+        head = r.right ? 'Respuesta correcta: ' + r.right : 'No del todo';
       }
-      const prog = L.querySelector('.prog i'); prog.style.width = (doneCount / Math.max(1, doneCount + queue.length + (remedial ? 2 : 0)) * 100) + '%';
-      const head = r.ok ? pickOne(['¡Correcto!', '¡Bien visto!', '¡Exacto!', '¡Eso es!']) : (r.right ? 'Respuesta correcta: ' + r.right : 'No del todo');
+      showCombo(); Fx.anim(L.querySelector('.combo'), 'pop');
+      const prog = L.querySelector('.prog i'); prog.style.width = (doneCount / Math.max(1, doneCount + queue.length + (remedial ? 2 : 0)) * 100) + '%'; Fx.anim(L.querySelector('.prog'), 'glow');
       const body = [r.msg, ex.e].filter(Boolean).map(esc).join(' ');
-      L.querySelector('.foot').innerHTML = `<div class="sheet ${r.ok ? 'ok' : 'bad'}" role="status"><div class="shead">${chispa(r.ok ? 'happy' : 'sad', 40)}<h3>${esc(head)}</h3></div>${body ? `<p>${body}</p>` : ''}${remedial ? `<p class="remnote">Te lo explico de otra manera antes de seguir.</p>` : ''}<button class="btn ${r.ok ? 'okb' : 'badb'}" id="nx">Continuar</button></div>`;
+      L.querySelector('.foot').innerHTML = `<div class="sheet ${tone}" role="status"><div class="shead"><span class="sicon">${tone === 'ok' ? '✓' : tone === 'pred' ? '!' : '✗'}</span><h3>${esc(head)}</h3></div>${body ? `<p>${body}</p>` : ''}${remedial ? `<p class="remnote">Te lo explico de otra manera antes de seguir.</p>` : ''}<button class="btn ${tone === 'bad' ? 'badb' : tone === 'pred' ? 'amber' : 'okb'}" id="nx">Continuar</button></div>`;
+      Fx.anim(L.querySelector('.sheet'), 'slideup');
       const nx = L.querySelector('#nx'); nx.focus();
-      nx.onclick = () => { if (remedial) queue.unshift(...remedial); ask(); };
+      nx.onclick = () => { Fx.sound('tap'); if (remedial) queue.unshift(...remedial); ask(); };
     });
   }
   ask();
 }
 const pickOne = a => a[Math.floor(Math.random() * a.length)];
+const TIPS = ['Si fallas, no pasa nada: te lo explico de otra manera y vuelve a salir al final.', 'En cualquier ejercicio, tócame y te doy una pista sin chivarte la respuesta.', 'Los proyectos no bloquean el avance, pero son donde de verdad se aprende: móntalos.', 'Antes de calcular, estima: si esperas miliamperios y te salen amperios, revisa los prefijos.', 'En Repasar tienes los ejercicios que fallaste, con explicaciones distintas.', 'El Laboratorio guarda tus montajes solos: prueba ahí antes de montar en la mesa.', 'Una lección al día mantiene tu racha encendida. ¡Como yo!'];
+function defaultTip() {
+  if (view === 'learn' || view === 'track') {
+    const seq = view === 'track' ? curTrack : 'base', n = (view === 'track' && !tracksOpen()) ? null : firstOpenIn(seq);
+    if (S.hist[today()] !== 'done' && n) return { title: '¿Seguimos?', text: `Tu siguiente paso es «${n.title}». Con una actividad hoy mantienes la racha.`, mood: 'happy' };
+    if (n) return { title: 'Lo siguiente', text: `Te espera «${n.title}». ${pickOne(TIPS)}`, mood: 'happy' };
+  }
+  if (view === 'review') { const k = Object.keys(S.miss).length; return { title: 'Repasar', text: k ? `Tienes ${k} ${k === 1 ? 'ejercicio' : 'ejercicios'} por repasar. Cada uno sale de la lista al acertarlo dos veces seguidas.` : 'No tienes fallos pendientes. Aquí también puedes ver cualquier concepto explicado de otra forma.', mood: 'happy' }; }
+  if (view === 'lab') return { title: 'Laboratorio', text: 'Pulsa «+ Pieza» para añadir componentes y «Cable» para unir puntos. Toca una pieza para girarla o borrarla.', mood: 'happy' };
+  if (view === 'streak') return { title: 'Tu racha', text: S.streak ? `Llevas ${S.streak} ${S.streak === 1 ? 'día' : 'días'}. Un protector cubre un día sin practicar.` : 'Completa una lección hoy para encenderme… digo, para encender tu racha.', mood: 'happy' };
+  return { title: 'Chispa', text: pickOne(TIPS), mood: 'happy' };
+}
+let justDone = null;
 
 /* ===================== RETO DE SIMULADOR ===================== */
 function startSim(node) {
@@ -575,6 +659,7 @@ function startSim(node) {
     <div class="foot"><button class="btn" id="chk">Comprobar</button></div></div>`;
   const api = Sim.open(L.querySelector('.simhost'), { battery: cfg.battery, arduino: cfg.arduino, board: cfg.board || 'uno', parts: cfg.parts, hint: cfg.hint, initial: S.circ[node.id] }, { toast, onChange: m => { S.circ[node.id] = m; save(); } });
   L.querySelector('.close').onclick = () => { api.destroy(); close(); };
+  Mascot.provider = () => ({ title: 'Pista', text: cfg.hint || 'Monta primero el camino de la corriente desde el + hasta el − y luego pulsa Comprobar: la lista te dirá qué falta.' });
   L.querySelector('#chk').onclick = () => {
     const res = CHECKS[node.checks](api), ok = res.every(r => r.ok);
     L.querySelector('.checks').innerHTML = `<ul class="clist">${res.map(r => `<li class="${r.ok ? 'ok' : 'no'}">${r.ok ? '✓' : '✗'} ${esc(r.label)}</li>`).join('')}</ul>`;
@@ -617,6 +702,7 @@ function startProject(node) {
     <p class="small">${node.track ? 'Tu avance se guarda solo: puedes dejarlo a medias y seguir otro día.' : 'Antes de montarlo puedes probar el circuito en el Laboratorio.'}</p></div>
     <div class="foot"><button class="btn" id="fin"></button></div></div>`;
   const fin = L.querySelector('#fin');
+  Mascot.provider = () => { const i = phases.findIndex((_, k) => !phaseDone(k)); return i < 0 ? { title: '¡Todo listo!', text: 'Has marcado todas las comprobaciones: pulsa «Marcar como completado».', mood: 'happy' } : { title: phases[i].title || 'Siguiente paso', text: 'Ve a por esta fase: ' + phases[i].steps[0] + ' Marca cada comprobación solo cuando la hayas verificado de verdad.' }; };
   function update() {
     const n = chk.filter(Boolean).length, all = n >= total, completed = S.done[node.id] === true;
     fin.className = 'btn' + (all && !completed ? ' amber' : ''); fin.disabled = !all || completed;
@@ -624,7 +710,7 @@ function startProject(node) {
     phases.forEach((x, i) => { const d = L.querySelector(`[data-ph="${i}"]`); d.classList.toggle('pdone', phaseDone(i)); d.querySelector('.pnum').textContent = phaseDone(i) ? '✓' : i + 1; d.querySelector('summary small').textContent = `${x.checks.filter((_, j) => chk[base[i] + j]).length}/${x.checks.length}`; });
   }
   L.querySelector('.close').onclick = close;
-  L.querySelectorAll('[data-c]').forEach(c => c.addEventListener('change', () => { chk[+c.dataset.c] = c.checked; save(); update(); }));
+  L.querySelectorAll('[data-c]').forEach(c => c.addEventListener('change', () => { chk[+c.dataset.c] = c.checked; save(); Fx.sound(c.checked ? 'task' : 'tap'); if (c.checked) Fx.burstAt(c, { n: 8, speed: 3 }); const ph = c.closest('.phase'), was = ph.classList.contains('pdone'); update(); if (!was && ph.classList.contains('pdone')) { Fx.sound('combo', 4); Fx.burstAt(ph.querySelector('.pnum'), { n: 24 }); } }));
   fin.onclick = () => finishScreen(L, close, node, projReward(p));
   update();
 }
@@ -657,7 +743,8 @@ function renderLab() {
 }
 
 /* ===================== ARRANQUE ===================== */
-(async () => { await loadNative(); evaluate(); render(); flush(); })();
+(async () => { await loadNative(); evaluate(); Fx.setSound(S.sound !== false); Mascot.mount(); Mascot.setEnabled(S.mascot !== false); Mascot.provider = defaultTip; render(); flush(); setTimeout(() => S.mascot !== false && S.hist[today()] !== 'done' && Mascot.say(defaultTip().text, 'happy', 5000, '¡Hola!'), 900); })();
+document.addEventListener('click', e => { if (e.target.closest('.nav button, .node, .tcard, .backlink, .modal .btn, .cbtn, .seg button')) Fx.sound('tap'); }, true);
 document.addEventListener('visibilitychange', () => { if (document.hidden) { flushSave(); return; } evaluate(); if (!document.querySelector('.lesson')) render(); flush(); });
 window.addEventListener('pagehide', flushSave);
 /* Botón atrás de Android: cierra la ventana abierta antes de salir de la app */

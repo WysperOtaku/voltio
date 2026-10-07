@@ -269,6 +269,8 @@ const Widgets = (() => {
   }
   function hbar(x, y, w, f, col, lab) { return `<rect x="${x}" y="${y - 10}" width="${w}" height="14" rx="4" fill="var(--line)"/><rect x="${x}" y="${y - 10}" width="${w * Math.max(0, Math.min(1, f))}" height="14" rx="4" fill="${col}"/><text x="${x}" y="${y - 14}" class="vizsm">${lab}</text>`; }
   function fmtParam(k, v, def) {
+    // Deslizador de opciones: labels da el nombre de cada valor (en el mismo orden que list, o indexado por el valor)
+    if (def.labels) { const i = def.list ? def.list.indexOf(v) : v; if (def.labels[i] != null) return def.labels[i]; }
     if (def.fmt === 'R') return fR(v); if (def.fmt === 'C') return v + ' µF'; if (def.fmt === 'mA') return num(v * 1000, 0) + ' mA';
     return num(v, def.dec ?? 1) + (def.unit ? ' ' + def.unit : '');
   }
@@ -283,10 +285,10 @@ const Widgets = (() => {
     const box = el.querySelector('.vizbox'), goalEl = el.querySelector('.goal');
     let t0 = performance.now(), raf = 0, o = viz.calc(p);
     const meets = () => { const v = o[ex.goal.q]; return v >= ex.goal.min && v <= ex.goal.max && !(ex.goal.notBurnt && o.burnt); };
-    function paint() { o = viz.calc(p); box.innerHTML = viz.svg(p, o, (performance.now() - t0) / 1000); if (goalEl) { const ok = meets(); goalEl.className = 'goal' + (ok ? ' met' : ''); goalEl.textContent = ok ? 'Objetivo conseguido' : ex.goal.text; } }
+    function paint() { o = viz.calc(p); box.innerHTML = viz.svg(p, o, (performance.now() - t0) / 1000); ex.onChange && ex.onChange(o); if (goalEl) { const ok = meets(); goalEl.className = 'goal' + (ok ? ' met' : ''); goalEl.textContent = ok ? 'Objetivo conseguido' : ex.goal.text; } }
     el.querySelectorAll('input[data-k]').forEach(inp => inp.addEventListener('input', () => {
       const k = inp.dataset.k, d = defs[k], list = d.list || (d.fmt === 'R' ? E12.filter(r => r >= (d.min || 10) && r <= (d.max || 1e6)) : null);
-      p[k] = list ? list[+inp.value] : +inp.value; el.querySelector(`[data-out="${k}"]`).textContent = fmtParam(k, p[k], d); paint();
+      p[k] = list ? list[+inp.value] : +inp.value; el.querySelector(`[data-out="${k}"]`).textContent = fmtParam(k, p[k], d); paint(); sfx('tick');
       if (viz.anim && (ex.viz === 'rc' || viz.restart)) t0 = performance.now();
     }));
     paint();
@@ -479,15 +481,15 @@ const Widgets = (() => {
     const opts = ex.o.map((o, i) => [o, i]);
     const order = ex.keep ? opts : shuffle(opts);
     el.innerHTML = `${ex.code ? `<pre class="code">${esc(ex.code)}</pre>` : ''}${ex.sch ? `<div class="schbox">${Schem.draw(SCH[ex.sch])}</div>` : ''}${ex.symk ? Schem.symbol(ex.symk) : ''}${ex.img ? IMG[ex.img].svg('') : ''}<div class="opts">${order.map(([o, i]) => `<button class="opt" data-i="${i}" aria-pressed="false">${esc(o)}</button>`).join('')}</div>`;
-    el.querySelectorAll('.opt').forEach(b => b.addEventListener('click', () => { el.querySelectorAll('.opt').forEach(x => x.setAttribute('aria-pressed', 'false')); b.setAttribute('aria-pressed', 'true'); sel = +b.dataset.i; ctx.ready(true); }));
-    return { check: () => ({ ok: sel === ex.a, right: ex.o[ex.a] }), lock: () => el.querySelectorAll('.opt').forEach(b => b.disabled = true) };
+    el.querySelectorAll('.opt').forEach(b => b.addEventListener('click', () => { el.querySelectorAll('.opt').forEach(x => x.setAttribute('aria-pressed', 'false')); b.setAttribute('aria-pressed', 'true'); sel = +b.dataset.i; ctx.ready(true); sfx('select'); }));
+    return { check: () => ({ ok: sel === ex.a, right: ex.o[ex.a] }), lock: () => el.querySelectorAll('.opt').forEach(b => { b.disabled = true; if (+b.dataset.i === ex.a) b.classList.add('right'); else if (+b.dataset.i === sel) b.classList.add('wrong'); }) };
   }
   function pick(ex, el, ctx) { // elegir el esquema correcto
     let sel = null;
     const order = shuffle(ex.o.map((k, i) => [k, i]));
     el.innerHTML = `<div class="opts">${order.map(([k, i]) => `<button class="opt schopt" data-i="${i}" aria-pressed="false">${Schem.draw(SCH[k], { width: 260 })}</button>`).join('')}</div>`;
-    el.querySelectorAll('.opt').forEach(b => b.addEventListener('click', () => { el.querySelectorAll('.opt').forEach(x => x.setAttribute('aria-pressed', 'false')); b.setAttribute('aria-pressed', 'true'); sel = +b.dataset.i; ctx.ready(true); }));
-    return { check: () => ({ ok: sel === ex.a, right: 'el esquema marcado' }), lock: () => el.querySelectorAll('.opt').forEach(b => b.disabled = true) };
+    el.querySelectorAll('.opt').forEach(b => b.addEventListener('click', () => { el.querySelectorAll('.opt').forEach(x => x.setAttribute('aria-pressed', 'false')); b.setAttribute('aria-pressed', 'true'); sel = +b.dataset.i; ctx.ready(true); sfx('select'); }));
+    return { check: () => ({ ok: sel === ex.a, right: 'el esquema marcado' }), lock: () => el.querySelectorAll('.opt').forEach(b => { b.disabled = true; if (+b.dataset.i === ex.a) b.classList.add('right'); else if (+b.dataset.i === sel) b.classList.add('wrong'); }) };
   }
   function numw(ex, el, ctx) {
     el.innerHTML = `${ex.code ? `<pre class="code">${esc(ex.code)}</pre>` : ''}${ex.sch ? `<div class="schbox">${Schem.draw(SCH[ex.sch])}</div>` : ''}<label class="numin"><input inputmode="decimal" autocomplete="off" placeholder="Tu respuesta" aria-label="Respuesta en ${ex.u}"><span>${ex.u}</span></label>`;
@@ -627,24 +629,72 @@ const Widgets = (() => {
     svg.addEventListener('click', e => { const z = e.target.closest('[data-z]'); if (!z) return; svg.querySelectorAll('[data-z]').forEach(x => x.classList.remove('zsel')); z.classList.add('zsel'); sel = z.dataset.z; ctx.ready(true); });
     return { check: () => ({ ok: sel === ex.a, right: ex.right }) };
   }
+  const paras = t => String(t || '').split('\n').filter(x => x !== '').map(p => `<p>${p}</p>`).join('');
+  const sfx = (n, a) => { try { typeof Fx !== 'undefined' && Fx.sound(n, a); } catch (e) { } };
+  // Imagen de apoyo común a las tarjetas: esquema, símbolo, foto tocable, puerta o SVG propio
+  function visual(ex) {
+    if (ex.svg) return `<div class="ivis">${ex.svg}</div>`;
+    if (ex.sch) return `<div class="schbox">${Schem.draw(SCH[ex.sch])}</div>`;
+    if (ex.symk) return Schem.symbol(ex.symk);
+    if (ex.img) return IMG[ex.img].svg('');
+    if (ex.gate) return gateSym(ex.gate);
+    return '';
+  }
+  // «Cuéntame más»: texto ampliado que se despliega bajo demanda
+  const moreBox = ex => ex.more ? `<details class="more"><summary>Cuéntame más</summary>${paras(ex.more)}</details>` : '';
   function info(ex, el, ctx) {
-    let viz = '';
-    if (ex.sch) viz = `<div class="schbox">${Schem.draw(SCH[ex.sch])}</div>`;
-    if (ex.symk) viz = Schem.symbol(ex.symk);
-    if (ex.img) viz = IMG[ex.img].svg('');
-    if (ex.gate) viz = gateSym(ex.gate);
-    if (ex.svg) viz = ex.svg;
-    el.innerHTML = `<div class="info">${viz}${ex.text.split('\n').map(p => `<p>${p}</p>`).join('')}${ex.code ? `<pre class="code">${esc(ex.code)}</pre>` : ''}</div>`;
+    el.innerHTML = `<div class="info">${visual(ex)}${paras(ex.text)}${ex.code ? `<pre class="code">${esc(ex.code)}</pre>` : ''}${moreBox(ex)}</div>`;
     let inner = null;
     if (ex.tune) { const d = document.createElement('div'); el.querySelector('.info').prepend(d); inner = tune({ viz: ex.tune.viz, params: ex.tune.params }, d, { ready() { } }); }
+    const m = el.querySelector('.more'); m && m.addEventListener('toggle', () => m.open && sfx('open'));
     ctx.ready(true);
     return { check: () => ({ ok: true }), info: true, destroy: () => inner && inner.destroy && inner.destroy() };
   }
+  /* EXPLORA: una visualización con deslizadores y una lista de mini-retos. Cada reto conseguido
+     se marca con su conclusión. No puntúa: se continúa al completar todos. */
+  function explore(ex, el, ctx) {
+    const box = document.createElement('div');
+    el.innerHTML = `<div class="info explore">${ex.text ? paras(ex.text) : ''}<div class="exviz"></div><ol class="tasks">${ex.tasks.map((t, i) => `<li data-t="${i}" class="${i ? 'later' : 'now'}"><span class="tk"></span><span class="tt">${t.text}</span><span class="tdone" hidden>${t.done || ''}</span></li>`).join('')}</ol>${moreBox(ex)}</div>`;
+    el.querySelector('.exviz').appendChild(box);
+    const done = new Set();
+    const inner = tune({ viz: ex.viz, params: ex.params, onChange: o => {
+      ex.tasks.forEach((t, i) => {
+        if (done.has(i) || (ex.inOrder !== false && i > done.size)) return;
+        const v = o[t.q]; if (!(v >= t.min && v <= t.max)) return;
+        done.add(i); sfx('task');
+        const li = el.querySelector(`[data-t="${i}"]`); li.className = 'ok'; li.querySelector('.tdone').hidden = !t.done;
+        const nx = el.querySelector(`[data-t="${done.size}"]`); nx && (nx.className = 'now');
+        typeof Fx !== 'undefined' && Fx.burstAt(li.querySelector('.tk'), { n: 10, speed: 3 });
+        if (done.size === ex.tasks.length) ctx.ready(true);
+      });
+    } }, box, { ready() { } });
+    ctx.ready(done.size === ex.tasks.length);
+    return { check: () => ({ ok: true }), info: true, destroy: () => inner && inner.destroy && inner.destroy() };
+  }
+  /* PASO A PASO: un ejemplo resuelto que se descubre paso a paso. */
+  function steps(ex, el, ctx) {
+    el.innerHTML = `<div class="info wsteps">${visual(ex)}${paras(ex.text)}${ex.code ? `<pre class="code">${esc(ex.code)}</pre>` : ''}<ol class="slist"></ol><button class="btn ghost snext">Siguiente paso</button>${moreBox(ex)}</div>`;
+    const ol = el.querySelector('.slist'), nb = el.querySelector('.snext');
+    let k = 0;
+    const show = () => {
+      const li = document.createElement('li'); li.innerHTML = ex.steps[k]; ol.appendChild(li); k++;
+      sfx('step'); typeof Fx !== 'undefined' && Fx.anim(li, 'rise');
+      if (k >= ex.steps.length) { nb.remove(); if (ex.result) { const r = document.createElement('p'); r.className = 'sres'; r.innerHTML = ex.result; ol.after(r); typeof Fx !== 'undefined' && Fx.anim(r, 'pop'); } ctx.ready(true); }
+      else nb.textContent = `Siguiente paso (${k + 1} de ${ex.steps.length})`;
+      li.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    };
+    nb.addEventListener('click', show);
+    nb.textContent = `Ver el primer paso (1 de ${ex.steps.length})`;
+    ctx.ready(false);
+    return { check: () => ({ ok: true }), info: true };
+  }
 
-  const REG = { mc, num: numw, res: resw, sym: symw, pick, tune, meter, match, order, truth, bits, bbtap, pin, tap, bands: bandsw, info };
+  const REG = { mc, num: numw, res: resw, sym: symw, pick, tune, meter, match, order, truth, bits, bbtap, pin, tap, bands: bandsw, info, explore, steps };
   function render(ex, el, ctx) { return REG[ex.t](ex, el, ctx); }
-  const KIND = { mc: 'Elige la respuesta', num: 'Calcula', res: 'Lee el código de colores', sym: '¿Qué símbolo es este?', pick: 'Elige el esquema', tune: 'Experimenta', meter: 'Usa el multímetro', match: 'Une las parejas', order: 'Ordena los pasos', truth: 'Completa la tabla de verdad', bits: 'Enciende los bits', bbtap: 'Explora la protoboard', pin: 'Elige el pin', tap: 'Toca la parte correcta', bands: 'Pinta las bandas', info: 'Descubre' };
+  const KIND = { mc: 'Elige la respuesta', num: 'Calcula', res: 'Lee el código de colores', sym: '¿Qué símbolo es este?', pick: 'Elige el esquema', tune: 'Experimenta', meter: 'Usa el multímetro', match: 'Une las parejas', order: 'Ordena los pasos', truth: 'Completa la tabla de verdad', bits: 'Enciende los bits', bbtap: 'Explora la protoboard', pin: 'Elige el pin', tap: 'Toca la parte correcta', bands: 'Pinta las bandas', info: 'Descubre', explore: 'Experimenta', steps: 'Paso a paso' };
+  // Pasos que no puntúan: se leen o se exploran y se continúa
+  const UNGRADED = new Set(['info', 'explore', 'steps']);
   // Utilidades de dibujo para que las especialidades añadan sus propias visualizaciones (Object.assign(Widgets.VIZ, …)).
   const H = { esc, num, fR, fI, fV, st, batt, resBody, ledBulb, npnSym, flowPath, stackBar, hbar, heat, BANDHEX };
-  return { render, KIND, SCENES, VIZ, IMG, H };
+  return { render, KIND, UNGRADED, SCENES, VIZ, IMG, H };
 })();

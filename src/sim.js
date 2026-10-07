@@ -324,8 +324,8 @@ const Sim = (() => {
         if (c.type === 'motor') r.speed = Math.max(0, Math.min(1, I / 0.25));
         live[c.id] = r;
         // daños
-        if (c.type === 'led' && !c.burnt && I > 0.045) { c.burnt = true; changedTopo = true; cb.toast && cb.toast('¡Has quemado un LED! Le pasaban ' + fmtI(I) + '. Pon una resistencia en serie.'); }
-        if (c.type === 'res' && !c.burnt && I * I * c.val > 0.6) { c.burnt = true; changedTopo = true; cb.toast && cb.toast('La resistencia de ' + fmtR(c.val) + ' se ha quemado: disipaba ' + (I * I * c.val).toFixed(1).replace('.', ',') + ' W y aguanta ¼ W.'); }
+        if (c.type === 'led' && !c.burnt && I > 0.045) { c.burnt = true; changedTopo = true; typeof Fx !== 'undefined' && Fx.sound('burn'); cb.toast && cb.toast('¡Has quemado un LED! Le pasaban ' + fmtI(I) + '. Pon una resistencia en serie.'); }
+        if (c.type === 'res' && !c.burnt && I * I * c.val > 0.6) { c.burnt = true; changedTopo = true; typeof Fx !== 'undefined' && Fx.sound('burn'); cb.toast && cb.toast('La resistencia de ' + fmtR(c.val) + ' se ha quemado: disipaba ' + (I * I * c.val).toFixed(1).replace('.', ',') + ' W y aguanta ¼ W.'); }
         // estadísticas para retos
         const s = stats.comps[c.id] || (stats.comps[c.id] = { maxI: 0, onT: 0, offT: 0, maxB: 0, minB: 1, onPressed: false, offReleased: false, onReleased: false, after: 0, maxAfter: 0, toggles: 0, lit: null });
         s.maxI = Math.max(s.maxI, Math.abs(I));

@@ -10,7 +10,7 @@ const buildPy = rd('build.py');
 const TRACK_ORDER = JSON.parse(buildPy.match(/TRACK_ORDER = (\[.*\])/)[1].replace(/'/g, '"'));
 const trackFiles = TRACK_ORDER.map(t => `src/tracks/${t}.js`).filter(f => fs.existsSync(path.join(root, f)));
 const extra = fs.existsSync(path.join(root, 'src/tracks')) ? fs.readdirSync(path.join(root, 'src/tracks')).filter(f => f.endsWith('.js')).map(f => 'src/tracks/' + f).filter(f => !trackFiles.includes(f)).sort() : [];
-const files = ['avr.js', 'src/solver.js', 'src/schem.js', 'src/sketches.js', 'src/sketches_esp.js', 'src/view3d.js', 'src/sim.js', 'src/route.js', 'src/widgets.js', 'src/concepts.js', 'src/gen.js', 'src/content.js', 'src/checks.js', ...trackFiles, ...extra];
+const files = ['avr.js', 'src/solver.js', 'src/schem.js', 'src/sketches.js', 'src/sketches_esp.js', 'src/view3d.js', 'src/sim.js', 'src/route.js', 'src/fx.js', 'src/widgets.js', 'src/concepts.js', 'src/gen.js', 'src/content.js', ...fs.readdirSync(path.join(root, 'src/base')).filter(f => f.endsWith('.js')).sort().map(f => 'src/base/' + f), 'src/checks.js', ...trackFiles, ...extra];
 
 const el = () => new Proxy({ style: {}, classList: { add() { }, remove() { }, toggle() { } }, dataset: {} }, { get: (t, k) => k in t ? t[k] : (k === 'querySelectorAll' ? () => [] : typeof k === 'string' ? () => el() : undefined) });
 const ctx = { console, Math, JSON, Date, Object, Array, String, Number, Boolean, Set, Map, RegExp, Error, Promise, Symbol, parseInt, parseFloat, isNaN, isFinite, Infinity, NaN, setTimeout() { }, clearTimeout() { }, requestAnimationFrame() { }, cancelAnimationFrame() { }, performance: { now: () => 0 }, navigator: {}, localStorage: { getItem() { return null; }, setItem() { } }, document: { createElement: el, querySelector: () => null, querySelectorAll: () => [], addEventListener() { }, body: el() }, Uint8Array, Uint16Array, Uint32Array, Int8Array, Int16Array, Int32Array, Float32Array, Float64Array, ArrayBuffer, DataView, TextDecoder, TextEncoder };
@@ -27,17 +27,17 @@ const errs = [], warns = [];
 const E = (w, m) => errs.push(w + ': ' + m), W = (w, m) => warns.push(w + ': ' + m);
 const ids = new Map();
 const TYPES = Object.keys(Widgets.KIND).concat('gen');
-let nLessons = 0, nEx = 0, nSims = 0, nProj = 0;
+let nLessons = 0, nEx = 0, nSims = 0, nProj = 0, nNoHint = 0;
 
 function checkEx(ex, where, lessonC) {
   if (!ex || typeof ex !== 'object') return E(where, 'paso vacío');
   if (!TYPES.includes(ex.t)) return E(where, 'tipo desconocido ' + ex.t);
   nEx++;
   const c = ex.c || lessonC;
-  if (ex.t !== 'info' && c && !CONCEPTS[c]) E(where, 'concepto inexistente ' + c);
+  if (!Widgets.UNGRADED.has(ex.t) && c && !CONCEPTS[c]) E(where, 'concepto inexistente ' + c);
   if (ex.c && !CONCEPTS[ex.c]) E(where, 'concepto inexistente ' + ex.c);
   // Cada ejercicio puntuable dice qué concepto practica: es lo que decide la explicación alternativa al fallar.
-  if (ex.t !== 'info' && ex.t !== 'gen' && !ex.c && !where.startsWith('concept/')) E(where, 'ejercicio sin concepto explícito (c): ' + String(ex.q || ex.t).slice(0, 60));
+  if (!Widgets.UNGRADED.has(ex.t) && ex.t !== 'gen' && !ex.c && !where.startsWith('concept/')) E(where, 'ejercicio sin concepto explícito (c): ' + String(ex.q || ex.t).slice(0, 60));
   if (ex.t === 'mc') { if (!Array.isArray(ex.o) || ex.o.length < 2) E(where, 'mc sin opciones'); else if (new Set(ex.o).size !== ex.o.length) E(where, 'mc con opciones repetidas: ' + ex.q); if (!ex.q) E(where, 'mc sin pregunta'); }
   if (ex.t === 'num') { if (typeof ex.a !== 'number' || !isFinite(ex.a)) E(where, 'num sin respuesta numérica: ' + ex.q); }
   if (ex.t === 'gen') { if (!Gen.keys.includes(ex.g)) E(where, 'generador inexistente ' + ex.g); }
@@ -47,6 +47,14 @@ function checkEx(ex, where, lessonC) {
     try { const o = v.calc(p); v.svg(p, o, 0.5); if (ex.goal && !(ex.goal.q in o)) E(where, 'goal.q no lo calcula la viz: ' + ex.goal.q); } catch (e) { E(where, 'viz ' + ex.viz + ' falla: ' + e.message); }
   }
   if (ex.t === 'info' && ex.tune) { const v = Widgets.VIZ[ex.tune.viz]; if (!v) E(where, 'viz inexistente ' + ex.tune.viz); else { const p = {}; for (const [k, d] of Object.entries(ex.tune.params || {})) p[k] = d.val; try { v.svg(p, v.calc(p), 0.5); } catch (e) { E(where, 'viz ' + ex.tune.viz + ' falla: ' + e.message); } } }
+  if (ex.t === 'explore') {
+    const v = Widgets.VIZ[ex.viz]; if (!v) E(where, 'viz inexistente ' + ex.viz);
+    else if (!Array.isArray(ex.tasks) || !ex.tasks.length) E(where, 'explore sin tasks');
+    else { const p = {}; for (const [k, d] of Object.entries(ex.params || {})) p[k] = d.val; try { const o = v.calc(p); v.svg(p, o, 0.5); ex.tasks.forEach((t, i) => { if (!(t.q in o)) E(where, `task ${i}: la viz no calcula ${t.q}`); if (!t.text) E(where, `task ${i} sin text`); if (o[t.q] >= t.min && o[t.q] <= t.max) W(where, `task ${i} ya se cumple con los valores iniciales`); }); } catch (e) { E(where, 'viz ' + ex.viz + ' falla: ' + e.message); } }
+  }
+  if (ex.t === 'steps' && (!Array.isArray(ex.steps) || ex.steps.length < 2)) E(where, 'steps necesita al menos 2 pasos');
+  if (ex.predict && ex.t !== 'mc') E(where, 'predict solo vale en preguntas mc');
+  if (!Widgets.UNGRADED.has(ex.t) && ex.t !== 'gen' && !where.startsWith('concept/') && !ex.h) nNoHint++;
   if (ex.sch && !SCH[ex.sch]) E(where, 'esquema inexistente ' + ex.sch);
   if (ex.t === 'pick') (ex.o || []).forEach(k => { if (!SCH[k]) E(where, 'esquema inexistente ' + k); });
   if (ex.t === 'meter' && !Widgets.SCENES[ex.scene]) E(where, 'escena inexistente ' + ex.scene);
@@ -126,6 +134,7 @@ for (const k of Object.keys(SCH)) { try { Schem.draw(SCH[k]); } catch (e) { E('s
 const quiet = process.argv.includes('--quiet');
 console.log(`Base: ${UNITS.length} módulos · Especialidades: ${TRACKS.length} (${TRACKS.map(t => t.id + ':' + t.units.reduce((a, u) => a + u.nodes.length, 0)).join(', ')})`);
 console.log(`Lecciones ${nLessons} · ejercicios ${nEx} · retos ${nSims} · proyectos ${nProj} · conceptos ${Object.keys(CONCEPTS).length} · generadores ${Gen.keys.length}`);
+console.log(`Ejercicios sin pista (h): ${nNoHint}`);
 if (warns.length && !quiet) { console.log(`\nAvisos (${warns.length}):`); warns.slice(0, 40).forEach(w => console.log('  · ' + w)); }
 if (errs.length) { console.log(`\nERRORES (${errs.length}):`); errs.forEach(e => console.log('  ✗ ' + e)); process.exit(1); }
 console.log('\nOK: sin errores.');

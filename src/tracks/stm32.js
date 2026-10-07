@@ -393,22 +393,44 @@
   /* ======================= GENERADORES ======================= */
   const fHz = f => f >= 1e6 ? fmt(f / 1e6, 3) + ' MHz' : f >= 1000 ? fmt(f / 1000, 3) + ' kHz' : fmt(f, 3) + ' Hz';
   const MODE_NAME = ['entrada', 'salida', 'función alternativa', 'analógico'];
+  // Pista de Chispa para cada generador: orienta sin dar la respuesta.
+  const GH = {
+    st_sysclk: 'Divide primero entre M, multiplica por N y divide entre P, en ese orden.',
+    st_pwmFreq: 'Recuerda el +1: el reloj se divide entre (PSC + 1) y entre (ARR + 1).',
+    st_pscArr: 'Elige primero un tick cómodo y recuerda que los registros guardan «divisor − 1».',
+    st_duty: 'Hay ARR + 1 pasos por periodo: el porcentaje se calcula sobre ese número.',
+    st_brr: 'Divide la frecuencia del bus entre los baudios y luego pasa el resultado a hexadecimal.',
+    st_baudErr: 'Calcula la velocidad real (fPCLK / BRR) y compárala con la que querías.',
+    st_adcTime: 'Suma 12 ciclos a los de muestreo y divide entre la frecuencia del ADC.',
+    st_regAddr: 'Suma base y desplazamiento en hexadecimal, sin pasar por decimal.',
+    st_moder: 'Cada pin ocupa 2 bits: el campo del pin n empieza en el bit 2·n.',
+    st_bsrr: 'La mitad baja (bits 0–15) pone a 1; la alta (16–31) pone a 0.',
+    st_iwdg: 'Tiempo = preescalador × (RLR + 1) / 32 kHz.',
+    st_memUse: '.data cuenta en las dos memorias: Flash = text + data; RAM = data + bss.',
+    st_systick: 'LOAD = ciclos por interrupción − 1.',
+    st_crystal: 'Los dos condensadores quedan en serie: C = 2 × (CL − Cparásita).',
+    st_dmaHalf: 'Cada interrupción llega al llenarse media vuelta: N / 2 muestras.',
+    st_canBit: 'Un bit son 1 + BS1 + BS2 cuantos: no olvides el de sincronismo.',
+    st_stack: 'En un Cortex-M una palabra son 4 bytes.'
+  };
+  const GA = (k, fn, c) => Gen.add(k, () => { const e = fn(); return e.h ? e : { ...e, h: GH[k] }; }, c);
 
-  Gen.add('st_sysclk', () => {
+
+  GA('st_sysclk', () => {
     const [hse, m, n, p] = pick([[25, 25, 192, 2], [25, 25, 336, 4], [8, 8, 336, 2], [8, 4, 180, 2], [25, 25, 200, 2], [8, 8, 384, 4], [16, 16, 336, 4], [16, 8, 180, 2], [12, 6, 168, 2], [25, 15, 216, 2], [16, 16, 200, 2], [8, 4, 168, 4]]);
     const vin = hse / m, vco = vin * n, sys = vco / p;
     if (Math.random() < 0.3) return N(`HSE = ${hse} MHz, PLLM = ${m}, PLLN = ${n}. ¿Frecuencia del VCO en MHz?`, vco, 'MHz', `Entrada del VCO: ${hse} / ${m} = ${fmt(vin, 3)} MHz. VCO = ${fmt(vin, 3)} × ${n} = ${fmt(vco, 1)} MHz (debe quedar entre 100 y 432 MHz en la F4).`, 0.5);
     return N(`STM32F4: HSE = ${hse} MHz, PLLM = ${m}, PLLN = ${n}, PLLP = ${p}. ¿SYSCLK en MHz?`, sys, 'MHz', `SYSCLK = ${hse} / ${m} × ${n} / ${p} = ${fmt(sys, 2)} MHz. Primero divide (entrada del VCO ${fmt(vin, 3)} MHz), luego multiplica (VCO ${fmt(vco, 1)} MHz) y luego divide entre P.`, 0.5);
   }, 'st_clock');
 
-  Gen.add('st_pwmFreq', () => {
+  GA('st_pwmFreq', () => {
     const F = pick([16, 72, 84, 100, 168, 170]);
     const psc = pick([0, 1, 3, 7, 9, 15, 99, 999]), arr = pick([99, 255, 499, 999, 1999, 4095, 9999]);
     const f = F * 1e6 / ((psc + 1) * (arr + 1));
     return N(`Temporizador a ${F} MHz con PSC = ${psc} y ARR = ${arr}. ¿Frecuencia de actualización en Hz?`, f, 'Hz', `f = ${F} MHz / ((${psc} + 1) × (${arr} + 1)) = ${fHz(f)}. El contador cuenta de 0 a ARR: son ARR + 1 pasos.`, Math.max(0.01, f * 0.005));
   }, 'st_timer');
 
-  Gen.add('st_pscArr', () => {
+  GA('st_pscArr', () => {
     const F = pick([16, 72, 84, 100]), target = pick([1, 10, 50, 100, 1000, 20000]);
     const p1 = target < 50 ? F * 100 : F, tick = F * 1e6 / p1, a1 = tick / target;
     return MC(`Reloj del temporizador ${F} MHz. ¿Qué pareja da exactamente ${fHz(target)}?`, `PSC = ${p1 - 1}, ARR = ${a1 - 1}`,
@@ -416,14 +438,14 @@
       `Divide ${F} MHz entre ${p1} (PSC = ${p1 - 1}) para tener ticks de ${fHz(tick)}; luego cuenta ${a1} ticks (ARR = ${a1 - 1}). Los registros guardan “divisor − 1”.`);
   }, 'st_timer');
 
-  Gen.add('st_duty', () => {
+  GA('st_duty', () => {
     let arr, d, ccr;
     do { arr = pick([99, 199, 249, 499, 999, 1999, 3599, 9999]); d = pick([10, 20, 25, 40, 50, 75, 80, 90]); ccr = (arr + 1) * d / 100; } while (!Number.isInteger(ccr));
     if (Math.random() < 0.5) return N(`PWM modo 1 con ARR = ${arr}. ¿Qué CCR da un ${d} % de ciclo de trabajo?`, ccr, '', `Hay ARR + 1 = ${arr + 1} pasos por periodo. ${d} % de ${arr + 1} = ${ccr}. Si usas ARR en vez de ARR + 1 te equivocas un poco.`, 0.5);
     return N(`PWM modo 1 con ARR = ${arr} y CCR = ${ccr}. ¿Ciclo de trabajo en %?`, d, '%', `Duty = CCR / (ARR + 1) = ${ccr} / ${arr + 1} = ${d} %.`, 0.05);
   }, 'st_duty');
 
-  Gen.add('st_brr', () => {
+  GA('st_brr', () => {
     let pclk, baud, brr;
     do { pclk = pick([8, 16, 36, 42, 50, 84, 100]); baud = pick([9600, 19200, 57600, 115200, 230400, 921600]); brr = Math.round(pclk * 1e6 / baud); } while (brr < 16);
     const mant = brr >> 4, frac = brr & 15;
@@ -433,7 +455,7 @@
       `BRR = fPCLK / baudios = ${fmt(pclk * 1e6 / baud, 2)} → ${brr} = ${hex(brr, 4)} (mantisa ${mant}, fracción ${frac}/16). No confundas el número decimal con su escritura hexadecimal.`);
   }, 'st_brr');
 
-  Gen.add('st_baudErr', () => {
+  GA('st_baudErr', () => {
     const pclk = pick([8, 16, 42, 48, 50, 84]), baud = pick([9600, 115200, 230400, 460800, 921600]);
     const brr = Math.round(pclk * 1e6 / baud);
     if (brr < 16) return Gen.make('st_baudErr');
@@ -441,7 +463,7 @@
     return N(`PCLK = ${pclk} MHz y quieres ${baud} baudios (×16). BRR se redondea a ${brr}. ¿Error de velocidad en %? (valor absoluto)`, err, '%', `Velocidad real = ${pclk} MHz / ${brr} = ${fmt(real, 0)} baudios → error ${fmt(err, 2)} %. Por encima de un 2 % la comunicación empieza a fallar.`, Math.max(0.02, err * 0.03));
   }, 'st_brr');
 
-  Gen.add('st_adcTime', () => {
+  GA('st_adcTime', () => {
     let pclk, pre; do { pclk = pick([60, 72, 84, 100]); pre = pick([2, 4, 6, 8]); } while (pclk / pre > 36);
     const clk = pclk / pre, smp = pick([3, 15, 28, 56, 84, 112, 144, 480]), t = (smp + 12) / clk;
     const c = ri(0, 2);
@@ -460,7 +482,7 @@
     u: [['SR', 0x00], ['DR', 0x04], ['BRR', 0x08], ['CR1', 0x0C]],
     t: [['SR', 0x10], ['CNT', 0x24], ['PSC', 0x28], ['ARR', 0x2C], ['CCR1', 0x34]]
   };
-  Gen.add('st_regAddr', () => {
+  GA('st_regAddr', () => {
     const [p, base, k] = pick(PERIPH), [r, off] = pick(REGS[k]);
     const right = hex(base + off), wrong = [hex(base + off * 4), hex(base + 0x400 + off), hex(base + off + 0x100)];
     const asDec = off.toString(16);
@@ -468,7 +490,7 @@
     return MC(`STM32F4: ${p} empieza en ${hex(base)} y ${r} está en el desplazamiento ${hex(off, 2)}. ¿Dirección de ${p}->${r}?`, right, wrong, `Dirección = base + desplazamiento = ${hex(base)} + ${hex(off, 2)} = ${right}. Suma en hexadecimal: ${hex(off, 2)} no es ${off.toString(16)} en decimal.`);
   }, 'st_regaddr');
 
-  Gen.add('st_moder', () => {
+  GA('st_moder', () => {
     const port = pick(['A', 'B', 'C']), pin = ri(0, 15), mode = pick([1, 2, 3]);
     const right = hex((mode << (2 * pin)) >>> 0);
     const wrong = [hex(mode << pin), hex(((3 - mode) & 3) << (2 * pin)), hex((mode << (2 * pin + 1)) >>> 0), hex((mode << (2 * pin + 2)) >>> 0)];
@@ -476,7 +498,7 @@
       `Cada pin ocupa 2 bits: el campo de P${port}${pin} empieza en el bit ${2 * pin}. ${mode.toString(2).padStart(2, '0')} << ${2 * pin} = ${right}. Antes de escribirlo, limpia el campo con &= ~(3U << ${2 * pin}).`);
   }, 'st_field');
 
-  Gen.add('st_bsrr', () => {
+  GA('st_bsrr', () => {
     const pin = ri(0, 15), set = Math.random() < 0.5, port = pick(['A', 'B', 'C']);
     const right = hex(set ? 1 << pin : (1 << (pin + 16)) >>> 0);
     const wrong = [hex(set ? (1 << (pin + 16)) >>> 0 : 1 << pin), hex(~(1 << pin)), hex((1 << (2 * pin)) >>> 0), hex(pin)];
@@ -484,7 +506,7 @@
       `BSRR: los bits 0–15 ponen a 1 (BS) y los bits 16–31 ponen a 0 (BR). ${set ? `Bit ${pin}` : `Bit ${pin} + 16 = ${pin + 16}`} → ${right}. Los ceros no hacen nada, por eso es atómico.`);
   }, 'st_bsrr');
 
-  Gen.add('st_iwdg', () => {
+  GA('st_iwdg', () => {
     const pr = pick([4, 8, 16, 32, 64, 128, 256]), rlr = pick([99, 249, 499, 999, 1999, 2499, 4095]);
     const t = pr * (rlr + 1) / 32;
     if (Math.random() < 0.4) {
@@ -495,38 +517,38 @@
     return N(`IWDG: LSI de 32 kHz, preescalador ÷${pr}, RLR = ${rlr}. ¿Tiempo hasta el reset en ms?`, t, 'ms', `t = ${pr} × (${rlr} + 1) / 32 kHz = ${fmt(t, 2)} ms. Ojo: el LSI de la F4 puede ir de unos 17 a 47 kHz, así que deja margen.`, Math.max(0.1, t * 0.01));
   }, 'st_iwdgcalc');
 
-  Gen.add('st_memUse', () => {
+  GA('st_memUse', () => {
     const text = ri(80, 600) * 100 + ri(0, 99), data = ri(20, 900), bss = ri(10, 300) * 64;
     return MC(`arm-none-eabi-size da text = ${text}, data = ${data}, bss = ${bss}. ¿Cuánto ocupa en Flash y en RAM estática?`, `Flash ${text + data} B · RAM ${data + bss} B`,
       [`Flash ${text} B · RAM ${bss} B`, `Flash ${text + data + bss} B · RAM ${bss} B`, `Flash ${text} B · RAM ${text + data + bss} B`],
       '.text va a Flash. .data ocupa Flash (los valores iniciales) y RAM (las variables). .bss solo RAM. Flash = text + data; RAM = data + bss (más pila y montón).');
   }, 'st_sections');
 
-  Gen.add('st_systick', () => {
+  GA('st_systick', () => {
     const f = pick([16, 48, 72, 84, 100, 168, 180]), hz = pick([1000, 1000, 100, 10000]);
     const r = f * 1e6 / hz - 1;
     return N(`SysTick con reloj de ${f} MHz. ¿Qué valor de recarga (LOAD) da una interrupción cada ${fmt(1000 / hz, 2)} ms?`, r, '', `LOAD = fCPU / ftick − 1 = ${f * 1e6} / ${hz} − 1 = ${r}. Cabe en 24 bits (máximo 16 777 215).`, 0.5);
   }, 'st_systick');
 
-  Gen.add('st_crystal', () => {
+  GA('st_crystal', () => {
     const cl = pick([6, 7, 8, 9, 10, 12, 12.5, 18, 20]), cs = pick([2, 3, 4, 5]);
     return N(`Cristal con capacidad de carga CL = ${fmt(cl)} pF y unos ${cs} pF parásitos. ¿Qué condensador pones a cada lado, en pF?`, 2 * (cl - cs), 'pF', `C = 2 × (CL − Cpar) = 2 × (${fmt(cl)} − ${cs}) = ${fmt(2 * (cl - cs))} pF. Luego eliges el valor comercial más cercano.`, 0.3);
   }, 'st_crystal');
 
-  Gen.add('st_dmaHalf', () => {
+  GA('st_dmaHalf', () => {
     const fs = pick([8000, 16000, 44100, 48000, 100000]), n = pick([256, 512, 1024, 2048]), ch = pick([1, 2]);
     const t = n / 2 / (fs * ch) * 1000;
     return N(`DMA circular con un búfer de ${n} muestras${ch === 2 ? ' (dos canales intercalados, cada uno' : ' (un canal'} a ${fs} Hz). ¿Tiempo entre la interrupción de mitad (HT) y la de completo (TC), en ms?`, t, 'ms', `Media vuelta son ${n / 2} muestras; llegan ${fs * ch} muestras por segundo → ${fmt(t, 3)} ms. Ese es tu plazo para procesar cada mitad.`, Math.max(0.01, t * 0.01));
   }, 'st_dma');
 
-  Gen.add('st_canBit', () => {
+  GA('st_canBit', () => {
     const [f, brp, bs1, bs2] = pick([[42, 6, 11, 2], [42, 3, 11, 2], [42, 12, 11, 2], [42, 21, 13, 2], [36, 4, 13, 4], [36, 2, 15, 2], [45, 5, 15, 2], [36, 9, 13, 2]]);
     const tq = 1 + bs1 + bs2, rate = f * 1000 / (brp * tq), sp = (1 + bs1) / tq * 100;
     if (Math.random() < 0.5) return N(`bxCAN con PCLK1 = ${f} MHz, preescalador ${brp}, BS1 = ${bs1} tq y BS2 = ${bs2} tq. ¿Velocidad en kbit/s?`, rate, 'kbit/s', `Un bit = 1 + BS1 + BS2 = ${tq} cuantos; tq = ${brp} / ${f} MHz. Velocidad = ${f} MHz / (${brp} × ${tq}) = ${fmt(rate, 2)} kbit/s.`, Math.max(0.5, rate * 0.005));
     return N(`bxCAN con BS1 = ${bs1} tq y BS2 = ${bs2} tq. ¿Punto de muestreo en %?`, sp, '%', `Se muestrea tras el segmento de sincronismo y BS1: (1 + ${bs1}) / ${tq} = ${fmt(sp, 1)} %. En CAN se busca alrededor del 87,5 %.`, 0.3);
   }, 'st_canbit');
 
-  Gen.add('st_stack', () => {
+  GA('st_stack', () => {
     const w = pick([128, 256, 384, 512]), hw = ri(8, 80);
     if (Math.random() < 0.5) return N(`CubeMX crea una tarea con “Stack Size (Words)” = ${w}. ¿Cuántos bytes de pila son?`, w * 4, 'B', `En un Cortex-M una palabra son 4 bytes: ${w} × 4 = ${w * 4} B. En CMSIS-RTOS v2, .stack_size se da en bytes.`);
     return N(`Una tarea tiene ${w} palabras de pila y uxTaskGetStackHighWaterMark devuelve ${hw}. ¿Cuántos bytes ha llegado a usar como máximo?`, (w - hw) * 4, 'B', `La marca de agua es lo que NUNCA se ha usado (en palabras): (${w} − ${hw}) × 4 = ${(w - hw) * 4} B usados.`);
@@ -622,7 +644,7 @@
       calc: p => {
         const clk = 84 / p.pre, ts = p.smp / clk, tconv = (p.smp + 12) / clk, tau = (p.R + 6) * 0.004, err = 4096 * Math.exp(-ts / tau);
         const valid = clk <= 36, good = valid && err < 0.5;
-        return { clk, ts, tconv, fs: 1 / tconv, err, ok: valid ? 1 : 0, good: good ? 1 : 0, fsOk: good ? 1 / tconv : 0 };
+        return { clk, ts, tconv, fs: 1 / tconv, err, ok: valid ? 1 : 0, good: good ? 1 : 0, fsOk: good ? 1 / tconv : 0, e47: p.R === 47 && good ? 1 : 0, fast: good && 1 / tconv >= 0.7 ? 1 : 0 };
       },
       svg: (p, o) => {
         const pts = []; for (let i = 0; i <= 40; i++) { const x = i / 40 * o.ts; pts.push(`${(30 + i * 6).toFixed(1)},${(110 - 80 * (1 - Math.exp(-x / ((p.R + 6) * 0.004)))).toFixed(1)}`); }
@@ -656,6 +678,846 @@
   });
 
   /* ======================= PROYECTOS ======================= */
+
+  /* ======================= VISUALIZACIONES PARA TOCAR (lecciones) ======================= */
+  const tx = (x, y, s, c = 'vizsm', st = '') => `<text x="${x}" y="${y}" class="${c}"${st ? ` style="${st}"` : ''}>${s}</text>`;
+  const tm = (x, y, s, c = 'vizsm', st = '') => `<text x="${x}" y="${y}" text-anchor="middle" class="${c}"${st ? ` style="${st}"` : ''}>${s}</text>`;
+  const rb = (x, y, w, h, f = 'none', s = 'currentColor', op = 1) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="4" fill="${f}" fill-opacity="${op}" stroke="${s}" stroke-width="1.3"/>`;
+  const OKS = ok => ok ? 'fill:var(--ok)' : 'fill:var(--err)';
+  const SV = (h, body) => `<svg viewBox="0 0 300 ${h}" class="viz">${body}</svg>`;
+  const pop = v => { let n = 0; v >>>= 0; while (v) { n += v & 1; v >>>= 1; } return n; };
+  // 32 casillas de bits en dos filas (31…16 arriba, 15…0 abajo). col(bit) da el relleno.
+  const bits32 = (y, val, col, lab) => {
+    let s = '';
+    for (let row = 0; row < 2; row++) for (let i = 0; i < 16; i++) {
+      const bit = 31 - (row * 16 + i), x = 10 + i * 17.5, yy = y + row * 34, on = (val >>> bit) & 1, f = col(bit);
+      s += `<rect x="${x}" y="${yy}" width="16" height="20" rx="3" fill="${f || 'none'}" fill-opacity="${f ? 0.75 : 1}" stroke="${f ? 'currentColor' : 'var(--line)'}"/><text x="${x + 8}" y="${yy + 14}" text-anchor="middle" class="vizsm" style="fill:currentColor">${on}</text>`;
+      if (bit % 4 === 0) s += `<text x="${x + 8}" y="${yy + 30}" text-anchor="middle" class="vizsm">${bit}</text>`;
+    }
+    return (lab ? tx(10, y - 5, lab) : '') + s;
+  };
+  // Cadena de cajas con flechas (3 por fila, en zigzag). '|' parte la línea.
+  const chain = (items, hi = -1) => {
+    const per = 3, w = 88, g = 18, h = 36, vg = 22, rows = Math.ceil(items.length / per);
+    const pos = i => { const r = Math.floor(i / per), c0 = i % per, c = r % 2 ? per - 1 - c0 : c0; return [c * (w + g), 6 + r * (h + vg), r]; };
+    let s = '';
+    items.forEach((t, i) => {
+      const [x, y] = pos(i), L = String(t).split('|');
+      s += `<rect x="${x + 1}" y="${y}" width="${w - 2}" height="${h}" rx="7" fill="${i === hi ? 'var(--ice)' : 'none'}" fill-opacity="${i === hi ? 0.3 : 1}" stroke="currentColor" stroke-width="1.4"/>`;
+      L.forEach((l, k) => { s += tm(x + w / 2, y + h / 2 + 4 + (k - (L.length - 1) / 2) * 12, l, k ? 'vizsm' : 'vizlab', 'font-size:11px'); });
+      if (i < items.length - 1) { const [x2, y2] = pos(i + 1); s += y2 === y ? arrow(x2 > x ? x + w - 1 : x + 1, y + h / 2, x2 > x ? x2 + 1 : x2 + w - 1, y + h / 2) : arrow(x + w / 2, y + h, x + w / 2, y2); }
+    });
+    return SV(10 + rows * (h + vg) - vg + 6, s);
+  };
+  // Parte un texto en líneas de como mucho n caracteres
+  const wrapT = (t, n) => { const L = ['']; String(t).split(' ').forEach(w => { const c = L[L.length - 1]; if (c && (c + ' ' + w).length > n) L.push(w); else L[L.length - 1] = c ? c + ' ' + w : w; }); return L; };
+  // Tabla de dos columnas: [izquierda, derecha, resaltar?]
+  const table = (rows, title) => {
+    const lw = Math.min(130, Math.max(...rows.map(r => String(r[0]).length)) * 7.2 + 20), cpl = Math.floor((290 - lw) / 5.6);
+    const T = title ? wrapT(title, 40) : [];
+    let s = T.map((l, k) => tx(8, 16 + k * 16, l, 'vizlab')).join(''), y = title ? 10 + T.length * 16 : 6;
+    rows.forEach(([a, b, h]) => {
+      const L = wrapT(b, cpl), LA = wrapT(a, Math.floor((lw - 18) / 7.2)), rh = 9 + Math.max(L.length, LA.length) * 13;
+      s += `<rect x="4" y="${y}" width="292" height="${rh}" rx="5" fill="${h ? 'var(--ice)' : 'none'}" fill-opacity="${h ? 0.3 : 1}" stroke="var(--line)"/>` + LA.map((l, k) => tx(12, y + 15 + k * 13, l, 'vizlab', 'font-size:11.5px')).join('') + L.map((l, k) => tx(lw, y + 15 + k * 13, l, 'vizsm', 'fill:currentColor')).join('');
+      y += rh + 4;
+    });
+    return SV(y + 2, s);
+  };
+  const IDS = [0x0F0, 0x120, 0x100, 0x101, 0x7FF, 0x065];
+  const CORES = ['Cortex-M0+', 'Cortex-M3', 'Cortex-M4F', 'Cortex-M7', 'Cortex-M33'], CORE_EX = ['F0, G0, L0, C0', 'F1, L1', 'F3, F4, G4, L4', 'F7, H7', 'L5, U5, H5'];
+  const OPS = ['Sumar enteros', 'Dividir enteros', 'Multiplicar float', 'Multiplicar double'];
+  const CORE_HW = [[1, 0, 0, 0], [1, 1, 0, 0], [1, 1, 1, 0], [1, 1, 1, 1], [1, 1, 1, 0]];
+  const PINS = [['C', 48], ['R', 64], ['V', 100], ['Z', 144]], FLS = [['8', 64], ['B', 128], ['C', 256], ['E', 512], ['G', 1024]];
+  const GREG = [['MODER', 0x00], ['OTYPER', 0x04], ['OSPEEDR', 0x08], ['PUPDR', 0x0C], ['IDR', 0x10], ['ODR', 0x14], ['BSRR', 0x18], ['AFR[0]', 0x20]];
+  const BOOT_STEPS = ['Reset: el núcleo aún no ha hecho nada', 'Lee la palabra 0: MSP = 0x20020000', 'Lee la palabra 1: salta a Reset_Handler', 'SystemInit: enciende la FPU', 'Copia .data de la Flash a la RAM', 'Pone .bss a cero', 'Llama a main()'];
+  const OSC = [['HSI', 'RC interno 16 MHz', 10000], ['HSE', 'Cristal externo', 30], ['LSI', 'RC interno ~32 kHz', 470000], ['LSE', 'Cristal 32,768 kHz', 20]];
+  const FOLD = [0xFF, 0x0F, 0xA5, 0x00], FNEW = [0xF0, 0x5A, 0x0F, 0xFF];
+  const b8 = v => v.toString(2).padStart(8, '0');
+  const h2 = v => '0x' + v.toString(16).toUpperCase().padStart(2, '0');
+
+  Object.assign(Widgets.VIZ, {
+    // st1 · 8 frente a 32 bits: cuántas sumas hacen falta
+    st_width: {
+      calc: p => { const need = p.a <= 255 ? 8 : p.a <= 65535 ? 16 : 32, instr = Math.max(1, need / p.bits); return { need, instr, w32: need === 32 && instr === 1 ? 1 : 0 }; },
+      svg: (p, o) => {
+        const hx = p.a.toString(16).toUpperCase().padStart(o.need / 4, '0'), ch = Math.max(1, p.bits / 4), parts = [];
+        for (let i = hx.length; i > 0; i -= ch) parts.unshift(hx.slice(Math.max(0, i - ch), i));
+        let s = tx(10, 18, `Número: ${num(p.a, 0)} → necesita ${o.need} bits (0x${hx})`, 'vizlab');
+        const w = 280 / parts.length;
+        parts.forEach((t, i) => { s += rb(10 + i * w, 30, w - 6, 30, i === parts.length - 1 ? 'var(--ice)' : 'var(--led)', 'currentColor', 0.3) + tm(10 + i * w + (w - 6) / 2, 50, t, 'vizlab'); });
+        s += tx(10, 82, `Registro de la CPU: ${p.bits} bits. Cada trozo es una suma:`);
+        parts.slice().reverse().forEach((t, i) => { s += tx(20, 102 + i * 16, `${i + 1}. ${i ? 'ADC (suma con el acarreo)' : 'ADD'} sobre 0x${t}`, 'vizsm', 'fill:currentColor'); });
+        s += tx(10, 172, `${o.instr} ${o.instr === 1 ? 'instrucción' : 'instrucciones'} por suma`, 'vizlab', o.instr === 1 ? OKS(1) : OKS(0));
+        return SV(182, s);
+      }
+    },
+    // st2 · qué hace cada núcleo por hardware
+    st_cores: {
+      calc: p => { const hw = CORE_HW[p.core][p.op]; return { hw, fhw: p.op === 2 && hw ? 1 : 0, dhw: p.op === 3 && hw ? 1 : 0, nodiv: p.op === 1 && !hw ? 1 : 0 }; },
+      svg: (p, o) => {
+        let s = OPS.map((t, j) => tm(122 + j * 46, 14, ['Sumar', 'Dividir', 'float ×', 'double ×'][j], 'vizsm', j === p.op ? 'fill:currentColor;font-weight:700' : '')).join('');
+        CORES.forEach((c, i) => {
+          const y = 22 + i * 22, sel = i === p.core;
+          s += `<rect x="2" y="${y}" width="296" height="20" rx="5" fill="${sel ? 'var(--ice)' : 'none'}" fill-opacity=".3" stroke="var(--line)"/>` + tx(8, y + 14, c, sel ? 'vizlab' : 'vizsm', 'font-size:11px');
+          CORE_HW[i].forEach((h, j) => { s += tm(122 + j * 46, y + 14, h ? '✓' : '·', 'vizlab', h ? 'fill:var(--ok)' : 'fill:var(--muted)'); });
+        });
+        const txt = o.hw ? (p.op === 1 ? 'por hardware: unos 2–12 ciclos' : p.op === 3 ? 'por hardware (FPU doble del H7 y algunos F7)' : 'por hardware: 1 ciclo o casi') : 'por software: decenas de ciclos';
+        s += tx(8, 148, `${CORES[p.core]} (${CORE_EX[p.core]})`, 'vizlab') + tx(8, 166, `${OPS[p.op]}: ${txt}`, 'vizsm', o.hw ? 'fill:var(--ok)' : 'fill:var(--err)') + tx(8, 182, 'Ciclos orientativos: dependen del chip y del compilador');
+        return SV(188, s);
+      }
+    },
+    // st3 · construir el código de un STM32
+    st_part: {
+      calc: p => { const pn = PINS[p.pins][1], kb = FLS[p.fl][1]; return { pinsN: pn, kb, g1: pn === 64 && kb === 512 ? 1 : 0, g2: pn === 48 && kb === 64 && p.pkg === 1 ? 1 : 0, g3: p.tmp === 1 ? 1 : 0 }; },
+      svg: (p, o) => {
+        const ch = [['STM32', 'marca'], ['F', 'familia'], ['4xx', 'línea'], [PINS[p.pins][0], o.pinsN + ' patas'], [FLS[p.fl][0], o.kb + ' KB'], [p.pkg ? 'U' : 'T', p.pkg ? 'QFN' : 'LQFP'], [p.tmp ? '7' : '6', p.tmp ? '≤105 °C' : '≤85 °C']];
+        const W = [58, 26, 42, 40, 44, 40, 40]; let x = 4, s = '';
+        ch.forEach(([a, b], i) => { const v = i >= 3; s += `<rect x="${x}" y="20" width="${W[i] - 3}" height="34" rx="6" fill="${v ? 'var(--ice)' : 'none'}" fill-opacity=".3" stroke="currentColor"/>` + tm(x + (W[i] - 3) / 2, 43, a, 'vizbig') + tm(x + (W[i] - 3) / 2, 72, b); x += W[i]; });
+        s += tx(4, 100, `Patas: C 48 · R 64 · V 100 · Z 144`) + tx(4, 118, 'Flash: 8 64 KB · B 128 · C 256 · E 512 · G 1024') + tx(4, 136, 'Encapsulado: T con patas (LQFP) · U sin patas (QFN)') + tx(4, 154, 'Temperatura: 6 de −40 a 85 °C · 7 hasta 105 °C');
+        s += tx(4, 176, 'No todas las combinaciones existen', 'vizsm', 'fill:currentColor');
+        return SV(184, s);
+      }
+    },
+    // st4 · LED activo a nivel alto o bajo
+    st_board: {
+      calc: p => { const on = p.board === 0 ? p.lvl === 1 : p.lvl === 0; return { on: on ? 1 : 0, nuOn: p.board === 0 && on ? 1 : 0, bpOn: p.board === 1 && on ? 1 : 0 }; },
+      svg: (p, o) => {
+        const nu = p.board === 0, pv = p.lvl ? '3,3 V' : '0 V';
+        let s = tx(8, 16, nu ? 'Nucleo-64 · LED LD2 en PA5' : 'Black Pill · LED en PC13', 'vizlab');
+        s += rb(14, 50, 70, 60) + tm(49, 76, nu ? 'PA5' : 'PC13', 'vizlab') + tm(49, 94, pv, 'vizsm', p.lvl ? 'fill:var(--led)' : '');
+        s += `<path d="M84 80H120M150 80H190M240 80H262V${nu ? 130 : 30}" stroke="currentColor" stroke-width="2" fill="none"/>${rb(120, 72, 30, 16)}`;
+        s += tm(276, nu ? 146 : 24, nu ? 'GND' : '3,3 V', 'vizlab') + `<g transform="translate(215 80) scale(.8)">${HX.ledBulb(o.on)}</g>`;
+        s += tx(8, 160, `Escribes ${p.lvl} en el pin: el LED queda ${o.on ? 'ENCENDIDO' : 'apagado'}`, 'vizlab', o.on ? 'fill:var(--ok)' : '') + tx(8, 178, nu ? 'Corriente con el pin a 3,3 V: activo a nivel alto' : 'Corriente con el pin a 0 V: activo a nivel bajo');
+        return SV(186, s);
+      }
+    },
+    // st5 · el mapa de memoria y dónde acaba una región
+    st_mem: {
+      calc: p => { const base = p.reg ? 0x20000000 : 0x08000000, end = base + p.kb * 1024; return { end, last: end - 1 }; },
+      svg: (p, o) => {
+        const R = [['E000 0000', 'Núcleo', 14], ['4000 0000', 'Periféricos', 52], ['2000 0000', 'SRAM', 90], ['0800 0000', 'Flash', 128], ['0000 0000', 'Alias de arranque', 160]];
+        let s = rb(8, 8, 22, 174, 'none', 'var(--line)');
+        R.forEach(([a, n, y]) => { const sel = (p.reg && n === 'SRAM') || (!p.reg && n === 'Flash'); s += `<rect x="10" y="${y}" width="18" height="12" rx="2" fill="${sel ? 'var(--led)' : 'var(--ice)'}" fill-opacity="${sel ? 0.9 : 0.4}"/>` + tx(34, y + 6, '0x' + a, 'vizsm', sel ? 'fill:currentColor;font-weight:700' : '') + tx(34, y + 18, n, 'vizsm', sel ? 'fill:currentColor;font-weight:700' : ''); });
+        s += tx(165, 22, 'Tamaño elegido:', 'vizsm') + tx(165, 38, `${p.kb} KB = ${num(p.kb * 1024, 0)} B`, 'vizlab') + tx(165, 54, `= ${hex(p.kb * 1024, 5)}`, 'vizsm', 'fill:currentColor');
+        s += tx(165, 84, 'Empieza en', 'vizsm') + tx(165, 100, hex(o.end - p.kb * 1024), 'vizlab') + tx(165, 124, 'Última dirección', 'vizsm') + tx(165, 140, hex(o.last), 'vizlab') + tx(165, 164, 'Primera fuera', 'vizsm') + tx(165, 180, hex(o.end), 'vizlab', 'fill:var(--err)');
+        return SV(188, s);
+      }
+    },
+    // st6 · regenerar con CubeMX
+    st_regen: {
+      calc: p => { const lost = p.regen && p.zona === 0 ? 1 : 0; return { lost, ok: p.regen && p.zona === 1 ? 1 : 0 }; },
+      svg: (p, o) => {
+        const lines = ['/* USER CODE BEGIN WHILE */', 'while (1)', '{', '  /* USER CODE END WHILE */', '  /* USER CODE BEGIN 3 */', '}', '/* USER CODE END 3 */'];
+        const at = p.zona ? 5 : 4, L = lines.slice(), Y = i => 20 + i * 15; L.splice(at, 0, '  parpadear();   // tu línea');
+        const zone = (a, b) => `<rect x="6" y="${Y(a) - 11}" width="288" height="${(b - a) * 15 + 15}" rx="4" fill="var(--ok)" fill-opacity=".12" stroke="var(--ok)" stroke-dasharray="4 3"/>`;
+        let s = zone(0, L.indexOf(lines[3])) + zone(L.indexOf(lines[4]), L.indexOf(lines[6]));
+        L.forEach((l, i) => { const mine = i === at, gone = mine && o.lost; s += tx(14, Y(i), l.replace(/</g, '&lt;'), 'vizsm', mine ? (gone ? 'fill:var(--err);text-decoration:line-through' : 'fill:var(--ok);font-weight:700') : 'fill:currentColor;font-family:monospace'); });
+        s += tx(10, 152, p.regen ? 'Has regenerado el código desde el .ioc' : 'Aún no has regenerado', 'vizlab') + tx(10, 172, o.lost ? 'Fuera de USER CODE: CubeMX la ha borrado' : p.regen ? 'Dentro de USER CODE: se conserva' : 'CubeMX respeta las zonas verdes', 'vizsm', o.lost ? 'fill:var(--err)' : '');
+        return SV(180, s);
+      }
+    },
+    // st7 · conexión SWD: masa común y velocidad frente a longitud
+    st_swd: {
+      calc: p => { const fmax = 40 / p.len, ok = p.gnd && p.f <= fmax + 1e-9 ? 1 : 0; return { fmax, ok, ok30: ok && p.len >= 30 ? 1 : 0 }; },
+      svg: (p, o) => {
+        let s = rb(6, 20, 70, 90) + tm(41, 40, 'ST-LINK', 'vizlab') + rb(224, 20, 70, 90) + tm(259, 40, 'STM32', 'vizlab');
+        [['SWDIO · PA13', 56], ['SWCLK · PA14', 76], ['GND', 96]].forEach(([n, y], i) => { const miss = i === 2 && !p.gnd; s += `<path d="M76 ${y}H224" stroke="${miss ? 'var(--err)' : 'currentColor'}" stroke-width="2" ${miss ? 'stroke-dasharray="5 5"' : ''}/>` + tm(150, y - 4, n + (miss ? ' (sin conectar)' : '')); });
+        const bad = !o.ok; let w = 'M20 150';
+        for (let k = 0; k < 6; k++) { const x = 20 + k * 44; w += bad ? `L${x + 4} 128l3 6l3 -10l3 6H${x + 22}L${x + 26} 150l3 -6l3 8l3 -4H${x + 44}` : `L${x} 128H${x + 22}V150H${x + 44}`; }
+        s += `<path d="${w}" fill="none" stroke="${bad ? 'var(--err)' : 'var(--ok)'}" stroke-width="2"/>`;
+        s += tx(8, 174, `Cable ${p.len} cm · SWD a ${num(p.f, 1)} MHz (máx. orientativo ${num(o.fmax, 1)} MHz)`, 'vizsm', 'fill:currentColor') + tx(8, 192, !p.gnd ? 'Sin masa común no hay referencia: no conecta' : o.ok ? 'Conexión estable' : 'Flancos sucios: baja la frecuencia o acorta el cable', 'vizlab', OKS(o.ok));
+        return SV(198, s);
+      }
+    },
+    // st8 · cronómetro de ciclos DWT->CYCCNT
+    st_cyc: {
+      calc: p => ({ us: p.c / p.f }),
+      svg: (p, o) => {
+        const a = Math.min(1, o.us / 100) * 2 * Math.PI - Math.PI / 2, x = 70 + 46 * Math.cos(a), y = 92 + 46 * Math.sin(a);
+        let s = `<circle cx="70" cy="92" r="52" fill="none" stroke="currentColor" stroke-width="2"/><path d="M70 92L${x.toFixed(1)} ${y.toFixed(1)}" stroke="var(--err)" stroke-width="3"/><circle cx="70" cy="92" r="4" fill="currentColor"/>` + tm(70, 160, 'escala 0–100 µs');
+        s += tx(140, 40, 'Ciclos contados', 'vizsm') + tx(140, 58, num(p.c, 0), 'vizlab') + tx(140, 82, 'Reloj del núcleo', 'vizsm') + tx(140, 100, `${p.f} MHz → ${num(1000 / p.f, 2)} ns/ciclo`, 'vizlab');
+        s += tx(140, 128, 'Tiempo = ciclos / f', 'vizsm') + tx(140, 148, `${num(o.us, 3)} µs`, 'vizbig');
+        return SV(170, s);
+      }
+    },
+    // st9 · lo que tarda un mensaje por la UART
+    st_uarttx: {
+      calc: p => ({ ms: p.n * 10 / p.baud * 1000 }),
+      svg: (p, o) => {
+        let s = tx(8, 16, `${p.n} caracteres × 10 bits = ${p.n * 10} bits`, 'vizlab'), k = Math.min(p.n, 24);
+        for (let i = 0; i < k; i++) s += `<rect x="${8 + i * 11.5}" y="26" width="10" height="16" rx="2" fill="var(--ice)" fill-opacity=".6"/>`;
+        if (p.n > k) s += tx(286, 40, '…');
+        s += tx(8, 62, 'Cada carácter: inicio + 8 datos + parada') + HX.hbar(8, 96, 284, Math.min(1, o.ms / 10), o.ms > 1 ? 'var(--err)' : 'var(--ok)', 'CPU bloqueada en HAL_UART_Transmit (escala 0–10 ms)');
+        s += tx(8, 126, `${num(o.ms, 3)} ms a ${num(p.baud, 0)} baudios`, 'vizbig') + tx(8, 146, `Bytes por segundo: ${num(p.baud / 10, 0)}`);
+        return SV(154, s);
+      }
+    },
+    // st10 y st15 · cuánto ocupa el programa en Flash y RAM
+    st_sec: {
+      calc: p => {
+        const fl = p.text * 1024 + p.data, ram = p.data + p.bss * 1024, fcap = (512 - p.res) * 1024, fOver = fl > fcap ? 1 : 0, rOver = ram > 128 * 1024 ? 1 : 0;
+        return { fl, ram, fOver, rOver, dataBoth: p.data === 4000 ? 1 : 0, resOver: p.res === 128 && fOver ? 1 : 0 };
+      },
+      svg: (p, o) => {
+        const fcap = (512 - p.res) * 1024, W = 280;
+        let s = tx(10, 16, 'STM32F411: 512 KB de Flash y 128 KB de RAM', 'vizlab');
+        s += tx(10, 40, `Flash = text + data = ${num(o.fl / 1024, 1)} KB`, 'vizsm', 'fill:currentColor');
+        s += `<rect x="10" y="46" width="${W}" height="18" rx="4" fill="var(--line)"/><rect x="10" y="46" width="${Math.min(W, W * p.text * 1024 / 524288)}" height="18" rx="4" fill="var(--ice)"/><rect x="${10 + Math.min(W, W * p.text * 1024 / 524288)}" y="46" width="${Math.min(W, W * p.data / 524288 + 2)}" height="18" fill="var(--led)"/>`;
+        if (p.res) s += `<rect x="${10 + W * fcap / 524288}" y="44" width="${W * p.res * 1024 / 524288}" height="22" fill="var(--err)" fill-opacity=".25" stroke="var(--err)" stroke-dasharray="3 2"/>` + tx(10 + W * fcap / 524288 + 3, 80, 'reservado para datos', 'vizsm', 'fill:var(--err)');
+        s += tx(10, 104, `RAM = data + bss = ${num(o.ram / 1024, 1)} KB (más pila y montón)`, 'vizsm', 'fill:currentColor');
+        s += `<rect x="10" y="110" width="${W}" height="18" rx="4" fill="var(--line)"/><rect x="10" y="110" width="${Math.min(W, W * p.data / 131072 + 2)}" height="18" fill="var(--led)"/><rect x="${10 + Math.min(W, W * p.data / 131072 + 2)}" y="110" width="${Math.min(W, W * p.bss * 1024 / 131072)}" height="18" fill="var(--ok)"/>`;
+        s += tx(10, 146, 'Azul: .text · ámbar: .data (en las dos) · verde: .bss');
+        s += tx(10, 166, o.fOver ? 'No cabe en la Flash: el enlazador da error' : o.rOver ? 'No cabe en la RAM: el enlazador da error' : 'Cabe', 'vizlab', OKS(!o.fOver && !o.rOver));
+        return SV(174, s);
+      }
+    },
+    // st11 · dirección de un registro de GPIO
+    st_addr: {
+      calc: p => ({ addr: 0x40020000 + 0x400 * p.port + GREG[p.reg][1] }),
+      svg: (p, o) => {
+        const P = 'ABCD'[p.port], base = 0x40020000 + 0x400 * p.port;
+        let s = tx(8, 16, `GPIO${P} empieza en ${hex(base)}`, 'vizlab');
+        GREG.forEach(([n, off], i) => { const y = 24 + i * 16, sel = i === p.reg; s += `<rect x="8" y="${y}" width="150" height="14" rx="3" fill="${sel ? 'var(--led)' : 'none'}" fill-opacity=".5" stroke="var(--line)"/>` + tx(14, y + 11, `+${hex(off, 2)} ${n}`, 'vizsm', sel ? 'fill:currentColor;font-weight:700' : ''); });
+        s += tx(170, 60, 'Base', 'vizsm') + tx(170, 76, hex(base), 'vizlab') + tx(170, 96, '+ desplazamiento', 'vizsm') + tx(170, 112, hex(GREG[p.reg][1], 2), 'vizlab') + tx(170, 134, '= dirección', 'vizsm') + tx(170, 150, hex(o.addr), 'vizlab', 'fill:var(--led)');
+        s += tx(8, 172, `GPIO${P}->${GREG[p.reg][0]} es *(volatile uint32_t *)${hex(o.addr)}`, 'vizsm', 'fill:currentColor');
+        return SV(180, s);
+      }
+    },
+    // st12 · operaciones de bits sobre un registro de 32 bits
+    st_reg32: {
+      calc: p => {
+        const V0 = 0xA8000000, m = (1 << p.bit) >>> 0;
+        const val = [(V0 | m) >>> 0, (V0 & ~m) >>> 0, (V0 ^ m) >>> 0, m][p.op], ch = (val ^ V0) >>> 0;
+        return { val, chg: pop(ch), bad: pop(ch & ~m) };
+      },
+      svg: (p, o) => {
+        const V0 = 0xA8000000, ch = (o.val ^ V0) >>> 0, m = (1 << p.bit) >>> 0;
+        const OP = ['REG |= (1U << n)', 'REG &= ~(1U << n)', 'REG ^= (1U << n)', 'REG = (1U << n)'][p.op].replace('n', p.bit);
+        let s = tx(8, 14, `Antes: ${hex(V0)} (MODER de GPIOA, F407, tras reset)`, 'vizsm') + tx(8, 32, OP.replace(/</g, '&lt;'), 'vizlab');
+        s += bits32(50, o.val, b => (ch >>> b) & 1 ? (((m >>> b) & 1) ? 'var(--ice)' : 'var(--err)') : ((m >>> b) & 1 ? 'var(--line)' : ''));
+        s += tx(8, 134, `Después: ${hex(o.val)}`, 'vizlab') + tx(8, 154, o.bad ? `¡${o.bad} bits que no tocaban han cambiado! (en rojo)` : o.chg ? 'Solo ha cambiado el bit que querías (en azul)' : 'No ha cambiado nada: ese bit ya estaba así', 'vizsm', o.bad ? 'fill:var(--err)' : 'fill:var(--ok)');
+        s += tx(8, 172, 'Los bits 26–31 mantienen PA13–PA15 para el depurador');
+        return SV(180, s);
+      }
+    },
+    // st12 y st20 · BSRR: poner a 1 o a 0 un pin con una sola escritura
+    st_bsrr: {
+      calc: p => { const O = 0x0021, odr = p.bit < 16 ? (O | (1 << p.bit)) : (O & ~(1 << (p.bit - 16))); return { odr, set: p.bit < 16 ? 1 : 0 }; },
+      svg: (p, o) => {
+        const pin = p.bit & 15;
+        let s = bits32(20, (1 << p.bit) >>> 0, b => b === p.bit ? (b < 16 ? 'var(--ok)' : 'var(--err)') : '', `BSRR = 1U << ${p.bit} → ${hex((1 << p.bit) >>> 0)}`);
+        s += tx(8, 108, 'Bits 31–16: BR (poner a 0) · bits 15–0: BS (poner a 1)');
+        let r = '';
+        for (let i = 0; i < 16; i++) { const b = 15 - i, on = (o.odr >> b) & 1, x = 10 + i * 17.5; r += `<rect x="${x}" y="132" width="16" height="20" rx="3" fill="${on ? 'var(--led)' : 'none'}" fill-opacity=".8" stroke="${b === pin ? 'currentColor' : 'var(--line)'}" stroke-width="${b === pin ? 2 : 1}"/>` + tm(x + 8, 146, on, 'vizsm', 'fill:currentColor'); if (b % 4 === 0) r += tm(x + 8, 164, b); }
+        s += tx(8, 126, `ODR antes 0x0021 → después ${hex(o.odr, 4)}: P${pin} ${o.set ? 'a 1' : 'a 0'}`, 'vizlab') + r;
+        return SV(170, s);
+      }
+    },
+    // st13 · sondeo, interrupción o DMA: cuánta CPU queda libre
+    st_halmode: {
+      calc: p => {
+        const byteUs = 1e7 / 115200, tot = p.n * byteUs, busy = p.mode === 0 ? 100 : p.mode === 1 ? 1.5 / byteUs * 100 : Math.min(100, 5 / tot * 100);
+        return { free: 100 - busy, ms: tot / 1000, free1000: p.n === 1000 ? 100 - busy : 0 };
+      },
+      svg: (p, o) => {
+        let s = tx(8, 16, `Enviar ${p.n} bytes a 115 200 baudios: ${num(o.ms, 2)} ms`, 'vizlab') + tx(8, 38, 'UART');
+        for (let i = 0; i < 20; i++) s += `<rect x="${60 + i * 11.5}" y="28" width="10" height="12" rx="2" fill="var(--ice)" fill-opacity=".6"/>`;
+        s += tx(8, 66, 'CPU');
+        for (let i = 0; i < 20; i++) {
+          const x = 60 + i * 11.5;
+          if (p.mode === 0) s += `<rect x="${x}" y="56" width="11.5" height="12" fill="var(--err)" fill-opacity=".7"/>`;
+          else if (p.mode === 1) s += `<rect x="${x}" y="56" width="2" height="12" fill="var(--err)"/><rect x="${x + 2}" y="56" width="9.5" height="12" fill="var(--ok)" fill-opacity=".5"/>`;
+          else s += `<rect x="${x}" y="56" width="11.5" height="12" fill="var(--ok)" fill-opacity=".5"/>${i === 0 || i === 19 ? `<rect x="${x}" y="56" width="1.5" height="12" fill="var(--err)"/>` : ''}`;
+        }
+        s += tx(8, 96, ['Sondeo: la CPU espera hasta el último bit', '_IT: una interrupción corta por byte', '_DMA: el DMA mueve los bytes; un aviso al final'][p.mode], 'vizsm', 'fill:currentColor');
+        s += tx(8, 118, 'Rojo: CPU ocupada · verde: libre para otras cosas') + tx(8, 142, `CPU libre ≈ ${num(o.free, 2)} %`, 'vizbig', OKS(o.free > 95)) + tx(8, 160, 'Cifras orientativas para un M4 a 84 MHz');
+        return SV(168, s);
+      }
+    },
+    // st14 · del reset a main, paso a paso
+    st_boot: {
+      calc: p => ({ step: p.step }),
+      svg: p => {
+        const k = p.step;
+        let s = tx(8, 14, 'Flash (0x08000000)', 'vizsm') + rb(8, 20, 130, 18, k === 1 ? 'var(--led)' : 'none', 'currentColor', 0.4) + tx(14, 33, '[0] 0x20020000', 'vizsm', 'fill:currentColor') + rb(8, 40, 130, 18, k === 2 ? 'var(--led)' : 'none', 'currentColor', 0.4) + tx(14, 53, '[1] 0x080001A9', 'vizsm', 'fill:currentColor');
+        s += tx(160, 14, 'Registros', 'vizsm') + tx(160, 33, `MSP = ${k >= 1 ? '0x20020000' : '?'}`, 'vizsm', 'fill:currentColor') + tx(160, 53, `PC = ${k >= 2 ? (k >= 6 ? 'main' : 'Reset_Handler') : '?'}`, 'vizsm', 'fill:currentColor');
+        s += tx(8, 78, 'RAM', 'vizsm') + rb(40, 66, 120, 16, k >= 4 ? 'var(--led)' : 'none', 'currentColor', 0.5) + tm(100, 78, k >= 4 ? '.data = valores iniciales' : '.data = basura') + rb(166, 66, 126, 16, k >= 5 ? 'var(--ok)' : 'none', 'currentColor', 0.5) + tm(229, 78, k >= 5 ? '.bss = 0' : '.bss = basura');
+        BOOT_STEPS.forEach((t, i) => { s += tx(14, 104 + i * 13, `${i}. ${t}`, 'vizsm', i === k ? 'fill:currentColor;font-weight:700' : i < k ? 'fill:var(--ok)' : ''); });
+        return SV(194, s);
+      }
+    },
+    // st24 · el SysTick: valor de recarga y límite de 24 bits
+    st_tick: {
+      calc: p => { const load = p.f * 1e6 / p.hz - 1; return { load, fits: load <= 16777215 ? 1 : 0, per: 1000 / p.hz }; },
+      svg: (p, o) => {
+        const fr = Math.min(1, o.load / 16777215);
+        let s = tx(8, 16, `SysTick a ${p.f} MHz · cada ${num(o.per, 2)} ms`, 'vizlab');
+        s += `<rect x="8" y="30" width="284" height="22" rx="5" fill="var(--line)"/><rect x="8" y="30" width="${(284 * fr).toFixed(1)}" height="22" rx="5" fill="${o.fits ? 'var(--ice)' : 'var(--err)'}"/>` + tx(8, 68, '0') + `<text x="292" y="68" text-anchor="end" class="vizsm">2²⁴ − 1 = 16 777 215</text>`;
+        s += tx(8, 96, `LOAD = ${p.f} 000 000 / ${num(p.hz, 0)} − 1`, 'vizsm', 'fill:currentColor') + tx(8, 118, `LOAD = ${num(o.load, 0)}`, 'vizbig', OKS(o.fits));
+        s += tx(8, 140, o.fits ? 'Cabe en los 24 bits del SysTick' : 'No cabe: periodo demasiado largo para esta frecuencia', 'vizsm', OKS(o.fits)) + tx(8, 158, `Periodo máximo a ${p.f} MHz: ${num(16777216 / p.f / 1000, 1)} ms`);
+        return SV(166, s);
+      }
+    },
+    // st16 · fuentes de reloj y su precisión
+    st_osc: {
+      calc: p => { const sday = OSC[p.src][2] * 1e-6 * 86400; return { sday, drift: sday * p.days }; },
+      svg: (p, o) => {
+        let s = '';
+        OSC.forEach(([n, d, ppm], i) => { const sel = i === p.src, x = 4 + i * 74; s += `<rect x="${x}" y="8" width="70" height="56" rx="7" fill="${sel ? 'var(--ice)' : 'none'}" fill-opacity=".35" stroke="${sel ? 'currentColor' : 'var(--line)'}" stroke-width="${sel ? 2 : 1}"/>` + tm(x + 35, 28, n, 'vizbig') + tm(x + 35, 44, ppm >= 10000 ? '±' + num(ppm / 10000, 0) + ' %' : '±' + ppm + ' ppm', 'vizsm') + tm(x + 35, 58, i < 2 ? 'alta' : 'baja', 'vizsm'); });
+        const fmtS = v => v >= 3600 ? num(v / 3600, 1) + ' h' : v >= 60 ? num(v / 60, 1) + ' min' : num(v, 1) + ' s';
+        s += tx(8, 88, `${OSC[p.src][0]}: ${OSC[p.src][1]}`, 'vizlab') + tx(8, 108, `Usado como reloj de hora, se desvía hasta ${fmtS(o.sday)} al día`, 'vizsm', 'fill:currentColor');
+        s += tx(8, 128, `En ${p.days} ${p.days === 1 ? 'día' : 'días'}: ${fmtS(o.drift)}`, 'vizbig', OKS(o.sday < 3)) + tx(8, 150, 'Precisiones típicas orientativas; mira la hoja de datos');
+        return SV(158, s);
+      }
+    },
+    // st18 · wait states de la Flash (F411 a 2,7–3,6 V)
+    st_ws: {
+      calc: p => { const need = p.f <= 30 ? 0 : p.f <= 64 ? 1 : p.f <= 90 ? 2 : 3, ok = p.ws >= need ? 1 : 0; return { need, ok, ok100: p.f === 100 && ok ? 1 : 0, just48: p.f === 48 && p.ws === need ? 1 : 0 }; },
+      svg: (p, o) => {
+        const T = [['0 WS', 'hasta 30 MHz'], ['1 WS', 'hasta 64 MHz'], ['2 WS', 'hasta 90 MHz'], ['3 WS', 'hasta 100 MHz']];
+        let s = tx(8, 14, 'F411 a 3,3 V: ciclos de espera que pide la Flash', 'vizsm');
+        T.forEach(([a, b], i) => { const y = 22 + i * 22; s += `<rect x="8" y="${y}" width="160" height="18" rx="4" fill="${i === o.need ? 'var(--ice)' : 'none'}" fill-opacity=".35" stroke="${i === p.ws ? 'currentColor' : 'var(--line)'}" stroke-width="${i === p.ws ? 2 : 1}"/>` + tx(14, y + 13, `${a} · ${b}`, 'vizsm', 'fill:currentColor'); });
+        s += tx(180, 40, 'SYSCLK', 'vizsm') + tx(180, 58, p.f + ' MHz', 'vizbig') + tx(180, 80, 'LATENCY', 'vizsm') + tx(180, 98, p.ws + ' WS', 'vizbig');
+        s += tx(8, 128, o.ok ? (p.ws > o.need ? 'Funciona, pero con esperas de más: algo más lento' : 'Justo lo necesario') : `La Flash no llega a tiempo: necesita ${o.need} WS. Cuelgue o HardFault`, 'vizlab', OKS(o.ok));
+        s += tx(8, 148, 'Al subir la frecuencia: primero los wait states');
+        return SV(156, s);
+      }
+    },
+    // st19 · push-pull, open-drain, pull-up y otra placa en la misma línea
+    st_pin: {
+      calc: p => {
+        const hi = p.mode === 1 && p.ot === 0 && p.out === 1, lo = (p.mode === 1 && p.out === 0) || p.other === 1;
+        const lvl = hi && lo ? 3 : lo ? 0 : hi ? 1 : p.pu ? 1 : 2;
+        return { lvl, short: lvl === 3 ? 1 : 0, odok: p.mode === 1 && p.ot === 1 && p.pu === 1 && p.other === 1 && lvl === 0 ? 1 : 0, rel: p.mode === 1 && p.ot === 1 && p.out === 1 && p.other === 0 && p.pu === 1 ? 1 : 0 };
+      },
+      svg: (p, o) => {
+        const col = ['var(--ice)', 'var(--led)', 'var(--muted)', 'var(--err)'][o.lvl];
+        let s = rb(8, 50, 90, 70) + tm(53, 66, 'Tu pin', 'vizlab') + tm(53, 82, p.mode ? (p.ot ? 'open-drain' : 'push-pull') : 'entrada') + tm(53, 98, p.mode ? 'escribes ' + p.out : '') ;
+        if (p.mode && !p.ot) s += tm(53, 114, p.out ? '↑ empuja a 3,3 V' : '↓ tira a 0 V', 'vizsm', 'fill:currentColor');
+        else if (p.mode && p.ot) s += tm(53, 114, p.out ? 'suelta la línea' : '↓ tira a 0 V', 'vizsm', 'fill:currentColor');
+        s += `<path d="M98 85H210" stroke="${col}" stroke-width="5"/>` + rb(210, 50, 82, 70) + tm(251, 66, 'Otra placa', 'vizlab') + tm(251, 86, p.other ? '↓ tira a 0 V' : 'suelta', 'vizsm', 'fill:currentColor');
+        if (p.pu) s += `<path d="M154 85V62" stroke="currentColor" stroke-width="2"/><rect x="148" y="34" width="12" height="28" rx="2" fill="none" stroke="currentColor"/><path d="M154 34V22" stroke="currentColor" stroke-width="2"/>` + tm(154, 16, 'pull-up a 3,3 V');
+        s += tx(8, 146, ['Línea a 0 V', 'Línea a 3,3 V', 'Línea flotante: nadie fija el nivel', '¡Cortocircuito! Uno empuja a 3,3 V y otro tira a 0 V'][o.lvl], 'vizlab', o.lvl === 3 ? 'fill:var(--err)' : 'fill:currentColor');
+        s += tx(8, 166, 'Open-drain solo puede tirar a 0: el 1 lo pone la pull-up');
+        return SV(174, s);
+      }
+    },
+    // st19 y st32 · tiempo de subida con una pull-up
+    st_rc: {
+      calc: p => { const tr = 0.8473 * p.R * p.C, spec = p.f === 100 ? 1000 : 300, ok = tr <= spec ? 1 : 0; return { tr, ok, ok100: p.f === 100 && ok ? 1 : 0, ok400: p.f === 400 && ok ? 1 : 0 }; },
+      svg: (p, o) => {
+        const spec = p.f === 100 ? 1000 : 300, Tb = 1e6 / p.f / 2, sc = 260 / Tb, tau = p.R * p.C;
+        let d = 'M20 120', ideal = 'M20 120V40H280';
+        for (let i = 0; i <= 50; i++) { const t = i / 50 * Tb; d += `L${(20 + t * sc).toFixed(1)} ${(120 - 80 * (1 - Math.exp(-t / tau))).toFixed(1)}`; }
+        let s = `<path d="${ideal}" fill="none" stroke="var(--muted)" stroke-dasharray="4 4"/><path d="${d}" fill="none" stroke="${o.ok ? 'var(--ok)' : 'var(--err)'}" stroke-width="2.6"/>`;
+        s += `<path d="M20 96H280M20 64H280" stroke="var(--line)"/>` + tx(250, 92, '30 %') + tx(250, 60, '70 %') + tx(20, 136, `Media fase de SCL a ${p.f} kHz: ${num(Tb / 1000, 2)} µs`);
+        s += tx(8, 158, `Subida 30→70 %: ${num(o.tr, 0)} ns (máximo I²C: ${spec} ns)`, 'vizlab', OKS(o.ok)) + tx(8, 176, `τ = R·C = ${num(p.R, 1)} kΩ × ${p.C} pF = ${num(tau, 0)} ns`);
+        return SV(184, s);
+      }
+    },
+    // st20 · campo de 4 bits en AFR
+    st_afr: {
+      calc: p => { const reg = p.pin >> 3, shift = 4 * (p.pin & 7); return { reg, shift, val: (p.af << shift) >>> 0, sel: p.pin * 16 + p.af }; },
+      svg: (p, o) => {
+        let s = tx(8, 16, `PA${p.pin} con AF${p.af} → AFR[${o.reg}], bits ${o.shift + 3}–${o.shift}`, 'vizlab');
+        for (let i = 0; i < 8; i++) { const pin = o.reg * 8 + 7 - i, x = 8 + i * 36, sel = pin === p.pin; s += `<rect x="${x}" y="28" width="34" height="34" rx="5" fill="${sel ? 'var(--led)' : 'none'}" fill-opacity=".5" stroke="${sel ? 'currentColor' : 'var(--line)'}"/>` + tm(x + 17, 50, sel ? p.af.toString(2).padStart(4, '0') : '0000', 'vizsm', 'fill:currentColor') + tm(x + 17, 76, 'P' + pin); }
+        s += tx(8, 100, `Campo = ${p.af} &lt;&lt; (4 × ${p.pin & 7}) = ${hex(o.val)}`, 'vizsm', 'fill:currentColor') + tx(8, 120, `(${num(o.val, 0)} en decimal)`);
+        s += tx(8, 144, 'AF1 TIM1/2 · AF2 TIM3–5 · AF4 I²C') + tx(8, 160, 'AF5 SPI1/2 · AF7 USART1/2');
+        return SV(168, s);
+      }
+    },
+    // st21 · las cuatro piezas de una interrupción
+    st_irqcfg: {
+      calc: p => ({ st: !p.ie || !p.nv ? 0 : !p.name ? 1 : !p.clr ? 2 : 3 }),
+      svg: (p, o) => {
+        const it = [['Activada en el periférico', p.ie], ['Activada en el NVIC', p.nv], ['Nombre exacto del manejador', p.name], ['Borra la bandera al entrar', p.clr]];
+        let s = '';
+        it.forEach(([t, v], i) => { s += tx(10, 20 + i * 20, (v ? '✓ ' : '✗ ') + t, 'vizsm', v ? 'fill:var(--ok)' : 'fill:var(--err)'); });
+        const msg = ['No llega a la CPU: main ni se entera', 'Salta a Default_Handler: bucle infinito', 'Entra… y vuelve a entrar sin parar', 'Entra, trabaja y vuelve a main'][o.st];
+        const fl = ['Periférico', 'NVIC', 'Manejador', 'main'];
+        fl.forEach((t, i) => { const lit = i < (o.st === 0 ? (p.ie ? 1 : 0) : o.st === 1 ? 2 : o.st === 2 ? 3 : 4); s += rb(8 + i * 74, 100, 66, 26, lit ? 'var(--ice)' : 'none', 'currentColor', 0.4) + tm(41 + i * 74, 118, t, 'vizsm', 'fill:currentColor'); if (i < 3) s += arrow(74 + i * 74, 113, 82 + i * 74, 113); });
+        s += tx(8, 152, msg, 'vizlab', o.st === 3 ? 'fill:var(--ok)' : 'fill:var(--err)');
+        return SV(160, s);
+      }
+    },
+    // st22 · contador++ interrumpido a mitad
+    st_race: {
+      calc: p => { const fin = p.when === 1 && !p.crit ? 1 : 2; return { fin, lost: fin === 1 ? 1 : 0, safe: p.when === 1 && p.crit ? 1 : 0 }; },
+      svg: (p, o) => {
+        const st = ['lee (0)', 'suma (1)', 'escribe'];
+        let s = tx(8, 14, 'main y la ISR hacen contador++ (empieza en 0)', 'vizsm', 'fill:currentColor') + tx(8, 40, 'main', 'vizsm') + tx(8, 70, 'ISR', 'vizsm'), x = 40;
+        const isrAt = p.crit ? 3 : p.when;
+        for (let i = 0; i <= 3; i++) {
+          if (i === isrAt) { s += rb(x, 52, 60, 30, 'var(--led)', 'currentColor', 0.5) + tm(x + 30, 64, 'lee, suma', 'vizsm', 'fill:currentColor') + tm(x + 30, 77, 'y escribe', 'vizsm', 'fill:currentColor'); x += 64; }
+          if (i < 3) { s += rb(x, 24, 58, 24, p.crit ? 'var(--ice)' : 'none', 'currentColor', 0.3) + tm(x + 29, 40, st[i], 'vizsm', 'fill:currentColor'); x += 62; }
+        }
+        if (p.crit) s += tx(8, 104, 'Sección crítica: la interrupción espera a que main termine', 'vizsm', 'fill:var(--ice)');
+        s += tx(8, 130, `Valor final: ${o.fin}`, 'vizbig', OKS(!o.lost)) + tx(8, 150, o.lost ? 'Se ha perdido un incremento: main escribió un valor viejo' : 'Correcto: dos incrementos, contador = 2', 'vizsm', OKS(!o.lost));
+        return SV(158, s);
+      }
+    },
+    // st23 · líneas EXTI compartidas por número de pin
+    st_exti: {
+      calc: p => { const g = n => n <= 4 ? n : n <= 9 ? 5 : 10, clash = p.p1 === p.p2 ? 1 : 0; return { clash, ok: clash ? 0 : 1, sh: !clash && g(p.p1) === g(p.p2) && g(p.p1) >= 5 ? 1 : 0 }; },
+      svg: (p, o) => {
+        const hn = n => n <= 4 ? `EXTI${n}_IRQHandler` : n <= 9 ? 'EXTI9_5_IRQHandler' : 'EXTI15_10_IRQHandler';
+        let s = tx(8, 14, 'Líneas EXTI 0–15: una por número de pin', 'vizsm');
+        for (let n = 0; n < 16; n++) { const x = 8 + n * 18, a = n === p.p1, b = n === p.p2; s += `<rect x="${x}" y="22" width="16" height="22" rx="3" fill="${a && b ? 'var(--err)' : a ? 'var(--ice)' : b ? 'var(--led)' : 'none'}" fill-opacity=".7" stroke="var(--line)"/>` + tm(x + 8, 37, n, 'vizsm', 'fill:currentColor'); }
+        s += `<path d="M8 50H62M98 50H188M188 50H296" stroke="var(--line)"/>` + tm(44, 62, '0–4: uno cada una') + tm(143, 62, '5–9: compartido') + tm(242, 62, '10–15: compartido');
+        s += tx(8, 88, `Botón A en PA${p.p1} → ${hn(p.p1)}`, 'vizsm', 'fill:var(--ice)') + tx(8, 106, `Botón B en PB${p.p2} → ${hn(p.p2)}`, 'vizsm', 'fill:var(--led)');
+        s += tx(8, 132, o.clash ? `Choque: PA${p.p1} y PB${p.p2} usan la misma línea ${p.p1}` : 'Cada botón tiene su línea', 'vizlab', OKS(!o.clash)) + tx(8, 150, o.sh ? 'Mismo manejador: dentro miras qué línea saltó' : '');
+        return SV(158, s);
+      }
+    },
+    // st26 · encoder en cuadratura
+    st_enc: {
+      calc: p => { const cpr = p.ppr * p.x * p.red; return { cpr, deg: 360 / cpr }; },
+      svg: (p, o) => {
+        let a = 'M10 40', b = 'M10 84', ticks = '';
+        for (let k = 0; k < 4; k++) { const x = 10 + k * 70; a += `V20H${x + 35}V40H${x + 70}`; b += `H${x + 17.5}V64H${x + 52.5}V84H${x + 70}`; const ed = [[x, 1], [x + 17.5, 2], [x + 35, 1], [x + 52.5, 2]]; ed.forEach(([xx, s2], j) => { if (p.x === 4 || (p.x === 2 && s2 === 1) || (p.x === 1 && j === 0)) ticks += `<path d="M${xx} 96v8" stroke="var(--err)" stroke-width="2"/>`; }); }
+        let s = `<path d="${a}" fill="none" stroke="var(--ice)" stroke-width="2.4"/><path d="${b}" fill="none" stroke="var(--led)" stroke-width="2.4"/>` + tx(0, 34, 'A') + tx(0, 78, 'B') + ticks + tx(10, 120, `Cuentas (rojo): ${p.x} por pulso`, 'vizsm', 'fill:currentColor');
+        s += tx(10, 142, `${p.ppr} × ${p.x} × ${p.red} = ${num(o.cpr, 0)} cuentas por vuelta`, 'vizlab') + tx(10, 162, `Resolución: ${num(o.deg, 3)}° por cuenta`);
+        return SV(170, s);
+      }
+    },
+    // st27 · tiempo muerto entre salidas complementarias
+    st_dead: {
+      calc: p => { const dt = p.dtg * 10, safe = dt >= p.toff ? 1 : 0; return { dt, safe, safe200: p.toff === 200 && safe ? 1 : 0, safe400: p.toff === 400 && safe ? 1 : 0 }; },
+      svg: (p, o) => {
+        const sc = 0.12, X = 30, H = 120, x1 = X + H + o.dt * sc, x2 = X + 240;
+        let s = tx(4, 30, 'CH1') + tx(4, 80, 'CH1N');
+        s += `<path d="M${X} 18H${X + H}V40H${x2}" fill="none" stroke="var(--ice)" stroke-width="2.4"/><path d="M${X} 90H${x1}V68H${x2}" fill="none" stroke="var(--led)" stroke-width="2.4"/>`;
+        s += `<path d="M${X + H} 40L${X + H + p.toff * sc} 40" stroke="var(--err)" stroke-width="5" stroke-opacity=".35"/>` + tx(X + H + 2, 54, `apagándose ${p.toff} ns`, 'vizsm', 'fill:var(--err)');
+        if (!o.safe) s += `<rect x="${x1}" y="14" width="${(X + H + p.toff * sc) - x1}" height="80" fill="var(--err)" fill-opacity=".25"/>`;
+        s += tx(8, 120, `Tiempo muerto = DTG × 10 ns = ${o.dt} ns (reloj a 100 MHz)`, 'vizsm', 'fill:currentColor') + tx(8, 142, o.safe ? 'Seguro: nunca conducen los dos' : 'Shoot-through: conducen los dos', 'vizlab', OKS(o.safe));
+        return SV(150, s);
+      }
+    },
+    // st29 · muestras intercaladas de varios canales
+    st_scan: {
+      calc: p => ({ idx: p.i < p.n ? p.n * p.k + p.i : -1, len: p.n * 13 }),
+      svg: (p, o) => {
+        const C = ['var(--ice)', 'var(--led)', 'var(--ok)', 'var(--err)', 'var(--muted)', 'currentColor'];
+        let s = tx(8, 14, `Búfer con ${p.n} canales intercalados (posiciones 0–47)`, 'vizsm');
+        for (let j = 0; j < 48; j++) { const r = Math.floor(j / 16), c = j % 16, x = 8 + c * 18, y = 22 + r * 30, sel = j === o.idx; s += `<rect x="${x}" y="${y}" width="16" height="18" rx="3" fill="${C[j % p.n]}" fill-opacity="${sel ? 1 : 0.35}" stroke="${sel ? 'currentColor' : 'none'}" stroke-width="2"/>` + tm(x + 8, y + 27, j % 4 === 0 ? j : '', 'vizsm'); }
+        s += tx(8, 126, o.idx < 0 ? `El canal ${p.i} no existe con ${p.n} canales (van de 0 a ${p.n - 1})` : `Muestra ${p.k} del canal ${p.i}: buf[${p.n}·${p.k} + ${p.i}] = buf[${o.idx}]`, 'vizlab', o.idx < 0 ? 'fill:var(--err)' : '');
+        s += tx(8, 146, o.idx > 47 ? 'Está más allá de lo dibujado, pero la regla es la misma' : 'Cada color es un canal');
+        return SV(154, s);
+      }
+    },
+    // st30 · tabla del DAC disparada por un temporizador
+    st_dac: {
+      calc: p => { const fo = p.ft / p.N, clip = p.off ? 0 : 1; return { fo, clip, f10: !clip && Math.abs(fo - 10) < 1e-9 ? 1 : 0, f50: !clip && Math.abs(fo - 50) < 1e-9 ? 1 : 0 }; },
+      svg: (p, o) => {
+        const n = Math.min(p.N, 100), w = 270 / n; let d = '';
+        for (let i = 0; i < n; i++) { let v = 2047 * Math.sin(2 * Math.PI * i / n) + (p.off ? 2048 : 0); v = Math.max(0, Math.min(4095, v)); const y = 120 - v / 4095 * 100; d += `${i ? 'L' : 'M'}${(15 + i * w).toFixed(1)} ${y.toFixed(1)}H${(15 + (i + 1) * w).toFixed(1)}`; }
+        let s = `<path d="M15 120H290M15 20V120" stroke="var(--line)"/><path d="${d}" fill="none" stroke="${o.clip ? 'var(--err)' : 'var(--ok)'}" stroke-width="2.2"/>` + tx(18, 30, '3,3 V') + tx(18, 116, '0 V');
+        s += tx(8, 144, `${p.ft} kHz / ${p.N} muestras = ${num(o.fo, 2)} kHz`, 'vizlab') + tx(8, 162, o.clip ? 'Sin sumar 2048, la mitad negativa se queda en 0 V' : 'Centrada en 2048: la onda entera cabe', 'vizsm', OKS(!o.clip));
+        return SV(170, s);
+      }
+    },
+    // st31 · BRR y error de velocidad
+    st_baud: {
+      calc: p => { const brr = Math.round(p.pclk * 1e6 / p.baud), real = p.pclk * 1e6 / brr, err = Math.abs(real - p.baud) / p.baud * 100; return { brr, err, e921: p.baud === 921600 && err < 1 ? 1 : 0 }; },
+      svg: (p, o) => {
+        let s = tx(8, 16, `BRR = ${p.pclk} MHz / ${num(p.baud, 0)} = ${num(p.pclk * 1e6 / p.baud, 2)} → ${o.brr}`, 'vizlab');
+        const bw = 27, drift = Math.min(1.5, o.err / 100);
+        for (let i = 0; i < 10; i++) { const x = 15 + i * bw; s += `<rect x="${x}" y="30" width="${bw - 2}" height="22" rx="3" fill="${i === 0 || i === 9 ? 'var(--muted)' : 'var(--ice)'}" fill-opacity=".35"/>`; const sx = x + bw / 2 + i * drift * bw; s += `<path d="M${sx.toFixed(1)} 26v30" stroke="${Math.abs(i * drift) > 0.4 ? 'var(--err)' : 'var(--ok)'}" stroke-width="2"/>`; }
+        s += tx(8, 74, 'Barras: momento en que el receptor lee cada bit') + tx(8, 100, `Velocidad real: ${num(p.pclk * 1e6 / o.brr, 0)} baudios`, 'vizsm', 'fill:currentColor');
+        s += tx(8, 124, `Error: ${num(o.err, 2)} %`, 'vizbig', OKS(o.err < 2)) + tx(8, 144, o.err < 2 ? 'Por debajo del 2 %: funciona' : 'Por encima del 2 %: bytes corruptos');
+        return SV(152, s);
+      }
+    },
+    // st32 · modos SPI (CPOL y CPHA)
+    st_spi: {
+      calc: p => { const mode = p.cpol * 2 + p.cpha, ok = mode === p.dev ? 1 : 0; return { mode, ok, m3ok: p.dev === 3 && ok ? 1 : 0, m1ok: p.dev === 1 && ok ? 1 : 0 }; },
+      svg: (p, o) => {
+        const hi = 24, lo = 48, idle = p.cpol ? hi : lo, act = p.cpol ? lo : hi; let d = `M10 ${idle}H40`, ar = '', ex = '';
+        const dc = Math.floor(p.dev / 2), dp = p.dev % 2;
+        for (let k = 0; k < 4; k++) { const x = 40 + k * 60; d += `V${act}H${x + 30}V${idle}H${x + 60}`; const e = p.cpha ? x + 30 : x; ar += `<path d="M${e} 60v14" stroke="var(--led)" stroke-width="2.4"/>`; const e2 = dp ? x + 30 : x; ex += `<path d="M${e2} 80v10" stroke="var(--muted)" stroke-width="2" stroke-dasharray="2 2"/>`; }
+        d += 'H290';
+        let s = tx(4, 40, 'SCK') + `<path d="${d}" fill="none" stroke="var(--ice)" stroke-width="2.4"/>` + ar + ex;
+        s += tx(8, 108, `Tu SPI: CPOL ${p.cpol}, CPHA ${p.cpha} → modo ${o.mode}`, 'vizsm', 'fill:var(--led)') + tx(8, 126, `El chip pide modo ${p.dev} (CPOL ${dc}, CPHA ${dp}): marcas grises`, 'vizsm');
+        s += tx(8, 150, o.ok ? 'Coinciden reposo y flanco de muestreo: datos correctos' : 'No coinciden: datos desplazados o basura', 'vizlab', OKS(o.ok));
+        return SV(158, s);
+      }
+    },
+    // st33 · temporización de bit en CAN
+    st_canbit: {
+      calc: p => { const tq = 1 + p.bs1 + p.bs2, rate = 36000 / (p.brp * tq), sp = (1 + p.bs1) / tq * 100; return { tq, rate, sp, good: Math.abs(rate - 500) < 0.5 && sp >= 85 && sp <= 90 ? 1 : 0 }; },
+      svg: (p, o) => {
+        const w = 280 / o.tq; let s = tx(8, 14, `Un bit = 1 + ${p.bs1} + ${p.bs2} = ${o.tq} cuantos`, 'vizlab');
+        for (let i = 0; i < o.tq; i++) s += `<rect x="${(10 + i * w).toFixed(1)}" y="24" width="${(w - 1).toFixed(1)}" height="22" fill="${i === 0 ? 'var(--muted)' : i <= p.bs1 ? 'var(--ice)' : 'var(--led)'}" fill-opacity=".55"/>`;
+        const xs = 10 + (1 + p.bs1) * w; s += `<path d="M${xs.toFixed(1)} 18v34" stroke="var(--err)" stroke-width="2.4"/>` + tm(xs, 64, 'muestreo', 'vizsm', 'fill:var(--err)');
+        s += tx(8, 88, 'Gris: SYNC · azul: BS1 · ámbar: BS2') + tx(8, 110, `Velocidad = 36 MHz / (${p.brp} × ${o.tq}) = ${num(o.rate, 1)} kbit/s`, 'vizsm', 'fill:currentColor');
+        s += tx(8, 132, `Punto de muestreo: ${num(o.sp, 1)} %`, 'vizlab', OKS(o.sp >= 85 && o.sp <= 90)) + tx(8, 150, 'Objetivo habitual: cerca del 87,5 %');
+        return SV(158, s);
+      }
+    },
+    // st33 · arbitraje CAN bit a bit
+    st_arb: {
+      calc: p => { const A = IDS[p.a], B = IDS[p.b]; let bit = -1; for (let i = 10; i >= 0; i--) if (((A >> i) & 1) !== ((B >> i) & 1)) { bit = 10 - i; break; } return { win: A === B ? 2 : A < B ? 0 : 1, bit }; },
+      svg: (p, o) => {
+        const A = IDS[p.a], B = IDS[p.b]; let s = '';
+        [['A', A, 30], ['B', B, 62]].forEach(([n, v, y]) => { s += tx(4, y + 14, `${n} ${hex(v, 3)}`, 'vizsm', 'fill:currentColor'); for (let i = 0; i < 11; i++) { const bv = (v >> (10 - i)) & 1, out = o.bit >= 0 && i > o.bit && ((n === 'A' && o.win === 1) || (n === 'B' && o.win === 0)); s += `<rect x="${70 + i * 20}" y="${y}" width="18" height="20" rx="3" fill="${bv ? 'none' : 'var(--ice)'}" fill-opacity=".6" stroke="var(--line)" opacity="${out ? 0.3 : 1}"/>` + tm(79 + i * 20, y + 14, bv, 'vizsm', 'fill:currentColor'); } });
+        if (o.bit >= 0) s += `<rect x="${69 + o.bit * 20}" y="26" width="20" height="60" rx="3" fill="none" stroke="var(--err)" stroke-width="2"/>` + tx(8, 106, `Se separan en el bit ${o.bit + 1}.º: quien envía 1 se retira`, 'vizsm');
+        s += tx(8, 16, '0 = dominante (azul): gana en el bus', 'vizsm') + tx(8, 132, o.win === 2 ? 'Mismo ID: no debe pasar nunca' : `Gana ${o.win ? 'B' : 'A'} (ID más bajo), sin perder nada`, 'vizlab', o.win === 2 ? 'fill:var(--err)' : 'fill:var(--ok)');
+        return SV(140, s);
+      }
+    },
+    // st34 · el planificador de FreeRTOS en 20 ticks
+    st_rtos: {
+      anim: true,
+      calc: p => {
+        const T = [{ pr: p.pa, per: 5, work: 1 }, { pr: p.pb, per: 10, work: 3 }, { pr: 1 }], rem = [0, 0], run = [], use = [0, 0, 0];
+        let rr = 0, busy = 0;
+        for (let t = 0; t < 20; t++) {
+          [0, 1].forEach(i => { if (t % T[i].per === 0) rem[i] = T[i].work; });
+          const ready = [0, 1].filter(i => rem[i] > 0 || p.wait === 0).concat(2), best = Math.max(...ready.map(i => T[i].pr)), cand = ready.filter(i => T[i].pr === best), who = cand[rr++ % cand.length];
+          let kind = 'c'; if (who < 2) { if (rem[who] > 0) { rem[who]--; kind = 'w'; use[who]++; } else { kind = 'b'; busy++; } } else use[2]++;
+          run.push([who, kind]);
+        }
+        const cpuA = use[0] * 5, cpuB = use[1] * 5, cpuC = use[2] * 5;
+        return { run, cpuA, cpuB, cpuC, waste: busy * 5, good: cpuA > 0 && cpuB > 0 && cpuC > 0 && busy === 0 ? 1 : 0, tie: p.pa === p.pb && p.wait === 1 && use[0] > 0 && use[1] > 0 && busy === 0 ? 1 : 0 };
+      },
+      svg: (p, o, t) => {
+        const N = ['A · sensor', 'B · pantalla', 'C · registro'], col = ['var(--ice)', 'var(--led)', 'var(--ok)'], w = 11.5;
+        let s = '';
+        N.forEach((n, i) => { s += tx(2, 30 + i * 26, n, 'vizsm', 'font-size:10px') + tx(2, 40 + i * 26, 'prio ' + [p.pa, p.pb, 1][i], 'vizsm', 'font-size:9px'); });
+        o.run.forEach(([who, k], j) => { const x = 66 + j * w, y = 20 + who * 26; s += `<rect x="${x}" y="${y}" width="${w - 1}" height="20" rx="2" fill="${k === 'b' ? 'var(--err)' : col[who]}" fill-opacity="${k === 'b' ? 0.45 : 0.85}"/>`; });
+        const cx = 66 + ((t % 5) / 5) * 20 * w; s += `<path d="M${cx.toFixed(1)} 16V96" stroke="currentColor" stroke-width="1.2"/>`;
+        s += tx(66, 110, '0 ms') + `<text x="296" y="110" text-anchor="end" class="vizsm">20 ms</text>`;
+        s += tx(4, 130, `CPU útil: A ${o.cpuA} % · B ${o.cpuB} % · C ${o.cpuC} %`, 'vizlab') + tx(4, 148, o.waste ? `Rojo: ${o.waste} % de la CPU dando vueltas en HAL_Delay` : 'Con osDelay, quien espera queda bloqueada y no gasta CPU', 'vizsm', o.waste ? 'fill:var(--err)' : 'fill:var(--ok)');
+        s += tx(4, 166, 'A trabaja 1 ms cada 5 ms · B trabaja 3 ms cada 10 ms');
+        return SV(174, s);
+      }
+    },
+    // st35 · pila de una tarea
+    st_stk: {
+      calc: p => { const used = 160 + p.arr + (p.pf ? 350 : 0), tot = p.words * 4, over = used > tot ? 1 : 0; return { used, tot, over, hwm: Math.max(0, Math.floor((tot - used) / 4)), fit: p.arr === 1024 && p.pf === 1 && !over ? 1 : 0 }; },
+      svg: (p, o) => {
+        const H = 130, sc = H / Math.max(o.tot, o.used);
+        let s = `<rect x="20" y="${150 - o.tot * sc}" width="80" height="${o.tot * sc}" fill="none" stroke="currentColor" stroke-width="2"/>`;
+        let y = 150; [[160, 'var(--muted)', 'contexto y locales'], [p.arr, 'var(--led)', 'array local'], [p.pf ? 350 : 0, 'var(--ice)', 'printf']].forEach(([v, c, l]) => { if (!v) return; const h = v * sc; y -= h; s += `<rect x="24" y="${y.toFixed(1)}" width="72" height="${h.toFixed(1)}" fill="${c}" fill-opacity=".7"/>` + tx(110, y + h / 2 + 4, `${l}: ${v} B`); });
+        s += tx(8, 168, `Pila: ${p.words} palabras = ${o.tot} B`, 'vizsm', 'fill:currentColor');
+        s += tx(110, 24, `Usado ≈ ${o.used} B`, 'vizlab', OKS(!o.over)) + tx(110, 40, o.over ? '¡Desborda! Pisa otra memoria' : `Marca de agua: ${o.hwm} palabras libres`, 'vizsm', OKS(!o.over));
+        s += tx(8, 184, 'Cifras orientativas', 'vizsm');
+        return SV(188, s);
+      }
+    },
+    // st35 · osDelay frente a osDelayUntil
+    st_drift: {
+      calc: p => { const per = p.mode ? Math.max(10, p.work) : 10 + p.work; return { per, drift: (per - 10) * 100, p10w3: p.work === 3 && per === 10 ? 1 : 0 }; },
+      svg: (p, o) => {
+        const sc = 270 / (3 * Math.max(o.per, 10)); let s = '', x = 10;
+        for (let k = 0; k < 3; k++) { s += `<rect x="${x}" y="30" width="${p.work * sc}" height="22" fill="var(--led)" fill-opacity=".8"/>`; const wait = p.mode ? Math.max(0, 10 - p.work) : 10; s += `<rect x="${x + p.work * sc}" y="30" width="${wait * sc}" height="22" fill="var(--ice)" fill-opacity=".3"/>`; s += `<path d="M${x} 24v34" stroke="currentColor"/>`; x += o.per * sc; }
+        for (let k = 0; k <= 3; k++) s += `<path d="M${10 + k * 10 * sc} 60v6" stroke="var(--ok)" stroke-width="2"/>`;
+        s += tx(10, 18, p.mode ? 'osDelayUntil(&t, 10): espera hasta la siguiente marca' : 'osDelay(10): espera 10 ms después de trabajar', 'vizsm', 'fill:currentColor') + tx(10, 82, 'Ámbar: trabajo · azul: espera · verde: cada 10 ms ideal');
+        s += tx(10, 108, `Periodo real: ${o.per} ms`, 'vizbig', OKS(o.per === 10)) + tx(10, 128, `Tras 100 vueltas llevas ${o.drift} ms de retraso`, 'vizsm', OKS(o.drift === 0));
+        return SV(136, s);
+      }
+    },
+    // st36 · una cola entre productor y consumidor
+    st_queue: {
+      calc: p => { const ex = p.prod - p.cons; let lost = 0, fill = 1, blk = 0; if (ex > 0) { fill = p.len; if (p.pw) blk = ex / p.prod * 100; else lost = Math.max(0, ex - p.len); } return { lost, fill, blk, okWait: ex > 0 && p.pw ? 1 : 0 }; },
+      svg: (p, o) => {
+        let s = rb(4, 40, 70, 40) + tm(39, 58, 'Productor', 'vizsm', 'fill:currentColor') + tm(39, 72, p.prod + '/s') + rb(226, 40, 70, 40) + tm(261, 58, 'Consumidor', 'vizsm', 'fill:currentColor') + tm(261, 72, p.cons + '/s');
+        const w = 140 / p.len; for (let i = 0; i < p.len; i++) s += `<rect x="${(80 + i * w).toFixed(1)}" y="46" width="${(w - 1.5).toFixed(1)}" height="28" rx="2" fill="${i < o.fill ? 'var(--led)' : 'none'}" fill-opacity=".6" stroke="var(--line)"/>`;
+        s += tm(150, 36, `Cola de ${p.len} mensajes`) + tx(8, 104, p.pw ? 'El productor espera si la cola está llena' : 'Tiempo de espera 0: si está llena, el mensaje se descarta', 'vizsm', 'fill:currentColor');
+        s += tx(8, 128, o.lost ? `Perdidos en 1 s: ${o.lost} mensajes` : 'Ningún mensaje perdido', 'vizlab', OKS(!o.lost)) + tx(8, 146, o.blk ? `El productor pasa bloqueado un ${num(o.blk, 0)} % del tiempo: la cola marca el ritmo` : '');
+        return SV(154, s);
+      }
+    },
+    // st37 · inversión de prioridad
+    st_inv: {
+      calc: p => { const waitH = (p.cs - 1) + (p.med && !p.inh ? 6 : 0); return { waitH, fixed: p.med && p.inh ? 1 : 0 }; },
+      svg: (p, o) => {
+        const w = 18, row = (y, segs, c) => segs.map(([a, b]) => `<rect x="${60 + a * w}" y="${y}" width="${(b - a) * w - 1}" height="18" rx="3" fill="${c}" fill-opacity=".8"/>`).join('');
+        const L = p.med && !p.inh ? [[0, 1], [7, 6 + p.cs]] : [[0, p.cs]], M = p.med ? (p.inh ? [[p.cs, p.cs + 6]] : [[1, 7]]) : [], Hs = o.waitH + 1;
+        let s = tx(4, 28, 'Alta') + tx(4, 52, 'Media') + tx(4, 76, 'Baja');
+        s += `<rect x="${60 + w}" y="18" width="${o.waitH * w}" height="18" fill="var(--err)" fill-opacity=".2"/>` + row(18, [[Hs, Hs + 1.5]], 'var(--err)') + row(42, M, 'var(--led)') + row(66, L, 'var(--ice)');
+        s += tx(4, 100, 'La baja toma el mutex en t = 0; la alta lo pide en t = 1', 'vizsm');
+        s += tx(4, 124, `La alta espera ${o.waitH} ms`, 'vizbig', OKS(o.waitH < 5)) + tx(4, 144, p.med && !p.inh ? 'La media expulsa a la baja, que no puede soltar el mutex' : p.inh ? 'Herencia: la baja sube a prioridad alta mientras tiene el mutex' : 'Sin tarea media: la alta solo espera la sección crítica');
+        return SV(152, s);
+      }
+    },
+    // st38 · resolución de un tick: osDelay y HAL_Delay
+    st_tickres: {
+      calc: p => { const d = p.fn ? p.n + 1 - p.ph : p.n - p.ph; return { d, dOs1: !p.fn && p.n === 1 ? d : 99, dHal1: p.fn && p.n === 1 ? d : 99 }; },
+      svg: (p, o) => {
+        const sc = 60, x0 = 20; let s = '';
+        for (let k = 0; k <= 4; k++) s += `<path d="M${x0 + k * sc} 30v36" stroke="currentColor"/>` + tm(x0 + k * sc, 80, k + ' ms');
+        const xs = x0 + p.ph * sc; s += `<rect x="${xs}" y="38" width="${o.d * sc}" height="20" rx="3" fill="var(--led)" fill-opacity=".7"/><path d="M${xs} 26v44" stroke="var(--err)" stroke-width="2"/>` + tx(xs + 3, 24, 'llamada', 'vizsm', 'fill:var(--err)');
+        s += tx(8, 104, `${p.fn ? 'HAL_Delay' : 'osDelay'}(${p.n}) llamada a ${num(p.ph, 2)} ms del último tick`, 'vizsm', 'fill:currentColor') + tx(8, 126, `Dura ${num(o.d, 2)} ms`, 'vizbig');
+        s += tx(8, 146, p.fn ? 'HAL_Delay añade un tick para garantizar el mínimo' : 'osDelay cuenta ticks: el primero puede llegar enseguida');
+        return SV(154, s);
+      }
+    },
+    // st39 · consumo medio y duración de la batería
+    st_avg: {
+      calc: p => { const avg = (p.iw * 1000 * p.tw / 1000 + p.is * (p.per - p.tw / 1000)) / p.per; return { avg, days: 2000 / (avg / 1000) / 24 }; },
+      svg: (p, o) => {
+        const lg = v => 10 + Math.log10(Math.max(1, v)) / 5 * 90; let s = `<path d="M20 120H290M20 20V120" stroke="var(--line)"/>`;
+        for (let k = 0; k < 3; k++) { const x = 30 + k * 85, w = Math.max(3, 85 * p.tw / 1000 / p.per * 8); s += `<rect x="${x}" y="${120 - lg(p.iw * 1000)}" width="${Math.min(40, w)}" height="${lg(p.iw * 1000)}" fill="var(--err)" fill-opacity=".7"/><rect x="${x + Math.min(40, w)}" y="${120 - lg(p.is)}" width="${85 - Math.min(40, w)}" height="${lg(p.is)}" fill="var(--ok)" fill-opacity=".5"/>`; }
+        s += tx(24, 16, 'Corriente (escala logarítmica)') + tx(8, 140, `Media: ${o.avg >= 1000 ? num(o.avg / 1000, 2) + ' mA' : num(o.avg, 1) + ' µA'}`, 'vizlab');
+        s += tx(8, 160, `Batería de 2000 mAh: ${o.days >= 365 ? num(o.days / 365, 1) + ' años' : num(o.days, 0) + ' días'} (sin contar autodescarga)`, 'vizsm', OKS(o.days >= 365));
+        return SV(168, s);
+      }
+    },
+    // st40 · el IWDG y el refresco
+    st_iwdg: {
+      calc: p => { const t = p.pr * (p.rlr + 1) / 32, tmin = p.pr * (p.rlr + 1) / 47; return { t, tmin, ok500: p.ref === 500 && p.ref < t ? 1 : 0, safe500: p.ref === 500 && p.ref < tmin ? 1 : 0 }; },
+      svg: (p, o) => {
+        const span = Math.min(Math.max(o.t * 1.3, p.ref * 2.2), o.t * 4), sc = 270 / span; let s = '', saw = 'M15 40';
+        let tt = 0; while (tt < span) { const nx = Math.min(span, tt + Math.min(p.ref, o.t)); saw += `L${(15 + nx * sc).toFixed(1)} ${(40 + (nx - tt) / o.t * 60).toFixed(1)}`; if (nx - tt >= o.t - 1e-9) { s += `<path d="M${(15 + nx * sc).toFixed(1)} 30v80" stroke="var(--err)" stroke-width="2"/>` + tx(15 + nx * sc + 2, 30, 'RESET', 'vizsm', 'fill:var(--err)'); break; } saw += `V40`; tt = nx; }
+        s = `<path d="M15 100H290" stroke="var(--line)"/><path d="${saw}" fill="none" stroke="var(--ice)" stroke-width="2.2"/>` + s + tx(15, 116, 'cuenta atrás → 0 = reset; cada refresco la recarga');
+        s += tx(8, 138, `Tiempo con LSI de 32 kHz: ${num(o.t, 1)} ms`, 'vizlab') + tx(8, 156, `Con el LSI más rápido (47 kHz): ${num(o.tmin, 1)} ms`, 'vizsm', 'fill:currentColor') + tx(8, 174, `Refrescas cada ${p.ref} ms → ${p.ref < o.tmin ? 'seguro siempre' : p.ref < o.t ? 'justo: falla si el LSI va rápido' : 'se reinicia'}`, 'vizsm', OKS(p.ref < o.tmin));
+        return SV(182, s);
+      }
+    },
+    // st41 · BOOT0 solo cuenta en el reset
+    st_boot0: {
+      calc: p => ({ dfu: p.rst ? 1 : 0, stay: p.rst && !p.now ? 1 : 0 }),
+      svg: (p, o) => {
+        let s = tx(8, 16, 'BOOT0', 'vizsm') + `<path d="M50 ${p.rst ? 20 : 40}H120V${p.now ? 20 : 40}H290" fill="none" stroke="var(--led)" stroke-width="2.4"/>` + tx(8, 70, 'NRST', 'vizsm') + `<path d="M50 56H100V76H120V56H290" fill="none" stroke="var(--ice)" stroke-width="2.4"/>`;
+        s += `<path d="M120 10v74" stroke="var(--err)" stroke-dasharray="3 3"/>` + tm(115, 98, 'aquí se lee BOOT0', 'vizsm', 'fill:var(--err)') + tm(240, 98, 'después da igual');
+        s += rb(8, 112, 284, 34, o.dfu ? 'var(--ice)' : 'var(--ok)', 'currentColor', 0.25) + tm(150, 134, o.dfu ? 'Arranca el cargador de ROM (memoria de sistema): DFU listo' : 'Arranca tu programa desde la Flash', 'vizlab');
+        return SV(154, s);
+      }
+    },
+    // st42 · programar sin borrar solo baja bits
+    st_flash: {
+      calc: p => { const O = FOLD[p.o], Nw = FNEW[p.n], res = p.er ? Nw : (O & Nw); return { res, r2: O === 0xA5 && res === 0x5A ? 1 : 0 }; },
+      svg: (p, o) => {
+        const O = FOLD[p.o], Nw = FNEW[p.n], row = (y, v, lab, c) => { let s = tx(4, y + 14, lab, 'vizsm'); for (let i = 0; i < 8; i++) { const b = (v >> (7 - i)) & 1; s += `<rect x="${100 + i * 24}" y="${y}" width="22" height="20" rx="3" fill="${b ? c : 'none'}" fill-opacity=".55" stroke="var(--line)"/>` + tm(111 + i * 24, y + 14, b, 'vizsm', 'fill:currentColor'); } return s; };
+        let s = row(10, p.er ? 0xFF : O, p.er ? 'Tras borrar' : 'Ahora hay', 'var(--ice)') + row(40, Nw, 'Programas', 'var(--led)') + row(76, o.res, 'Queda', o.res === Nw ? 'var(--ok)' : 'var(--err)');
+        s += tx(8, 116, p.er ? `Borrado: todo a 0xFF; luego queda ${h2(o.res)}` : `Sin borrar: ${h2(O)} AND ${h2(Nw)} = ${h2(o.res)}`, 'vizlab', o.res === Nw ? 'fill:var(--ok)' : 'fill:var(--err)') + tx(8, 136, 'Programar solo puede pasar bits de 1 a 0');
+        return SV(144, s);
+      }
+    },
+    // st43 · condensadores de carga del cristal
+    st_xtal: {
+      calc: p => { const eff = p.c / 2 + p.cp, match = Math.abs(eff - p.cl) <= 0.6 ? 1 : 0; return { eff, need: 2 * (p.cl - p.cp), match, match6: p.cl === 6 && match ? 1 : 0 }; },
+      svg: (p, o) => {
+        let s = `<rect x="130" y="20" width="40" height="22" rx="4" fill="none" stroke="currentColor" stroke-width="2"/><path d="M60 31H130M170 31H240M60 31V60M240 31V60M50 60H70M50 66H70M230 60H250M230 66H250M60 66V90M240 66V90M50 90H70M230 90H250" stroke="currentColor" stroke-width="2" fill="none"/>`;
+        s += tm(150, 14, 'cristal') + tm(60, 108, `C = ${p.c} pF`) + tm(240, 108, `C = ${p.c} pF`) + tm(150, 70, `+ ${p.cp} pF parásitos`);
+        s += tx(8, 132, `Carga que ve el cristal: ${p.c}/2 + ${p.cp} = ${num(o.eff, 1)} pF (pide ${num(p.cl, 1)} pF)`, 'vizsm', 'fill:currentColor') + tx(8, 152, o.match ? 'Ajustado: oscila a su frecuencia' : o.eff > p.cl ? 'Demasiada carga: va algo lento' : 'Poca carga: va algo rápido', 'vizlab', OKS(o.match)) + tx(8, 170, `Ideal: C = 2 × (${num(p.cl, 1)} − ${p.cp}) = ${num(o.need, 1)} pF`);
+        return SV(178, s);
+      }
+    },
+    // st43 · caída del regulador con una Li-ion
+    st_ldo: {
+      calc: p => { const vout = Math.min(3.3, p.vin - p.drop), ok = vout >= 3.29 ? 1 : 0; return { vout, ok, ok37: Math.abs(p.vin - 3.7) < 1e-9 && ok ? 1 : 0, ok35: Math.abs(p.vin - 3.5) < 1e-9 && ok ? 1 : 0 }; },
+      svg: (p, o) => {
+        const y = v => 130 - (v - 2.5) / 2 * 110;
+        let s = `<rect x="40" y="${y(p.vin)}" width="60" height="${130 - y(p.vin)}" fill="var(--ice)" fill-opacity=".5"/><rect x="190" y="${y(o.vout)}" width="60" height="${130 - y(o.vout)}" fill="${o.ok ? 'var(--ok)' : 'var(--err)'}" fill-opacity=".6"/><path d="M30 ${y(3.3)}H270" stroke="var(--muted)" stroke-dasharray="4 4"/>`;
+        s += tm(70, y(p.vin) - 4, num(p.vin, 1) + ' V') + tm(220, y(o.vout) - 4, num(o.vout, 2) + ' V') + tm(70, 146, 'batería') + tm(220, 146, 'salida') + tm(145, 80, `− ${num(p.drop, 1)} V`, 'vizlab') + tx(272, y(3.3) + 4, '3,3');
+        s += tx(8, 168, o.ok ? 'El regulador mantiene los 3,3 V' : 'Sin margen: la salida cae por debajo de 3,3 V', 'vizlab', OKS(o.ok));
+        return SV(176, s);
+      }
+    },
+    // st44 · número de versión al publicar
+    st_semver: {
+      calc: p => ({ v: [10402, 10403, 10500, 20000][p.tipo] }),
+      svg: (p, o) => {
+        const v = [Math.floor(o.v / 10000), Math.floor(o.v / 100) % 100, o.v % 100], old = [1, 4, 2];
+        let s = tx(8, 16, 'Versión publicada: 1.4.2 (MAYOR.MENOR.PARCHE)', 'vizsm');
+        v.forEach((n, i) => { const ch = n !== old[i]; s += rb(20 + i * 90, 30, 70, 50, ch ? 'var(--led)' : 'none', 'currentColor', 0.4) + tm(55 + i * 90, 64, n, 'vizbig', 'font-size:22px') + tm(55 + i * 90, 96, ['MAYOR', 'MENOR', 'PARCHE'][i]); });
+        s += tx(8, 124, ['Sin cambios: misma versión', 'Corrección de errores: sube PARCHE', 'Función nueva compatible: sube MENOR y PARCHE vuelve a 0', 'Cambio incompatible: sube MAYOR y lo demás a 0'][p.tipo], 'vizlab');
+        return SV(132, s);
+      }
+    }
+  });
+
+  /* ======================= DESLIZADORES REUTILIZABLES ======================= */
+  const sl = (label, val, min, max, unit = '', dec = 0) => ({ label, val, min, max, step: 1, unit, dec });
+  const li = (label, val, list, unit = '', dec = 0) => ({ label, val, list, unit, dec });
+  const P_WIDTH = (bits, a) => ({ bits: li('Ancho de la CPU', bits, [8, 16, 32], 'bits'), a: li('Número', a, [100, 250, 1000, 40000, 70000, 3000000000]) });
+  const P_CORES = (core, op) => ({ core: sl('Núcleo (M0+ … M33)', core, 0, 4), op: sl('Operación (suma … double)', op, 0, 3) });
+  const P_PART = (pins, fl, pkg, tmp) => ({ pins: sl('Patas (C, R, V, Z)', pins, 0, 3), fl: sl('Flash (8, B, C, E, G)', fl, 0, 4), pkg: sl('Encapsulado (T, U)', pkg, 0, 1), tmp: sl('Temperatura (6, 7)', tmp, 0, 1) });
+  const P_BOARD = (board, lvl) => ({ board: sl('Placa (Nucleo, Black Pill)', board, 0, 1), lvl: sl('Valor escrito en el pin', lvl, 0, 1) });
+  const P_MEM = (reg, kb) => ({ reg: sl('Región (Flash, SRAM)', reg, 0, 1), kb: li('Tamaño', kb, [16, 32, 64, 128, 256, 512], 'KB') });
+  const P_REGEN = (zona, regen) => ({ zona: sl('Tu línea (fuera, dentro de USER CODE)', zona, 0, 1), regen: sl('Regenerar código (no, sí)', regen, 0, 1) });
+  const P_SWD = (gnd, len, f) => ({ gnd: sl('GND conectado (no, sí)', gnd, 0, 1), len: li('Cable', len, [5, 10, 20, 30, 50], 'cm'), f: li('Frecuencia SWD', f, [0.5, 1, 2, 4, 8], 'MHz', 1) });
+  const P_CYC = (f, c) => ({ f: li('Reloj del núcleo', f, [16, 72, 84, 100, 168], 'MHz'), c: li('Cuentas de CYCCNT', c, [84, 420, 1000, 2500, 8400, 16800, 100000]) });
+  const P_UTX = (n, baud) => ({ n: li('Caracteres', n, [10, 20, 46, 100, 200]), baud: li('Baudios', baud, [9600, 19200, 57600, 115200, 460800, 921600]) });
+  const P_SEC = (text, data, bss, res) => ({ text: li('.text', text, [8, 16, 32, 64, 128, 256, 400, 480, 520], 'KB'), data: li('.data', data, [0, 200, 1000, 4000], 'B'), bss: li('.bss', bss, [1, 4, 16, 64, 100, 120, 130], 'KB'), res: res == null ? { val: 0, fixed: true } : li('Reserva al final de la Flash', res, [0, 128], 'KB') });
+  const P_ADDR = (port, reg) => ({ port: sl('Puerto (A, B, C, D)', port, 0, 3), reg: sl('Registro (MODER … AFR[0])', reg, 0, 7) });
+  const P_R32 = (op, bit) => ({ op: sl('Operación (|=, &=~, ^=, =)', op, 0, 3), bit: sl('Bit n', bit, 0, 31) });
+  const P_BSRR = bit => ({ bit: sl('Bit de BSRR que escribes a 1', bit, 0, 31) });
+  const P_HALM = (mode, n) => ({ mode: sl('Modo (sondeo, _IT, _DMA)', mode, 0, 2), n: li('Bytes', n, [1, 10, 100, 1000]) });
+  const P_BOOT = s => ({ step: sl('Paso', s, 0, 6) });
+  const P_TICK = (f, hz) => ({ f: li('Reloj del núcleo', f, [16, 48, 72, 84, 100, 168], 'MHz'), hz: li('Interrupciones por segundo', hz, [1, 10, 100, 1000, 10000], 'Hz') });
+  const P_OSC = (src, days) => ({ src: sl('Fuente (HSI, HSE, LSI, LSE)', src, 0, 3), days: li('Días', days, [1, 7, 30, 365]) });
+  const P_WS = (f, ws) => ({ f: li('SYSCLK', f, [16, 30, 48, 64, 84, 90, 100], 'MHz'), ws: sl('Wait states', ws, 0, 3) });
+  const P_PIN = (mode, ot, pu, other, out) => ({ mode: sl('Modo (entrada, salida)', mode, 0, 1), ot: sl('Tipo (push-pull, open-drain)', ot, 0, 1), pu: sl('Pull-up (no, sí)', pu, 0, 1), out: sl('Valor que escribes', out, 0, 1), other: sl('La otra placa (suelta, tira a 0)', other, 0, 1) });
+  const P_RC = (R, C, f) => ({ R: li('Pull-up', R, [1, 2.2, 4.7, 10, 40], 'kΩ', 1), C: li('Capacidad del bus', C, [50, 100, 200, 400], 'pF'), f: li('Velocidad I²C', f, [100, 400], 'kHz') });
+  const P_AFR = (pin, af) => ({ pin: sl('Pin PAn', pin, 0, 15), af: sl('Función AF', af, 0, 15) });
+  const P_IRQ = (ie, nv, name, clr) => ({ ie: sl('Activada en el periférico', ie, 0, 1), nv: sl('Activada en el NVIC', nv, 0, 1), name: sl('Nombre exacto del manejador', name, 0, 1), clr: sl('Borra la bandera', clr, 0, 1) });
+  const P_RACE = (when, crit) => ({ when: sl('Llega la ISR (antes, en medio, al final)', when, 0, 2), crit: sl('Sección crítica (no, sí)', crit, 0, 1) });
+  const P_EXTI = (p1, p2) => ({ p1: sl('Botón A en PAn', p1, 0, 15), p2: sl('Botón B en PBn', p2, 0, 15) });
+  const P_ENC = (ppr, x, red) => ({ ppr: li('Pulsos por vuelta', ppr, [7, 11, 12, 16, 100]), x: li('Modo', x, [1, 2, 4], '×'), red: li('Reductora', red, [1, 20, 30, 50], ':1') });
+  const P_DEAD = (dtg, toff) => ({ dtg: li('DTG', dtg, [0, 5, 10, 15, 20, 25, 30, 40, 50, 80]), toff: li('Apagado del transistor', toff, [100, 200, 400], 'ns') });
+  const P_SCAN = (n, k, i) => ({ n: sl('Canales', n, 2, 6), k: sl('Muestra k', k, 0, 12), i: sl('Canal i', i, 0, 5) });
+  const P_DAC = (N, ft, off) => ({ N: li('Muestras por periodo', N, [10, 20, 50, 100, 200]), ft: li('Disparo del temporizador', ft, [100, 200, 500, 1000], 'kHz'), off: sl('Sumar 2048 (no, sí)', off, 0, 1) });
+  const P_BAUD = (pclk, baud) => ({ pclk: li('PCLK', pclk, [8, 16, 42, 50, 84], 'MHz'), baud: li('Baudios', baud, [9600, 115200, 460800, 921600]) });
+  const P_SPI = (dev, cpol, cpha) => ({ dev: sl('Modo que pide el chip', dev, 0, 3), cpol: sl('CPOL', cpol, 0, 1), cpha: sl('CPHA', cpha, 0, 1) });
+  const P_CANB = (brp, bs1, bs2) => ({ brp: li('Preescalador BRP', brp, [1, 2, 3, 4, 6, 9, 12]), bs1: sl('BS1', bs1, 1, 16, 'tq'), bs2: sl('BS2', bs2, 1, 8, 'tq') });
+  const P_ARB = (a, b) => ({ a: sl('ID de A (lista)', a, 0, 5), b: sl('ID de B (lista)', b, 0, 5) });
+  const P_RTOS = (pa, pb, wait) => ({ pa: sl('Prioridad de A', pa, 1, 3), pb: sl('Prioridad de B', pb, 1, 3), wait: sl('Esperan con (HAL_Delay, osDelay)', wait, 0, 1) });
+  const P_STK = (words, arr, pf) => ({ words: li('Pila de la tarea', words, [128, 256, 384, 512, 768], 'palabras'), arr: li('Array local', arr, [0, 64, 256, 1024], 'B'), pf: sl('Usa printf (no, sí)', pf, 0, 1) });
+  const P_DRIFT = (work, mode) => ({ work: li('Trabajo por vuelta', work, [0, 1, 2, 3, 5, 8], 'ms'), mode: sl('Espera (osDelay, osDelayUntil)', mode, 0, 1) });
+  const P_QUEUE = (prod, cons, len, pw) => ({ prod: li('Productor', prod, [50, 100, 200], 'msj/s'), cons: li('Consumidor', cons, [50, 100, 200], 'msj/s'), len: li('Longitud de la cola', len, [4, 8, 16]), pw: sl('Si está llena (descarta, espera)', pw, 0, 1) });
+  const P_INV = (med, inh, cs) => ({ med: sl('Tarea media activa (no, sí)', med, 0, 1), inh: sl('Herencia de prioridad (no, sí)', inh, 0, 1), cs: li('Sección crítica de la baja', cs, [2, 3, 4], 'ms') });
+  const P_TRES = (ph, n, fn) => ({ fn: sl('Función (osDelay, HAL_Delay)', fn, 0, 1), n: li('Argumento', n, [1, 2, 5]), ph: li('Momento de la llamada dentro del tick', ph, [0, 0.25, 0.5, 0.75, 0.95], 'ms', 2) });
+  const P_AVG = (iw, tw, per, is) => ({ iw: li('Despierto', iw, [1, 5, 10, 20], 'mA'), tw: li('Tiempo despierto', tw, [5, 20, 50, 100], 'ms'), per: li('Cada', per, [1, 10, 60], 's'), is: li('Dormido', is, [2, 10, 50, 500], 'µA') });
+  const P_IWDG = (pr, rlr, ref) => ({ pr: li('Preescalador', pr, [4, 8, 16, 32, 64, 128, 256], '÷'), rlr: li('RLR', rlr, [99, 249, 499, 999, 1999, 4095]), ref: li('Refrescas cada', ref, [10, 100, 500, 1000, 2000], 'ms') });
+  const P_B0 = (rst, now) => ({ rst: sl('BOOT0 al soltar NRST', rst, 0, 1), now: sl('BOOT0 ahora', now, 0, 1) });
+  const P_FLASH = (o, n, er) => ({ o: sl('Contenido (FF, 0F, A5, 00)', o, 0, 3), n: sl('Escribes (F0, 5A, 0F, FF)', n, 0, 3), er: sl('Borrar antes (no, sí)', er, 0, 1) });
+  const P_XTAL = (cl, cp, c) => ({ cl: li('CL del cristal', cl, [6, 8, 10, 12.5, 18], 'pF', 1), cp: li('Parásitos', cp, [2, 3, 4, 5], 'pF'), c: li('Condensador a cada lado', c, [6, 8, 10, 12, 15, 18, 22, 27, 33], 'pF') });
+  const P_LDO = (vin, drop) => ({ vin: li('Batería', vin, [4.2, 3.9, 3.7, 3.5, 3.3, 3.0], 'V', 1), drop: li('Caída del regulador', drop, [1.0, 0.3, 0.1], 'V', 1) });
+  const P_SEMVER = t => ({ tipo: sl('Cambio (nada, arreglo, función, incompatible)', t, 0, 3) });
+  const P_CLK = (hse, m, n, pp, a1, a2) => ({ HSE: { label: 'HSE', val: hse, list: [8, 12, 16, 25], unit: 'MHz', dec: 0 }, M: sl('M', m, 2, 63), N: { label: 'N', val: n, min: 50, max: 432, step: 2, dec: 0 }, P: li('P', pp, [2, 4, 6, 8]), A1: li('APB1 ÷', a1, [1, 2, 4, 8, 16]), A2: li('APB2 ÷', a2, [1, 2, 4, 8, 16]) });
+
+  /* ======================= DIBUJOS FIJOS ======================= */
+  const SVG_CORE = SV(150, `<rect x="6" y="10" width="288" height="130" rx="12" fill="none" stroke="currentColor" stroke-width="2"/>` + tx(16, 30, 'Chip STM32 (diseño de ST)', 'vizlab') +
+    `<rect x="20" y="42" width="120" height="86" rx="9" fill="var(--ice)" fill-opacity=".3" stroke="currentColor"/>` + tm(80, 62, 'Núcleo Cortex-M', 'vizlab') + tm(80, 80, '(licencia de ARM)') + tm(80, 98, 'NVIC · SysTick') + tm(80, 114, 'SWD · Thumb') +
+    ['Flash y RAM', 'Relojes y PLL', 'GPIO · UART · ADC', 'Temporizadores · DMA'].map((t, i) => `<rect x="152" y="${42 + i * 22}" width="132" height="18" rx="5" fill="var(--led)" fill-opacity=".25" stroke="var(--line)"/>` + tm(218, 55 + i * 22, t, 'vizsm', 'fill:currentColor')).join(''));
+  const SVG_PRINTF = chain(['printf()', 'newlib|formatea', '_write()', '__io_putchar|(la escribes tú)', 'HAL_UART_|Transmit', 'USART2 → PC'], 3);
+  const SVG_TOOL = chain(['main.c', 'gcc|compila', 'main.o', 'ld + .ld|enlaza', 'app.elf|+ app.map', 'objcopy|→ app.bin']);
+  const SVG_LAYERS = table([['Arduino', 'Bibliotecas de Arduino: rápido, poco control'], ['HAL', 'Manejadores y callbacks: portable'], ['LL', 'Funciones inline casi como registros'], ['Registros', 'CMSIS: control total, nada portable']], 'De más cómodo (arriba) a más fino (abajo)');
+  const SVG_DOCS = table([['Hoja de datos', 'Patillaje, AF, límites eléctricos'], ['Manual de ref.', 'Cada registro, bit a bit'], ['Erratas', 'Fallos conocidos del silicio'], ['Manual de prog.', 'El núcleo y sus instrucciones']], 'Cuatro documentos, cuatro preguntas');
+  const SVG_HALST = table([['HAL_OK', 'Todo ha ido bien'], ['HAL_ERROR', 'Error del periférico o de parámetros'], ['HAL_BUSY', 'Ocupado con otra operación'], ['HAL_TIMEOUT', 'Se agotó el tiempo de espera']], 'Lo que devuelve casi cada función HAL');
+  const SVG_32K = chain(['32 768 Hz', '÷2 ×15|veces', '1 Hz|el segundo']);
+  const SVG_STACK = SV(170, `<rect x="40" y="10" width="110" height="150" rx="4" fill="none" stroke="currentColor" stroke-width="2"/>` + `<rect x="42" y="12" width="106" height="50" fill="var(--led)" fill-opacity=".35"/>` + tm(95, 40, 'pila ↓ crece', 'vizlab') + `<rect x="42" y="56" width="106" height="12" fill="var(--err)" fill-opacity=".5"/>` + `<rect x="42" y="100" width="106" height="28" fill="var(--ice)" fill-opacity=".35"/>` + tm(95, 118, '.bss (globales)') + `<rect x="42" y="130" width="106" height="28" fill="var(--ok)" fill-opacity=".3"/>` + tm(95, 148, '.data') + tx(160, 30, 'final de la SRAM', 'vizsm') + tx(160, 66, 'la pila se pasa…', 'vizsm', 'fill:var(--err)') + tx(160, 116, '…y pisa variables', 'vizsm', 'fill:var(--err)') + tx(160, 150, 'principio de la SRAM'));
+  const SVG_IRQSTACK = SV(150, tx(8, 16, 'Al entrar, el hardware apila 8 registros:', 'vizlab') + ['xPSR', 'PC', 'LR', 'R12', 'R3', 'R2', 'R1', 'R0'].map((r, i) => `<rect x="${10 + i * 35}" y="28" width="32" height="26" rx="4" fill="var(--ice)" fill-opacity=".4" stroke="currentColor"/>` + tm(26 + i * 35, 46, r, 'vizsm', 'fill:currentColor')).join('') + tx(8, 82, 'Son los que una función de C puede machacar.') + tx(8, 100, 'Por eso el manejador es una función normal.') + tx(8, 126, 'Unos 12 ciclos de entrada en un M3 o un M4', 'vizlab'));
+  const SVG_RTOSPRIO = SV(130, tx(8, 16, 'Prioridad NVIC (0 = más urgente)', 'vizsm') + Array.from({ length: 16 }, (_, i) => `<rect x="${8 + i * 18}" y="24" width="16" height="24" rx="3" fill="${i < 5 ? 'var(--err)' : 'var(--ok)'}" fill-opacity=".45"/>` + tm(16 + i * 18, 40, i, 'vizsm', 'fill:currentColor')).join('') + `<path d="M98 20v34" stroke="currentColor" stroke-width="2" stroke-dasharray="3 2"/>` + tx(8, 72, '0–4: nunca las retrasa el RTOS, pero no pueden', 'vizsm', 'fill:var(--err)') + tx(8, 86, 'llamar a su API', 'vizsm', 'fill:var(--err)') + tx(8, 106, '5–15: pueden usar las funciones FromISR', 'vizsm', 'fill:var(--ok)') + tx(8, 124, 'configMAX_SYSCALL_INTERRUPT_PRIORITY = 5'));
+  const SVG_POWER = table([['Sleep', 'Para el núcleo; despierta cualquier IRQ'], ['Stop', 'Para relojes; RAM intacta; EXTI o RTC'], ['Standby', 'Casi todo apagado; vuelve desde reset']], 'Cuanto más abajo, menos consumo y más se pierde');
+  const SVG_BOUNCE = SV(120, `<path d="M10 30H80V90H86V40H92V88H98V50H104V90H112V90H290" fill="none" stroke="var(--led)" stroke-width="2.4"/>` + tx(76, 108, 'rebotes: unos ms', 'vizsm', 'fill:var(--err)') + `<path d="M80 18h80" stroke="var(--ice)" stroke-width="3"/>` + tx(80, 14, 'ventana de 20 ms: ignorar', 'vizsm') + tx(180, 60, 'una pulsación =', 'vizsm') + tx(180, 76, 'varios flancos', 'vizsm'));
+  const SVG_DMACFG = SV(150, rb(6, 30, 86, 50) + tm(49, 50, 'ADC->DR', 'vizlab') + tm(49, 68, 'fijo') + `<path d="M92 55H150" stroke="currentColor" stroke-width="2"/>` + rb(150, 30, 60, 50, 'var(--ice)', 'currentColor', 0.3) + tm(180, 60, 'DMA', 'vizlab') + `<path d="M210 55H232" stroke="currentColor" stroke-width="2"/>` + [0, 1, 2, 3].map(i => `<rect x="${234 + (i % 2) * 31}" y="${30 + Math.floor(i / 2) * 26}" width="29" height="24" rx="3" fill="var(--led)" fill-opacity="${0.2 + i * 0.15}" stroke="var(--line)"/>` + tm(248 + (i % 2) * 31, 46 + Math.floor(i / 2) * 26, 'buf' + i, 'vizsm', 'fill:currentColor')).join('') + tx(6, 104, 'Periférico → memoria · media palabra (16 bits)', 'vizsm', 'fill:currentColor') + tx(6, 122, 'Periférico sin incremento · memoria con incremento') + tx(6, 140, 'Normal (una pasada) o circular (vuelve a empezar)'));
+  const SVG_CCM = SV(150, rb(110, 10, 80, 30, 'var(--ice)', 'currentColor', 0.3) + tm(150, 30, 'Núcleo', 'vizlab') + rb(10, 100, 70, 30, 'var(--led)', 'currentColor', 0.3) + tm(45, 120, 'CCM', 'vizlab') + rb(115, 100, 70, 30) + tm(150, 120, 'SRAM', 'vizlab') + rb(220, 10, 70, 30) + tm(255, 30, 'DMA', 'vizlab') + `<path d="M130 40L50 100M150 40V100M255 40L170 100" stroke="currentColor" stroke-width="2"/><path d="M240 40L70 100" stroke="var(--err)" stroke-width="2" stroke-dasharray="5 4"/>` + tx(8, 92, '✗ sin camino', 'vizsm', 'fill:var(--err)') + tx(8, 146, 'La CCM solo la ve el núcleo: el DMA no llega', 'vizsm', 'fill:currentColor'));
+  const SVG_IDLE = SV(120, tx(4, 20, 'RX') + `<path d="M24 30H40V46H52V30H64V46H76V30H90V46H102V30H200H290" fill="none" stroke="var(--ice)" stroke-width="2.4"/>` + `<rect x="102" y="24" width="60" height="28" fill="var(--ok)" fill-opacity=".2"/>` + tm(132, 84, '1 carácter en silencio', 'vizsm', 'fill:var(--ok)') + `<path d="M162 20v46" stroke="var(--err)" stroke-width="2"/>` + tx(168, 62, 'IDLE: fin del mensaje', 'vizsm', 'fill:var(--err)') + tx(4, 100, 'El DMA guarda los bytes; IDLE avisa al acabar la frase', 'vizsm', 'fill:currentColor'));
+  const SVG_DE = SV(130, tx(4, 22, 'TX') + `<path d="M30 30H60V44H80V30H100V44H130V30H160V44H180V30H290" fill="none" stroke="var(--ice)" stroke-width="2.2"/>` + tx(4, 72, 'DE') + `<path d="M30 80H50V62H190V80H290" fill="none" stroke="var(--led)" stroke-width="2.2"/>` + `<path d="M180 20v80" stroke="var(--ok)" stroke-dasharray="3 3"/>` + tx(150, 112, 'TC: salió el último bit', 'vizsm', 'fill:var(--ok)') + `<path d="M150 20v6" stroke="var(--err)" stroke-width="2"/>` + tx(4, 124, 'Si bajas DE con TXE, cortas el último byte', 'vizsm', 'fill:var(--err)'));
+  const SVG_I2CADDR = SV(130, tx(8, 16, 'Dirección de 7 bits 0x68 y el bit R/W', 'vizlab') + [1, 1, 0, 1, 0, 0, 0, 'R/W'].map((b, i) => `<rect x="${10 + i * 34}" y="28" width="32" height="28" rx="4" fill="${i === 7 ? 'var(--led)' : 'var(--ice)'}" fill-opacity=".4" stroke="currentColor"/>` + tm(26 + i * 34, 47, b, 'vizsm', 'fill:currentColor')).join('') + tx(8, 80, 'La HAL quiere los 8 bits con hueco para R/W:', 'vizsm', 'fill:currentColor') + tx(8, 98, '0x68 << 1 = 0xD0', 'vizbig') + tx(8, 120, 'La propia HAL rellena el bit de lectura o escritura'));
+  const SVG_BUS = table([['UART', 'Asíncrona, sin reloj, punto a punto'], ['I²C', '2 hilos open-drain, direcciones'], ['SPI', 'Reloj + MOSI/MISO + CS, rápido'], ['CAN', 'Diferencial, multimaestro, arbitraje']], 'Cuatro buses');
+  const SVG_CDC = chain(['Tu código|CDC_Transmit_FS', 'USB 12 Mbit/s', 'PC: COMx o|/dev/ttyACM0']);
+  const SVG_WDG = SV(130, tx(8, 16, 'WWDG: refresco válido solo dentro de la ventana', 'vizsm') + `<rect x="10" y="30" width="120" height="30" fill="var(--err)" fill-opacity=".3"/><rect x="130" y="30" width="110" height="30" fill="var(--ok)" fill-opacity=".35"/><rect x="240" y="30" width="50" height="30" fill="var(--err)" fill-opacity=".3"/>` + tm(70, 50, 'demasiado pronto') + tm(185, 50, 'ventana: refresca', 'vizsm', 'fill:currentColor') + tm(265, 50, 'tarde') + tx(8, 86, 'IWDG: solo cuenta atrás; basta con llegar a tiempo') + tx(8, 106, 'Refresca donde solo llegas si todo va bien', 'vizlab'));
+  const SVG_BLPROTO = SV(150, tx(8, 16, 'Tu PC', 'vizlab') + `<text x="292" y="16" text-anchor="end" class="vizlab">Cargador de ROM</text>` + [['0x7F →', 'detecta la velocidad'], ['← 0x79', 'ACK'], ['0x31 0xCE →', 'escribir + complemento'], ['← 0x79', 'ACK']].map(([a, b], i) => tx(i % 2 ? 160 : 8, 40 + i * 24, a, 'vizlab', 'fill:var(--led)') + tx(i % 2 ? 160 : 8, 52 + i * 24, b)).join('') + tx(8, 144, 'UART en 8E1: paridad par obligatoria', 'vizsm', 'fill:currentColor'));
+  const SVG_RDP = table([['Nivel 0', 'Sin protección'], ['Nivel 1', 'No se lee la Flash; volver a 0 la borra'], ['Nivel 2', 'Sin depuración nunca más: irreversible']], 'Protección de lectura');
+  const SVG_MINBOARD = table([['VDD', '100 nF en cada pata + 4,7–10 µF'], ['VCAP', 'El condensador de la hoja de datos'], ['VDDA', 'Ferrita y condensadores'], ['BOOT0', '10 kΩ a masa'], ['NRST', '100 nF a masa'], ['USB', 'Supresor ESD en D+ y D−']], 'Circuito mínimo');
+  const SVG_BRINGUP = chain(['Inspección y|continuidad', 'Fuente con|límite: 3,3 V', 'ST-LINK:|leer el ID', 'Parpadeo', 'Reloj por MCO', 'Cada periférico|por separado'], -1);
+  const SVG_FWLAYERS = table([['Aplicación', 'Estados y lógica del producto'], ['Servicios', 'Filtros, protocolos, control'], ['Drivers', 'Hablan con el hardware'], ['HAL / registros', 'El chip']], 'Cada capa solo usa la de debajo');
+  const SVG_PINLIM = table([['Un pin', 'Unos 25 mA como máximo'], ['Pines FT', 'Toleran 5 V solo como entrada digital'], ['OSPEEDR', 'Rapidez de los flancos, no frecuencia'], ['Cargas grandes', 'Transistor (y diodo si es bobina)']], 'Límites de un pin de STM32');
+  const SVG_FAMILY = table([['F', 'Uso general clásico: F0, F1, F4, F7'], ['G', 'Uso general moderno: G0, G4'], ['L · U', 'Bajo consumo: L0, L4, U5'], ['H', 'Alto rendimiento: H7'], ['W', 'Con radio: WB, WL']], 'La letra dice para qué es');
+  const SVG_VOLATILE = SV(140, tx(8, 16, 'while (!listo) { }', 'vizlab') + rb(8, 26, 136, 64) + tm(76, 44, 'Sin volatile', 'vizlab') + tm(76, 62, 'lee listo 1 vez') + tm(76, 78, '→ bucle infinito', 'vizsm', 'fill:var(--err)') + rb(156, 26, 136, 64, 'var(--ok)', 'currentColor', 0.15) + tm(224, 44, 'Con volatile', 'vizlab') + tm(224, 62, 'lee en cada vuelta') + tm(224, 78, '→ ve el cambio', 'vizsm', 'fill:var(--ok)') + tx(8, 112, '__IO de CMSIS = volatile: cada acceso al registro') + tx(8, 128, 'se hace de verdad'));
+  const SVG_RCC = SV(130, tx(8, 16, 'RCC: un grifo de reloj por periférico', 'vizlab') + [['AHB1ENR', 'GPIOA, GPIOB, DMA…'], ['APB1ENR', 'USART2, TIM2–5, I²C…'], ['APB2ENR', 'USART1, TIM1, SYSCFG, ADC…']].map(([a, b], i) => rb(8, 26 + i * 30, 90, 24, 'var(--ice)', 'currentColor', 0.3) + tm(53, 42 + i * 30, a, 'vizsm', 'fill:currentColor') + tx(106, 42 + i * 30, b)).join('') + tx(8, 124, 'Cerrado tras el reset: sin reloj, el periférico no responde', 'vizsm', 'fill:var(--err)'));
+  const SVG_SWDREC = SV(130, tx(4, 20, 'NRST') + `<path d="M40 14H70V34H180V14H290" fill="none" stroke="var(--ice)" stroke-width="2.4"/>` + tm(125, 50, 'el ST-LINK conecta aquí', 'vizsm', 'fill:currentColor') + `<path d="M180 8v60" stroke="var(--ok)" stroke-width="2"/>` + tx(184, 66, 'para el núcleo antes', 'vizsm', 'fill:var(--ok)') + tx(184, 80, 'de la 1.ª instrucción', 'vizsm', 'fill:var(--ok)') + tx(4, 110, 'Tu código no llega a desactivar PA13 y PA14', 'vizlab'));
+  const SVG_DBG = table([['Punto de ruptura', 'Para en una línea'], ['Watchpoint', 'Para al leer o escribir una dirección'], ['Step Into / Over', 'Entra en la función / la ejecuta entera'], ['Live Expressions', 'Lee variables sin parar']], 'Herramientas del depurador');
+  const SVG_DBGLP = table([['Duerme en Stop', 'El depurador se desconecta'], ['Pausa en ruptura', 'El IWDG sigue y reinicia'], ['DBGMCU', 'Mantiene la depuración o congela el IWDG'], ['En el producto', 'Quítalo: gasta corriente']], 'Depurar con bajo consumo y watchdog');
+  const SVG_HSI = SV(130, `<path d="M20 100H290M20 20V100" stroke="var(--line)"/><path d="M20 80H90V30H180V80H220V30H290" fill="none" stroke="var(--led)" stroke-width="2.4"/>` + tx(24, 76, 'HSI 16') + tx(96, 26, 'PLL 100 MHz') + tx(184, 76, 'HSI') + tx(226, 26, 'PLL') + tm(90, 116, 'SystemClock_Config') + tm(180, 116, 'Stop') + tm(220, 126, 'reconfigurar'));
+  const SVG_LEAK = table([['LED de encendido', 'Unos mA siempre'], ['Regulador', 'Su corriente propia'], ['Pull-ups con corriente', 'V / R continuamente'], ['Pines al aire', 'Oscilan y consumen']], 'Lo que gasta aunque el chip duerma');
+  const SVG_ADVTIM = SV(130, rb(8, 40, 70, 40) + tm(43, 64, 'TIM1 PWM', 'vizsm', 'fill:currentColor') + `<path d="M78 60H120" stroke="currentColor" stroke-width="2"/><path d="M120 60L150 46" stroke="var(--err)" stroke-width="3"/><path d="M150 60H220" stroke="currentColor" stroke-width="2"/>` + tm(135, 36, 'MOE', 'vizlab') + rb(220, 40, 72, 40) + tm(256, 64, 'Puente', 'vizsm', 'fill:currentColor') + tx(8, 104, 'Sin MOE las salidas de TIM1 y TIM8 no salen.') + tx(8, 122, 'BKIN (freno) abre el interruptor por hardware.', 'vizsm', 'fill:var(--err)'));
+  const SVG_ADCACC = SV(134, tx(8, 16, 'El ADC mide en «trozos de VDDA»', 'vizlab') + `<rect x="10" y="28" width="280" height="18" rx="4" fill="var(--line)"/><rect x="10" y="28" width="${280 * 1500 / 4095}" height="18" rx="4" fill="var(--ice)"/>` + tx(10, 64, 'VREFINT (estable) leído a 3,3 V: 1500 cuentas', 'vizsm', 'fill:currentColor') + `<rect x="10" y="74" width="280" height="18" rx="4" fill="var(--line)"/><rect x="10" y="74" width="${280 * 1650 / 4095}" height="18" rx="4" fill="var(--led)"/>` + tx(10, 110, 'Hoy lees 1650: VDDA ha bajado', 'vizsm', 'fill:currentColor') + tx(10, 126, 'VDDA = 3,3 × 1500 / 1650 = 3,0 V', 'vizlab'));
+  const SVG_USBCLK = chain(['VCO|192 MHz', '÷P = 2', '96 MHz|SYSCLK', '÷Q = 4', '48 MHz|USB ✓']);
+  const SVG_SWT = chain(['osTimerStart|(t, 500)', 'Tarea de|temporizadores', 'parpadeo()|corto, sin esperas']);
+  const SVG_PROFW = chain(['Pruebas en|verde (CI)', 'Versión|nueva', 'Etiqueta|en git', 'Compilar|producción', 'Guardar .elf|y .bin', 'Grabar y|verificar']);
+
+  /* ======================= EXPLICACIONES ALTERNATIVAS VISUALES ======================= */
+  const alt = (k, a) => CONCEPTS[k].alts.push(a);
+  alt('st_core', { title: 'Mira dentro del chip', text: 'El rectángulo grande lo diseña ST; el bloque azul es lo que licencia ARM. Todo lo de la derecha cambia de un fabricante a otro; lo de la izquierda es igual en cualquier Cortex-M.', svg: SVG_CORE, q: mcq('¿Qué parte de un STM32 es igual en un chip de NXP con el mismo núcleo?', ['El núcleo con su NVIC y su SysTick', 'Los registros de GPIO', 'El árbol de relojes', 'El ADC'], 'ARM licencia el núcleo; los periféricos son de cada fabricante.') });
+  alt('st_cores', { title: 'Pruébalo núcleo a núcleo', text: 'Mueve el núcleo y la operación y mira qué se hace por hardware (✓) y qué por software. Fíjate en las dos columnas de la derecha: ahí está la diferencia entre M3, M4F y M7.', tune: { viz: 'st_cores', params: P_CORES(1, 2) }, q: mcq('¿Qué núcleo es el más sencillo de todos los STM32?', ['Cortex-M0+', 'Cortex-M3', 'Cortex-M4F', 'Cortex-M7'], 'Sin división por hardware ni FPU: G0, C0, L0, F0.') });
+  alt('st_fpu', { title: 'float y double en la tabla', text: 'Pon un Cortex-M4F y compara «float ×» con «double ×»: el primero es una instrucción y el segundo se emula. Por eso en un M4F se escribe 0.5f y no 0.5.', tune: { viz: 'st_cores', params: P_CORES(2, 3) }, q: mcq('En un M4F, ¿cuál de estas dos líneas tarda más?', ['La segunda: 0.5 es double y se emula por software', 'La primera', 'Tardan lo mismo', 'Ninguna compila'], 'Sin la f, la constante es double.', { code: 'float y = a * 0.5f;\nfloat z = a * 0.5;' }) });
+  alt('st_bits32', { title: 'Cuenta las sumas', text: 'Elige un número grande y un micro de 8 bits: el número se parte en trozos de 1 byte y cada trozo es una suma. Con 32 bits, un solo trozo.', tune: { viz: 'st_width', params: P_WIDTH(8, 70000) }, q: mcq('Sumar dos uint32_t en un micro de 16 bits, ¿cuántas sumas necesita?', ['2', '1', '4', '32'], '32 bits en trozos de 16: dos sumas (la segunda con acarreo).') });
+  alt('st_family', { title: 'La letra lo dice', text: 'La primera letra tras STM32 resume para qué está pensada la familia. Luego, dentro de cada una, cada chip trae su lista de periféricos: compruébala siempre.', svg: SVG_FAMILY, q: mcq('Buscas un STM32 para un sensor con pila que debe durar años. ¿Qué letra miras primero?', ['L o U', 'H', 'F7', 'W'], 'L y U son las familias de bajo consumo.') });
+  alt('st_partnum', { title: 'Monta el nombre tú', text: 'Mueve los deslizadores y mira cómo cambia cada letra. Las letras no son cantidades: son códigos de una tabla.', tune: { viz: 'st_part', params: P_PART(0, 0, 0, 0) }, q: mcq('¿Qué letra de patas lleva un STM32 de 100 patas?', ['V', 'C', 'R', 'Z'], 'C 48 · R 64 · V 100 · Z 144.') });
+  alt('st_boards', { title: 'Enciende los dos LED', text: 'En la Nucleo el LED va del pin a masa: un 1 lo enciende. En la Black Pill va de 3,3 V al pin: hace falta un 0. Pruébalo.', tune: { viz: 'st_board', params: P_BOARD(1, 1) }, q: mcq('LED conectado entre 3,3 V y un pin. ¿Qué valor lo enciende?', ['0', '1', 'Cualquiera', 'Ninguno'], 'Con el pin a 0 V circula corriente desde 3,3 V.') });
+  alt('st_pinlim', { title: 'La ficha del pin', text: 'Cuatro reglas que caben en una tabla. Si dudas, la hoja de datos de tu chip manda.', svg: SVG_PINLIM, q: mcq('Un motor pequeño pide 150 mA. ¿Cómo lo mueves desde un pin?', ['Con un transistor y un diodo de libre circulación', 'Directo a un pin FT', 'Con OSPEEDR muy alta', 'Con dos pines en paralelo'], 'Un pin da unos 25 mA.') });
+  alt('st_memmap', { title: 'Recorre el mapa', text: 'Elige región y tamaño: verás dónde empieza, cuál es la última dirección y la primera que queda fuera. El tamaño en KB se convierte a hexadecimal y se suma a la base.', tune: { viz: 'st_mem', params: P_MEM(1, 64) }, q: mcq('¿En qué dirección empiezan los periféricos de un STM32F4?', ['0x40000000', '0x08000000', '0x20000000', '0xE0000000'], '0xE0000000 es la zona de los periféricos del núcleo.') });
+  alt('st_regaddr', { title: 'Calcula con el puerto y el registro', text: 'Cada puerto empieza 0x400 más arriba que el anterior y cada registro está siempre en el mismo desplazamiento. Mueve los dos y mira la suma.', tune: { viz: 'st_addr', params: P_ADDR(0, 0) }, q: mcq('GPIOC empieza en 0x40020800. ¿Dónde está su ODR (+0x14)?', ['0x40020814', '0x40020800', '0x40020014', '0x40020822'], 'Base + 0x14.') });
+  alt('st_volatile', { title: 'Dos bucles, dos finales', text: 'El mismo bucle con y sin volatile. El compilador no sabe que una interrupción o el hardware pueden cambiar la variable: volatile se lo dice.', svg: SVG_VOLATILE, q: mcq('¿Qué variables deben ser volatile?', ['Las que cambian una interrupción o el hardware fuera del flujo normal', 'Todas las globales', 'Las constantes', 'Las locales de main'], 'Así cada acceso se hace de verdad.') });
+  alt('st_bsrr', { title: 'Toca BSRR', text: 'Elige qué bit de BSRR pones a 1 y mira el efecto sobre ODR. Los bits bajos encienden, los altos apagan, y los ceros no hacen nada.', tune: { viz: 'st_bsrr', params: P_BSRR(3) }, q: mcq('¿Qué bit de BSRR pone PC13 a 0?', ['29', '13', '26', '3'], '13 + 16 = 29.') });
+  alt('st_boot0', { title: 'Solo importa el instante del reset', text: 'Mueve BOOT0 antes y después de soltar NRST. Solo cuenta lo que vale en ese instante.', tune: { viz: 'st_boot0', params: P_B0(0, 1) }, q: mcq('Pones BOOT0 a 1 con el programa ya funcionando, sin resetear. ¿Qué pasa?', ['Nada: BOOT0 solo se lee en el reset', 'Salta al cargador', 'Se borra la Flash', 'Se reinicia'], 'Hasta el próximo reset no cuenta.') });
+  alt('st_cubemx', { title: 'Regenera y mira', text: 'Coloca tu línea dentro o fuera de la zona USER CODE y regenera. Lo de fuera desaparece sin avisar.', tune: { viz: 'st_regen', params: P_REGEN(0, 0) }, q: mcq('¿Dónde deja CubeMX las macros LED_Pin y LED_GPIO_Port?', ['En main.h', 'En main.c', 'En stm32f4xx_it.c', 'En el .ld'], 'Salen de la etiqueta que pones al pin en el .ioc.') });
+  alt('st_swd', { title: 'Cablea y prueba', text: 'Conecta la masa y elige longitud de cable y frecuencia. Con cables largos, baja la velocidad.', tune: { viz: 'st_swd', params: P_SWD(0, 30, 4) }, q: mcq('¿Qué tres señales son imprescindibles para depurar por SWD?', ['SWDIO, SWCLK y GND', 'SWDIO, SWO y 5 V', 'TX, RX y GND', 'NRST, BOOT0 y GND'], 'NRST y SWO son opcionales.') });
+  alt('st_swdrec', { title: 'Llegar antes que tu código', text: 'Con NRST sujeto a 0, el ST-LINK conecta y para el núcleo en el mismo instante en que se suelta: tu programa no llega a ejecutar ni una instrucción.', svg: SVG_SWDREC, q: mcq('¿Qué cable hace falta para «Connect under reset»?', ['NRST', 'SWO', 'BOOT1', 'VBAT'], 'El ST-LINK necesita manejar el reset.') });
+  alt('st_dbglp', { title: 'Síntoma y remedio', text: 'Dos síntomas raros, un mismo bloque que los arregla: DBGMCU.', svg: SVG_DBGLP, q: mcq('¿Qué bloque mantiene vivo el depurador mientras el chip está en Stop?', ['DBGMCU', 'RCC', 'NVIC', 'EXTI'], 'Solo para desarrollo.') });
+  alt('st_debug', { title: 'La caja de herramientas', text: 'Cada herramienta responde a una pregunta distinta. Elige por la pregunta, no por costumbre.', svg: SVG_DBG, q: mcq('Quieres saltarte una función que sabes que funciona. ¿Qué pulsas?', ['Step Over', 'Step Into', 'Step Return', 'Un watchpoint'], 'Ejecuta la llamada entera y para en la línea siguiente.') });
+  alt('st_hardfault', { title: 'La pila que invade', text: 'La pila crece hacia abajo desde el final de la RAM. Si se pasa, pisa las variables globales: el fallo aparece lejos de la causa.', svg: SVG_STACK, q: mcq('¿Qué registro apilado te dice dónde ocurrió un HardFault?', ['El PC', 'R0', 'El MSP inicial', 'xPSR'], 'El contador de programa guardado al entrar.') });
+  alt('st_cycles', { title: 'El cronómetro', text: 'Elige reloj y cuentas: el tiempo es ciclos entre frecuencia. Mira que a más MHz, cada ciclo dura menos.', tune: { viz: 'st_cyc', params: P_CYC(84, 84) }, q: mcq('A 168 MHz, ¿cuánto dura un ciclo, aproximadamente?', ['6 ns', '168 ns', '1,68 µs', '60 ns'], '1 / 168 MHz ≈ 5,95 ns.') });
+  alt('st_printf', { title: 'El camino de un carácter', text: 'printf no sabe nada de tu placa: formatea el texto y acaba llamando, carácter a carácter, a la función que tú escribes. Ahí decides si sale por la UART o por SWO.', svg: SVG_PRINTF, q: mcq('¿Qué función escribes tú para que printf salga por la UART?', ['__io_putchar', 'printf', 'HAL_UART_Init', 'main'], 'La llama _write por cada carácter.') });
+  alt('st_uarttime', { title: 'Mide el mensaje', text: 'Cambia el número de caracteres y los baudios. Cada carácter son 10 bits, y mientras se envía con HAL_UART_Transmit la CPU espera.', tune: { viz: 'st_uarttx', params: P_UTX(100, 9600) }, q: mcq('100 caracteres a 9600 baudios (8N1). ¿Cuánto tarda?', ['≈ 104 ms', '≈ 83 ms', '≈ 10 ms', '≈ 1 s'], '1000 bits / 9600.') });
+  alt('st_isrrules', { title: 'Mira quién espera a quién', text: 'Pon USART2 más urgente que TIM2 y fíjate: mientras se atiende una interrupción, las de igual o menor urgencia esperan. Con el SysTick pasa igual: si tu interrupción es más urgente, el SysTick no avanza y HAL_Delay se queda esperando para siempre.', tune: { viz: 'st_nvic', params: { pA: sl('Prioridad TIM2', 5, 0, 15), pB: sl('Prioridad USART2', 8, 0, 15) } }, q: mcq('¿Qué es lo correcto dentro de una interrupción?', ['Guardar el dato, marcar una bandera y salir', 'Imprimir con printf', 'Esperar con HAL_Delay', 'Hacer el cálculo largo'], 'Lo lento, fuera.') });
+  alt('st_brr', { title: 'Juega con el divisor', text: 'Elige reloj del bus y velocidad. Cuanto más pequeño sale BRR, más pesa el redondeo. Mira cómo se desplazan los instantes de lectura.', tune: { viz: 'st_baud', params: P_BAUD(84, 115200) }, q: mcq('PCLK = 42 MHz y 115 200 baudios. ¿BRR?', ['365', '42', '1152', '23'], '42 000 000 / 115 200 ≈ 364,6 → 365.') });
+  alt('st_toolchain', { title: 'Del .c al .bin', text: 'Cada caja es una herramienta o un archivo. El .elf lleva símbolos para depurar; el .bin son solo bytes.', svg: SVG_TOOL, q: mcq('¿Qué archivo usas para depurar con símbolos?', ['El .elf', 'El .bin', 'El .hex', 'El .o de main'], 'El .bin no tiene símbolos.') });
+  alt('st_hal', { title: 'La escalera de capas', text: 'Cuanto más abajo, más control y menos portabilidad. Puedes mezclar: HAL en lo general y LL o registros en lo crítico.', svg: SVG_LAYERS, q: mcq('¿Qué capa elegirías para un prototipo de fin de semana con un sensor que ya tiene biblioteca de Arduino?', ['STM32duino (Arduino)', 'Registros', 'LL', 'Ensamblador'], 'Rapidez antes que control.') });
+  alt('st_sections', { title: 'Mira crecer las barras', text: 'Cambia .text, .data y .bss y mira qué barra crece. .data es la única que aparece en las dos.', tune: { viz: 'st_sec', params: P_SEC(64, 0, 4) }, q: mcq('¿Qué sección ocupa solo RAM?', ['.bss', '.data', '.text', '.rodata'], 'Variables a cero: no hay valores que guardar en Flash.') });
+  alt('st_reg', { title: 'Opera sobre un registro real', text: 'Este es el MODER de GPIOA de una F407 tras el reset: sus bits altos mantienen el depurador. Elige operación y bit y mira qué cambia. Con = verás bits rojos: los que has roto.', tune: { viz: 'st_reg32', params: P_R32(3, 5) }, q: mcq('¿Qué operación invierte un bit sin tocar los demás?', ['reg ^= (1U << n)', 'reg |= (1U << n)', 'reg &= ~(1U << n)', 'reg = (1U << n)'], 'XOR con un 1 invierte; con un 0 deja igual.') });
+  alt('st_rccen', { title: 'Un grifo por periférico', text: 'Cada bus tiene su registro de habilitación en RCC. Tras el reset todos los grifos están cerrados.', svg: SVG_RCC, q: mcq('¿En qué registro abres el reloj de USART2 en una F4?', ['RCC->APB1ENR', 'RCC->AHB1ENR', 'RCC->APB2ENR', 'USART2->CR1'], 'USART2 cuelga de APB1.') });
+  alt('st_docs', { title: 'Cada pregunta, su libro', text: 'No hace falta leerlo todo: basta con saber en cuál buscar.', svg: SVG_DOCS, q: mcq('¿Dónde buscas qué hace el bit UE de USART_CR1?', ['En el manual de referencia', 'En la hoja de datos', 'En la hoja de erratas', 'En el manual de programación'], 'Los registros, bit a bit, están en el manual de referencia.') });
+  alt('st_halstatus', { title: 'Cuatro respuestas posibles', text: 'Casi todas las funciones HAL devuelven uno de estos cuatro valores. Compruébalo siempre.', svg: SVG_HALST, q: mcq('HAL_UART_Receive devuelve HAL_TIMEOUT. ¿Qué ha pasado?', ['No llegaron todos los datos antes del tiempo límite', 'Todo bien', 'La UART está ocupada', 'Un parámetro es inválido'], 'Se agotó la espera.') });
+  alt('st_halcb', { title: 'Sondeo, _IT y _DMA', text: 'Elige el modo y mira cuánta CPU queda libre mientras se envían los datos. En _IT y _DMA, la función vuelve enseguida y la HAL te avisa con un callback.', tune: { viz: 'st_halmode', params: P_HALM(0, 100) }, q: mcq('Con HAL_UART_Transmit_DMA, ¿cuándo puedes reutilizar el búfer?', ['Cuando llega HAL_UART_TxCpltCallback', 'Nada más volver la función', 'Nunca', 'Tras un HAL_Delay(1)'], 'Hasta el callback, el DMA lo sigue leyendo.') });
+  alt('st_boot', { title: 'Avanza paso a paso', text: 'Mueve el deslizador desde el reset hasta main y mira qué cambia en los registros y en la RAM.', tune: { viz: 'st_boot', params: P_BOOT(0) }, q: mcq('¿Qué hace el arranque justo antes de llamar a main?', ['Poner .bss a cero (tras copiar .data)', 'Configurar el PLL', 'Leer el MSP', 'Encender la FPU'], 'El PLL se configura ya dentro de main.') });
+  alt('st_hsi', { title: 'La frecuencia en el tiempo', text: 'El chip arranca con el HSI, sube al PLL cuando lo configuras y, si entra en Stop, vuelve a despertar con el HSI.', svg: SVG_HSI, q: mcq('Tras despertar de Stop, ¿qué función vuelves a llamar?', ['SystemClock_Config()', 'HAL_Init()', 'main()', 'SystemInit()'], 'Para volver al PLL.') });
+  alt('st_irqsetup', { title: 'Las cuatro piezas', text: 'Activa una a una las cuatro piezas y mira lo que pasa con cada combinación. Cada fallo tiene su síntoma.', tune: { viz: 'st_irqcfg', params: P_IRQ(0, 0, 0, 0) }, q: mcq('El programa se queda en Default_Handler al llegar la interrupción. ¿Qué pieza falla?', ['El nombre del manejador', 'La activación en el NVIC', 'La bandera', 'El reloj del periférico'], 'Un nombre que no coincide deja el manejador por defecto.') });
+  alt('st_linker', { title: 'Reserva y comprueba', text: 'Reserva el final de la Flash para datos y sube el tamaño del programa: el enlazador te avisará cuando no quepa.', tune: { viz: 'st_sec', params: P_SEC(256, 200, 16, 0) }, q: mcq('Reservas 128 KB de 512 KB. ¿Qué LENGTH queda para FLASH?', ['384K', '512K', '128K', '256K'], '512 − 128.') });
+  alt('st_dmamem', { title: 'Quién está conectado a quién', text: 'La CCM es una memoria pegada al núcleo. El DMA no tiene camino hasta ella.', svg: SVG_CCM, q: mcq('¿Dónde pones un búfer que llenará el DMA en una F407?', ['En la SRAM normal', 'En la CCM', 'En la Flash', 'En la pila de una ISR'], 'La CCM no está en el camino del DMA.') });
+  alt('st_clksrc', { title: 'Compara las cuatro fuentes', text: 'Elige una fuente y mira cuánto se desviaría al día si la usaras para dar la hora. Las rápidas (HSI, HSE) son para la CPU; las lentas (LSI, LSE), para watchdog y RTC.', tune: { viz: 'st_osc', params: P_OSC(0, 1) }, q: mcq('¿Qué fuente usa el IWDG?', ['LSI', 'LSE', 'HSE', 'PLL'], 'Por eso sigue funcionando aunque falle el cristal principal.') });
+  alt('st_32k', { title: 'Dividir hasta el segundo', text: 'Quince divisiones entre 2 convierten 32 768 Hz en 1 Hz exacto.', svg: SVG_32K, q: mcq('¿Cuántas cuentas da un contador alimentado a 32 768 Hz en 1 s?', ['32 768', '32 000', '1000', '15'], 'Una por ciclo.') });
+  alt('st_usbclk', { title: 'Un VCO múltiplo de 48', text: 'El mismo VCO alimenta la CPU (÷P) y el USB (÷Q). Si el VCO no es múltiplo de 48 MHz, no hay Q que valga.', svg: SVG_USBCLK, q: mcq('VCO = 288 MHz. ¿Qué Q da 48 MHz?', ['6', '4', '8', 'No hay ninguna'], '288 / 48 = 6.') });
+  alt('st_apb', { title: 'Mira los relojes de los temporizadores', text: 'Cambia el divisor de APB1 entre 1 y 2 y mira la línea de abajo: cuando el divisor no es 1, los temporizadores reciben el doble de PCLK.', tune: { viz: 'st_clock', params: P_CLK(25, 25, 200, 2, 1, 1) }, q: mcq('PCLK1 = 42 MHz con APB1 ÷2. ¿Reloj de TIM3?', ['84 MHz', '42 MHz', '21 MHz', '168 MHz'], 'Divisor distinto de 1: el doble.') });
+  alt('st_waitst', { title: 'Encuentra los wait states justos', text: 'Sube SYSCLK y mira cuántos wait states pide la Flash de la F411. Con menos, la CPU lee instrucciones a medias.', tune: { viz: 'st_ws', params: P_WS(16, 0) }, q: mcq('F411 a 3,3 V y 84 MHz. ¿Cuántos wait states?', ['2', '0', '1', '3'], 'Entre 64 y 90 MHz piden 2.') });
+  alt('st_gpio', { title: 'El campo de modo de cada pin', text: 'Elige pin y modo y mira qué dos bits cambian en MODER. 00 entrada, 01 salida, 10 función alternativa, 11 analógico.', tune: { viz: 'st_reg', params: { pin: sl('Pin', 2, 0, 15), mode: li('Modo (0 ent · 1 sal · 2 AF · 3 anal)', 2, [0, 1, 2, 3]) } }, q: mcq('PA0 va a leer una tensión con el ADC. ¿Qué modo?', ['Analógico (11)', 'Entrada (00)', 'Salida (01)', 'Función alternativa (10)'], 'El modo analógico desconecta la parte digital.') });
+  alt('st_od', { title: 'Comparte la línea sin cortos', text: 'Pon tu pin en push-pull a 1 mientras la otra placa tira a 0: cortocircuito. Pásalo a open-drain con pull-up y vuelve a probar.', tune: { viz: 'st_pin', params: P_PIN(1, 0, 0, 1, 0) }, q: mcq('Una salida open-drain escribe 1 y nadie más tira a 0. ¿Qué nivel tiene la línea?', ['El que ponga la pull-up (3,3 V si la hay)', '0 V siempre', '3,3 V aunque no haya pull-up', 'Cortocircuito'], 'Open-drain solo suelta; el 1 lo pone la resistencia.') });
+  alt('st_leak', { title: 'La lista de sospechosos', text: 'Antes de culpar al chip, mira la placa: estas cuatro cosas gastan aunque el STM32 duerma.', svg: SVG_LEAK, q: mcq('Una pull-up de 10 kΩ a 3,3 V con el pin a 0 V todo el rato. ¿Cuánto gasta?', ['0,33 mA', '33 µA', '3,3 mA', 'Nada'], '3,3 V / 10 kΩ = 0,33 mA: muchísimo para un nodo a pilas.') });
+  alt('st_af', { title: 'Elige pin y función', text: 'Mueve el pin y mira cómo salta de AFR[0] a AFR[1] al pasar del 7 al 8, y dónde cae su campo de 4 bits.', tune: { viz: 'st_afr', params: P_AFR(0, 0) }, q: mcq('¿En qué registro va la función alternativa de PB12?', ['AFR[1]', 'AFR[0]', 'MODER', 'AFR[2]'], 'Pines 8–15 en AFR[1].') });
+  alt('st_irq', { title: 'La mochila del hardware', text: 'Estos ocho registros los guarda el núcleo solo al entrar. El resto, si los usa, los guarda el compilador como en cualquier función.', svg: SVG_IRQSTACK, q: mcq('¿Cuántos registros apila el hardware al entrar en una excepción (sin FPU)?', ['8', '16', '4', '32'], 'R0–R3, R12, LR, PC y xPSR.') });
+  alt('st_shared', { title: 'Pierde un incremento', text: 'Haz que la interrupción llegue entre la lectura y la escritura de main y mira el resultado. Luego activa la sección crítica.', tune: { viz: 'st_race', params: P_RACE(0, 0) }, q: mcq('¿Por qué contador++ no es atómico?', ['Son tres pasos: leer, sumar y escribir', 'Porque es de 32 bits', 'Porque no es volatile', 'Sí lo es'], 'Una interrupción puede colarse entre ellos.') });
+  alt('st_exti', { title: 'Reparte los números', text: 'Pon los dos botones en el mismo número de pin y mira el choque. Cambia uno y comprueba qué manejador atiende a cada uno.', tune: { viz: 'st_exti', params: P_EXTI(0, 0) }, q: mcq('Botones en PA6 y PB8. ¿Qué manejador atiende a los dos?', ['EXTI9_5_IRQHandler', 'EXTI6_IRQHandler', 'EXTI15_10_IRQHandler', 'Cada uno el suyo'], 'Las líneas 5–9 comparten manejador.') });
+  alt('st_debounce', { title: 'La forma de un rebote', text: 'Una pulsación real produce varios flancos en pocos milisegundos. Con EXTI, cada flanco es una interrupción.', svg: SVG_BOUNCE, q: mcq('¿Cuánto suele durar el rebote de un pulsador?', ['Unos pocos milisegundos', 'Nanosegundos', 'Varios segundos', 'No rebota nunca'], 'Por eso se ignoran unos 20 ms.') });
+  alt('st_power', { title: 'Tres escalones', text: 'Cuanto más profundo duermes, menos gastas y más cosas pierdes.', svg: SVG_POWER, q: mcq('Quieres dormir conservando la RAM y despertar con un pulsador. ¿Qué modo?', ['Stop', 'Standby', 'Sleep sin suspender el SysTick', 'Apagar la alimentación'], 'Stop conserva RAM y despierta por EXTI.') });
+  alt('st_systick', { title: 'Calcula LOAD', text: 'Elige frecuencia y cuántas interrupciones por segundo quieres. Mira si LOAD cabe en los 24 bits.', tune: { viz: 'st_tick', params: P_TICK(16, 1) }, q: mcq('SysTick a 48 MHz, interrupción cada 1 ms. ¿LOAD?', ['47 999', '48 000', '4799', '479 999'], '48 000 ciclos − 1.') });
+  alt('st_tick', { title: 'El tick tiene grano', text: 'Cambia el momento de la llamada dentro del tick: osDelay(1) puede durar casi nada y HAL_Delay(1) casi 2 ms.', tune: { viz: 'st_tickres', params: P_TRES(0.5, 1, 0) }, q: mcq('¿Qué garantiza HAL_Delay(5)?', ['Que espera al menos 5 ms', 'Que espera exactamente 5 ms', 'Que espera como mucho 5 ms', 'Nada'], 'Añade un tick para garantizar el mínimo.') });
+  alt('st_capture', { title: 'Cuenta los flancos', text: 'Cambia el modo ×1, ×2 o ×4 y la reductora y mira cuántas cuentas da una vuelta del eje de salida.', tune: { viz: 'st_enc', params: P_ENC(12, 1, 1) }, q: mcq('Encoder de 16 pulsos por vuelta en modo ×4, sin reductora. ¿Cuentas por vuelta?', ['64', '16', '32', '4'], '16 × 4.') });
+  alt('st_deadtime', { title: 'Evita el corto', text: 'Ajusta el tiempo muerto según lo que tarda en apagarse el transistor. La zona roja es un cortocircuito de la alimentación.', tune: { viz: 'st_dead', params: P_DEAD(0, 200) }, q: mcq('El transistor tarda 300 ns en apagarse y el tiempo muerto es de 200 ns. ¿Qué pasa?', ['Shoot-through durante unos 100 ns en cada conmutación', 'Nada', 'El motor gira más rápido', 'Se pierde el PWM'], 'Hace falta un tiempo muerto mayor que el apagado.') });
+  alt('st_advtim', { title: 'El interruptor general', text: 'MOE es un interruptor entre el temporizador y los pines. El freno lo abre por hardware.', svg: SVG_ADVTIM, q: mcq('Tras saltar el freno, ¿qué tiene que hacer el programa para volver a sacar PWM?', ['Poner MOE otra vez cuando sea seguro', 'Nada: vuelve solo siempre', 'Resetear el chip', 'Cambiar ARR'], 'El freno borra MOE.') });
+  alt('st_dmacfg', { title: 'La configuración de un vistazo', text: 'Un ADC que llena un búfer: el lado del periférico no se mueve; el de la memoria avanza una posición por dato.', svg: SVG_DMACFG, q: mcq('UART que envía un texto desde la RAM por DMA. ¿Qué dirección?', ['Memoria → periférico', 'Periférico → memoria', 'Memoria → memoria', 'Periférico → periférico'], 'Los datos salen de la RAM hacia el registro de la UART.') });
+  alt('st_adcscan', { title: 'Encuentra la casilla', text: 'Elige número de canales, muestra y canal: la casilla resaltada es buf[n·k + i].', tune: { viz: 'st_scan', params: P_SCAN(3, 0, 0) }, q: mcq('3 canales. ¿Qué índice tiene la muestra 5 del primer canal (índice 0)?', ['15', '5', '8', '3'], '3 × 5 + 0.') });
+  alt('st_adcacc', { title: 'Una regla que encoge', text: 'Si VDDA baja, la misma tensión da más cuentas. VREFINT, que no cambia, te dice cuánto ha encogido la regla.', svg: SVG_ADCACC, q: mcq('VREFINT_CAL = 1500 (a 3,3 V) y hoy lees 1500. ¿VDDA?', ['3,3 V', '3,0 V', '1,5 V', 'No se puede saber'], 'Mismas cuentas, misma referencia.') });
+  alt('st_wavegen', { title: 'Tabla y ritmo', text: 'Cambia el número de muestras y el ritmo del temporizador: la frecuencia de salida es el cociente.', tune: { viz: 'st_dac', params: P_DAC(100, 100, 1) }, q: mcq('Disparo a 200 kHz y tabla de 40 muestras. ¿Frecuencia de salida?', ['5 kHz', '8 MHz', '200 kHz', '40 kHz'], '200 / 40.') });
+  alt('st_dac', { title: 'Centra la onda', text: 'Quita el desplazamiento de 2048 y mira cómo se recorta la mitad negativa: el DAC no da tensiones negativas.', tune: { viz: 'st_dac', params: P_DAC(50, 500, 0) }, q: mcq('¿Qué código del DAC de 12 bits da la mitad de VREF+?', ['2048', '4095', '1024', '0'], 'Mitad de escala.') });
+  alt('st_uartrx', { title: 'El silencio marca el final', text: 'La línea en reposo está a 1. Cuando pasa un carácter entero sin nada nuevo, salta IDLE: el mensaje ha terminado.', svg: SVG_IDLE, q: mcq('¿Qué detecta la bandera IDLE?', ['Que la línea lleva un carácter de tiempo sin actividad', 'Un error de paridad', 'Que el búfer está lleno', 'Un byte nuevo'], 'Ideal para mensajes de longitud variable.') });
+  alt('st_rs485', { title: 'El momento de bajar DE', text: 'DE debe seguir alto hasta que salga el último bit (TC). TXE llega antes: solo dice que el registro está libre.', svg: SVG_DE, q: mcq('¿Qué bandera de la USART indica que ha salido el último bit?', ['TC', 'TXE', 'RXNE', 'IDLE'], 'Transmission Complete.') });
+  alt('st_i2c', { title: 'Los 8 bits del byte de dirección', text: 'La dirección ocupa los 7 bits altos; el último es lectura o escritura. Por eso la HAL quiere la dirección ya desplazada.', svg: SVG_I2CADDR, q: mcq('Un sensor en 0x3C. ¿Qué valor pasas a la HAL?', ['0x78', '0x3C', '0x1E', '0x3D'], '0x3C << 1 = 0x78.') });
+  alt('st_spi', { title: 'Ajusta CPOL y CPHA', text: 'CPOL dice si el reloj reposa en 0 o en 1; CPHA, en qué flanco se lee. Haz coincidir tus marcas con las del chip.', tune: { viz: 'st_spi', params: P_SPI(3, 0, 0) }, q: mcq('Modo SPI 2. ¿CPOL y CPHA?', ['CPOL 1, CPHA 0', 'CPOL 0, CPHA 1', 'CPOL 1, CPHA 1', 'CPOL 0, CPHA 0'], 'Modo = 2·CPOL + CPHA.') });
+  alt('st_bus', { title: 'La tabla de los cuatro', text: 'Un rasgo distintivo de cada bus basta para elegir.', svg: SVG_BUS, q: mcq('¿Qué bus necesita una línea de selección por cada esclavo?', ['SPI', 'I²C', 'UART', 'CAN'], 'El chip select.') });
+  alt('st_can', { title: 'Haz que compitan dos nodos', text: 'Elige dos identificadores y mira bit a bit: el 0 manda en el bus y quien envió un 1 se retira.', tune: { viz: 'st_arb', params: P_ARB(0, 1) }, q: mcq('En CAN, ¿qué nivel es dominante?', ['El 0', 'El 1', 'Ninguno', 'Depende de la velocidad'], 'Por eso gana el identificador más bajo.') });
+  alt('st_canbit', { title: 'Reparte los cuantos', text: 'Mueve BRP, BS1 y BS2 y mira la velocidad y el punto de muestreo. El primer cuanto, de sincronismo, siempre está.', tune: { viz: 'st_canbit', params: P_CANB(1, 1, 1) }, q: mcq('BS1 = 6 y BS2 = 1. ¿Punto de muestreo?', ['87,5 %', '85,7 %', '75 %', '100 %'], '(1 + 6) / 8.') });
+  alt('st_usbcdc', { title: 'Un puerto serie de mentira', text: 'Los datos viajan por USB a 12 Mbit/s; el PC lo presenta como un puerto serie.', svg: SVG_CDC, q: mcq('Cambias en el PC de 9600 a 115 200 baudios con un CDC. ¿Qué cambia en la transferencia?', ['Nada: viaja a la velocidad del USB', 'Va 12 veces más rápido', 'Deja de funcionar', 'Se corrompen los datos'], 'El número llega al STM32, pero no limita nada.') });
+  alt('st_rtos', { title: 'Juega con el planificador', text: 'Tres tareas, 20 ms. Cambia prioridades y el tipo de espera: con HAL_Delay, la tarea que espera sigue gastando CPU (rojo) y las de menos prioridad no corren.', tune: { viz: 'st_rtos', params: P_RTOS(3, 2, 0) }, q: mcq('¿Qué tarea ejecuta el planificador de FreeRTOS?', ['La lista de mayor prioridad', 'La que se creó primero', 'La que lleva más tiempo esperando', 'Todas a la vez'], 'Con empate, se turnan.') });
+  alt('st_stack', { title: 'Llena la pila', text: 'Añade un array local y printf y mira cuándo se desborda la pila de la tarea.', tune: { viz: 'st_stk', params: P_STK(128, 0, 0) }, q: mcq('Una tarea con 256 palabras de pila. ¿Cuántos bytes son?', ['1024', '256', '512', '2048'], '× 4.') });
+  alt('st_task', { title: 'Compara las dos esperas', text: 'Pon algo de trabajo y alterna entre osDelay y osDelayUntil: mira el periodo real y el retraso que se acumula.', tune: { viz: 'st_drift', params: P_DRIFT(2, 0) }, q: mcq('Trabajo de 4 ms y osDelayUntil con periodo de 10 ms. ¿Periodo real?', ['10 ms', '14 ms', '6 ms', '4 ms'], 'osDelayUntil espera hasta la siguiente marca.') });
+  alt('st_rtosisr', { title: 'La línea del 5', text: 'Las prioridades NVIC más urgentes que el límite no pueden llamar al RTOS. Las demás sí, con las funciones FromISR.', svg: SVG_RTOSPRIO, q: mcq('Una ISR con prioridad 7 (límite 5). ¿Puede usar xQueueSendFromISR?', ['Sí', 'No', 'Solo con mutex', 'Solo si es 0'], '7 es menos urgente que 5: está en la zona permitida.') });
+  alt('st_queue', { title: 'Llena la cola', text: 'Haz el productor más rápido que el consumidor y decide qué pasa cuando la cola se llena: descartar o esperar.', tune: { viz: 'st_queue', params: P_QUEUE(50, 100, 8, 0) }, q: mcq('El productor es una ISR y la cola está llena. ¿Qué pasa con el mensaje?', ['Se descarta: una ISR no puede esperar', 'La ISR espera', 'Se sobrescribe el más viejo siempre', 'Se reinicia el chip'], 'Desde una ISR, tiempo de espera 0.') });
+  alt('st_mutex', { title: 'Provoca la inversión', text: 'Activa la tarea media sin herencia: mira cuánto espera la alta. Luego activa la herencia.', tune: { viz: 'st_inv', params: P_INV(0, 0, 2) }, q: mcq('¿Qué hace la herencia de prioridad?', ['Sube temporalmente la prioridad de quien tiene el mutex', 'Baja la prioridad de la tarea alta', 'Quita el mutex', 'Duplica la pila'], 'Así la media no puede expulsarla.') });
+  alt('st_swtimer', { title: 'Una sola tarea para todos', text: 'Todos los callbacks de temporizadores software corren uno tras otro en la misma tarea. Si uno se bloquea, los demás esperan.', svg: SVG_SWT, q: mcq('¿Dónde se ejecuta el callback de un osTimer?', ['En la tarea del servicio de temporizadores', 'En una interrupción hardware', 'En la tarea Idle', 'En main'], 'Por eso no debe bloquear.') });
+  alt('st_avgcur', { title: 'Mueve el ciclo de trabajo', text: 'Cambia cuánto tiempo pasa despierto y cuánto gasta dormido. Mira qué pesa más en la media.', tune: { viz: 'st_avg', params: P_AVG(20, 100, 1, 500) }, q: mcq('5 mA durante 10 ms cada 10 s y 5 µA dormido. ¿Media aproximada?', ['≈ 10 µA', '≈ 5 mA', '≈ 50 µA', '≈ 1 µA'], '(5000 × 0,01 + 5 × 9,99) / 10.') });
+  alt('st_wdg', { title: 'La ventana', text: 'El WWDG castiga refrescar tarde y también demasiado pronto. El IWDG solo castiga llegar tarde.', svg: SVG_WDG, q: mcq('¿Qué watchdog sigue funcionando aunque falle el cristal principal?', ['IWDG', 'WWDG', 'Los dos', 'Ninguno'], 'Usa su propio LSI.') });
+  alt('st_iwdgcalc', { title: 'Ajusta el tiempo', text: 'Elige preescalador y RLR y mira el tiempo. Comprueba también el peor caso, con el LSI a 47 kHz.', tune: { viz: 'st_iwdg', params: P_IWDG(4, 99, 500) }, q: mcq('IWDG ÷128 y RLR = 249 con LSI de 32 kHz. ¿Tiempo?', ['1 s', '0,5 s', '2 s', '128 ms'], '128 × 250 / 32 000.') });
+  alt('st_blproto', { title: 'La conversación', text: 'Cada comando va con su complemento y cada paso espera un ACK.', svg: SVG_BLPROTO, q: mcq('El cargador responde 0x1F. ¿Qué significa?', ['NACK: comando rechazado', 'ACK', 'Velocidad detectada', 'Fin de la escritura'], '0x79 es ACK; 0x1F, NACK.') });
+  alt('st_flash', { title: 'Escribe encima', text: 'Elige lo que hay y lo que escribes. Sin borrar, el resultado es el AND de los dos: los bits solo pueden bajar.', tune: { viz: 'st_flash', params: P_FLASH(0, 0, 0) }, q: mcq('Hay 0xFF y programas 0xA5 sin borrar. ¿Qué queda?', ['0xA5', '0xFF', '0x00', '0x5A'], '0xFF AND 0xA5.') });
+  alt('st_rdp', { title: 'Tres niveles', text: 'De abajo arriba, cada nivel protege más y es más difícil volver atrás. El 2 no tiene vuelta.', svg: SVG_RDP, q: mcq('Tu prototipo está en RDP nivel 1 y necesitas reprogramarlo. ¿Qué haces?', ['Bajar a nivel 0 (se borra la Flash) y volver a grabar', 'Nada, no se puede nunca', 'Subir a nivel 2', 'Leer la Flash con el depurador'], 'Volver a 0 borra todo, pero el chip sigue vivo.') });
+  alt('st_board', { title: 'Pata a pata', text: 'Seis puntos que no pueden faltar en el esquema de un STM32.', svg: SVG_MINBOARD, q: mcq('¿Qué pata necesita un filtro para que el ADC mida bien?', ['VDDA', 'BOOT0', 'NRST', 'PA13'], 'El ADC mide respecto a VDDA.') });
+  alt('st_crystal', { title: 'Ajusta la carga', text: 'Elige el condensador para que la carga que ve el cristal coincida con su CL. Recuerda los parásitos.', tune: { viz: 'st_xtal', params: P_XTAL(10, 3, 22) }, q: mcq('CL = 18 pF y 4 pF parásitos. ¿Condensador a cada lado?', ['28 pF', '18 pF', '36 pF', '14 pF'], '2 × (18 − 4).') });
+  alt('st_bringup', { title: 'Un escalón cada vez', text: 'Cada paso comprueba una sola cosa. Si uno falla, no sigues.', svg: SVG_BRINGUP, q: mcq('El ST-LINK no lee el ID de tu placa nueva. ¿Qué compruebas antes?', ['Que hay 3,3 V y no hay cortos', 'Que el USB enumera', 'El reloj por MCO', 'El ADC'], 'Primero alimentación; luego depuración.') });
+  alt('st_profw', { title: 'Capas que se pueden probar', text: 'Cada capa solo habla con la de debajo. Así la lógica de arriba se prueba en el PC sustituyendo los drivers.', svg: SVG_FWLAYERS, q: mcq('¿Qué capa conviene probar en el PC?', ['Servicios y aplicación: filtros, protocolos, estados', 'Los drivers del ADC', 'El arranque', 'El script del enlazador'], 'Lo que no depende del hardware.') });
+  alt('st_field', { title: 'Del campo al número', text: 'Con el pin y el modo que elijas, mira el valor del campo ya desplazado: modo << (2·pin).', tune: { viz: 'st_reg', params: { pin: sl('Pin', 0, 0, 15), mode: li('Modo (0 ent · 1 sal · 2 AF · 3 anal)', 3, [0, 1, 2, 3]) } }, q: mcq('PB4 en salida (01). ¿Valor del campo ya desplazado?', ['0x100', '0x10', '0x8', '0x200'], '1 << 8.') });
+  alt('st_clock', { title: 'Etapa a etapa', text: 'Ajusta un divisor cada vez y mira qué caja se pone roja: cada etapa tiene su límite.', tune: { viz: 'st_clock', params: P_CLK(8, 4, 168, 2, 2, 1) }, q: mcq('HSE 8 MHz y M = 4. ¿Entrada del VCO?', ['2 MHz', '32 MHz', '4 MHz', '0,5 MHz'], '8 / 4.') });
+  alt('st_nvic', { title: 'Números y urgencia', text: 'En el NVIC, un número menor es más urgente. Solo una prioridad de expropiación menor interrumpe a otra.', svg: SV(110, tx(8, 16, 'Prioridad NVIC', 'vizsm') + Array.from({ length: 16 }, (_, i) => `<rect x="${8 + i * 18}" y="24" width="16" height="24" rx="3" fill="var(--err)" fill-opacity="${(1 - i / 16).toFixed(2)}"/>` + tm(16 + i * 18, 40, i, 'vizsm', 'fill:currentColor')).join('') + tx(8, 70, '0: la más urgente', 'vizlab') + `<text x="292" y="70" text-anchor="end" class="vizlab">15: la menos</text>` + tx(8, 96, 'Al revés que en FreeRTOS, donde mayor es más importante')), q: mcq('Prioridades 3 y 9. ¿Cuál puede interrumpir a la otra?', ['La de 3', 'La de 9', 'Ninguna', 'Las dos'], 'Número menor, más urgente.') });
+  alt('st_timer', { title: 'Divide dos veces', text: 'Primero el preescalador da el tick; luego ARR + 1 ticks forman un periodo.', svg: chain(['fTIM|84 MHz', '÷ (PSC + 1)|PSC = 83', 'tick 1 µs', '× (ARR + 1)|ARR = 999', 'periodo|1 ms → 1 kHz']), q: mcq('Ticks de 1 µs y ARR = 4999. ¿Frecuencia?', ['200 Hz', '5 kHz', '2 kHz', '20 Hz'], '5000 µs de periodo.') });
+  alt('st_duty', { title: 'El comparador en números', text: 'Con ARR = 99 hay 100 pasos: CCR es directamente el porcentaje.', svg: table([['ARR = 99', '100 pasos por periodo'], ['CCR = 25', 'Alta 25 pasos: 25 %'], ['CCR = 0', 'Siempre baja: 0 %'], ['CCR ≥ 100', 'Siempre alta: 100 %']], 'PWM modo 1: alta mientras CNT < CCR'), q: mcq('ARR = 99 y CCR = 60. ¿Ciclo de trabajo?', ['60 %', '61 %', '59 %', '6 %'], '60 / 100.') });
+  alt('st_dma', { title: 'Las dos mitades', text: 'Mientras el DMA llena una mitad, la CPU procesa la otra. HT y TC te dicen cuándo cambiar.', svg: chain(['DMA llena|mitad A', 'HT: procesa A', 'DMA llena|mitad B', 'TC: procesa B']), q: mcq('¿Cuándo procesas la segunda mitad del búfer circular?', ['Tras la interrupción TC', 'Tras la interrupción HT', 'En cualquier momento', 'Nunca'], 'TC: el DMA acaba de completarla y vuelve al principio.') });
+  alt('st_adc', { title: 'Cuentas del tiempo de conversión', text: 'tconv = (ciclos de muestreo + 12) / fADC. Con el reloj y los ciclos lo tienes.', svg: chain(['PCLK2 84 MHz', '÷4 → fADC|21 MHz', '15 + 12 ciclos', '27 / 21 MHz|≈ 1,29 µs']), q: mcq('fADC = 21 MHz y 3 ciclos de muestreo (12 bits). ¿tconv?', ['≈ 0,71 µs', '≈ 0,14 µs', '≈ 0,57 µs', '15 µs'], '(3 + 12) / 21 MHz.') });
+
   const C = String.raw;
   Object.assign(PROJECTS, {
     st_identify: {
@@ -1210,361 +2072,546 @@ void imu_paso(float gyro_dps, float ax, float az) {
     }
   });
 
+
   /* ======================= LECCIONES ======================= */
-  const M1 = { id: 'st-m1', title: 'ARM Cortex-M y la familia STM32', desc: 'Núcleos, familias, nombres de pieza, placas y el mapa de memoria de 32 bits.', nodes: [
+  const PRED = { predict: true };
+  const M1 = { id: 'st-m1', title: 'ARM Cortex-M y la familia STM32', desc: 'Qué significa «32 bits», los núcleos Cortex-M, cómo leer el nombre de un chip, las placas y el mapa de memoria.', nodes: [
     L('st1', 'Del Arduino al ARM de 32 bits', 'chip', ['st_bits32', 'st_core', 'st_family'], [
-      I('La Uno lleva un ATmega328P: 8 bits, 16 MHz, 2 KB de RAM y 32 KB de Flash. Un <b>STM32F411</b> cuesta unos pocos euros y tiene 32 bits, 100 MHz, 128 KB de RAM, 512 KB de Flash, unidad de coma flotante, DMA y decenas de periféricos.'),
-      Q('¿Qué significa que un microcontrolador sea “de 32 bits”?', ['Que sus registros y su unidad aritmética trabajan con 32 bits de una vez', 'Que tiene 32 patas', 'Que funciona a 32 MHz', 'Que tiene 32 KB de memoria'], 'Una suma de dos números de 32 bits es una sola instrucción.', { c: 'st_bits32' }),
-      Q('Sumar dos uint32_t en un AVR de 8 bits necesita…', ['Varias instrucciones: byte a byte con acarreo', 'Una instrucción', 'Una biblioteca de coma flotante', 'Que el número quepa en 8 bits'], 'Cuatro sumas encadenadas; en un Cortex-M es una.', { c: 'st_bits32' }),
-      I('<b>ARM no fabrica chips</b>: diseña núcleos y vende licencias. ST, NXP, Nordic, Microchip o Raspberry Pi compran el núcleo y le añaden memoria y periféricos. Por eso todos los Cortex-M se programan y depuran de forma muy parecida.'),
-      Q('¿Quién fabrica los STM32?', ['STMicroelectronics, con núcleos licenciados de ARM', 'ARM', 'Arduino', 'Raspberry Pi'], 'ARM diseña el núcleo; ST hace el chip.', { c: 'st_core' }),
-      I('ARM tiene tres perfiles: <b>Cortex-A</b> (procesadores de aplicación: móviles, Linux), <b>Cortex-R</b> (tiempo real exigente: discos, frenos) y <b>Cortex-M</b> (microcontroladores).'),
-      { t: 'match', q: 'Une cada perfil con su uso.', pairs: [['Cortex-A', 'Móviles y ordenadores con Linux'], ['Cortex-R', 'Tiempo real crítico (discos, automoción)'], ['Cortex-M', 'Microcontroladores']], c: 'st_core' },
-      Nm('Un puntero de 32 bits puede direccionar 2³² bytes. ¿Cuántos GB son?', 4, 'GB', '2³² = 4 294 967 296 bytes = 4 GB. Por eso el STM32 coloca Flash, RAM y periféricos en un mismo espacio de direcciones.', { c: 'st_bits32' }),
-      Q('En la Uno, int vale como máximo 32 767. ¿Y en un STM32?', ['2 147 483 647: int es de 32 bits en ARM', '32 767, igual', '255', '65 535'], 'El tamaño de int depende de la arquitectura. Usa int16_t, uint32_t… de stdint.h para que tu código sea portable.', { c: 'st_bits32' }),
-      Q('¿Qué imprime este código en un STM32?', ['4', '260', '250', 'Error de compilación'], 'uint8_t solo llega a 255: 260 da la vuelta a 4 en cualquier arquitectura.', { code: 'uint8_t x = 250;\nx = x + 10;\nprintf("%u", x);', c: 'st_bits32' }),
-      I('Los Cortex-M solo ejecutan instrucciones <b>Thumb</b>: un juego que mezcla instrucciones de 16 y 32 bits para que el código ocupe poco sin perder potencia.'),
-      Q('¿Por qué se usan tanto los STM32 en la industria?', ['Una familia enorme y compatible, herramientas gratuitas y suministro a largo plazo', 'Porque son los únicos de 32 bits', 'Porque se programan en Arduino', 'Porque no necesitan alimentación'], 'Puedes cambiar de chip dentro de la familia sin reescribir todo.', { c: 'st_family' })
+      Q('Sumas dos números de 70 000 en una Uno (8 bits) y en un STM32 (32 bits). ¿Qué crees que pasa?', ['La Uno necesita varias instrucciones; el STM32, una', 'Los dos lo hacen en una instrucción', 'La Uno no puede sumar números tan grandes', 'El STM32 necesita más instrucciones que la Uno'], 'La Uno trocea el número en bytes y suma trozo a trozo, arrastrando el acarreo. Vamos a verlo.', { ...PRED, c: 'st_bits32', h: 'Piensa en cuántos bits caben en un registro de cada chip.' }),
+      { t: 'explore', text: 'El número se parte en trozos del ancho de la CPU. Cada trozo es una suma.', viz: 'st_width', params: P_WIDTH(8, 250),
+        tasks: [{ q: 'instr', min: 4, max: 4, text: 'Con la CPU de 8 bits, elige un número que necesite 4 sumas', done: 'Un número de 32 bits son 4 bytes: ADD y tres ADC (sumas con acarreo).', hint: 'Prueba con 70 000 o más.' },
+          { q: 'w32', min: 1, max: 1, text: 'Ahora suma un número de 32 bits en una sola instrucción', done: 'Con registros de 32 bits, el número entero cabe en uno.', hint: 'Cambia el ancho de la CPU.' }] },
+      I('Un micro <b>de 32 bits</b> tiene registros y unidad aritmética de 32 bits: opera con números de hasta 4 bytes de una vez. Sus direcciones también son de 32 bits.', { svg: table([['Uno', 'ATmega328P · 8 bits · 16 MHz'], ['', '2 KB de RAM · 32 KB de Flash'], ['STM32F411', '32 bits · 100 MHz · con FPU'], ['', '128 KB de RAM · 512 KB de Flash']], 'Por unos pocos euros'), more: 'Hay más diferencias: DMA (copias de memoria sin la CPU), muchos temporizadores, varias UART, USB… Las irás viendo en esta especialidad. La FPU es la unidad de coma flotante: hace cuentas con decimales por hardware.' }),
+      I('<b>Cuidado con int</b>: en la Uno ocupa 16 bits; en un STM32, <b>32</b>. Los tipos de stdint.h miden lo mismo en todas partes.', { code: 'int a = 40000;       // Uno: no cabe · STM32: sí\nuint16_t b = 65535;  // igual en los dos\nb = b + 1;           // da la vuelta: 0' }),
+      I('<b>ARM no fabrica chips</b>: diseña núcleos y vende licencias. ST, NXP, Nordic o Raspberry Pi les añaden memoria y periféricos. Tres gamas: <b>Cortex-A</b> (Linux, móviles), <b>Cortex-R</b> (tiempo real crítico) y <b>Cortex-M</b> (microcontroladores).', { svg: SVG_CORE, more: 'Por eso un STM32, un nRF52 o una RP2040 se depuran igual y manejan las interrupciones igual: comparten núcleo. Los Cortex-M solo ejecutan instrucciones Thumb, un juego que mezcla instrucciones de 16 y 32 bits para que el código ocupe poco.' }),
+      { t: 'steps', text: '¿Cuántas posiciones de memoria puede señalar un puntero de 32 bits?', steps: ['Cada bit duplica las combinaciones: con n bits hay <b>2ⁿ</b>', '2³² = 2² × 2³⁰', '2¹⁰ = 1024 ≈ mil, así que 2³⁰ ≈ mil millones: 1 G', '2³² = 4 × 2³⁰ = <b>4 GB</b> (4 294 967 296 bytes)'], result: 'Flash, RAM y periféricos se reparten esos 4 GB de direcciones.' },
+      Q('¿Qué significa que un microcontrolador sea «de 32 bits»?', ['Que sus registros y su unidad aritmética trabajan con 32 bits de una vez', 'Que tiene 32 patas', 'Que funciona a 32 MHz', 'Que tiene 32 KB de memoria'], 'Una suma de dos números de 32 bits es una sola instrucción.', { c: 'st_bits32', h: 'Piensa en el tamaño de los números con los que opera de una vez.' }),
+      Q('¿Quién diseña el núcleo de un STM32?', ['ARM, que lo licencia; ST diseña y fabrica el resto del chip', 'ST, entero', 'Arduino', 'Raspberry Pi'], 'ARM hace el «motor»; ST, el «coche».', { c: 'st_core', h: 'Uno diseña el motor y otro el coche.' }),
+      Nm('Un puntero de 32 bits direcciona 2³² bytes. ¿Cuántos GB son?', 4, 'GB', '2³² = 4 × 2³⁰ = 4 GB.', { c: 'st_bits32', h: 'Usa 2³⁰ ≈ mil millones: 2³² = 2² × 2³⁰.' }),
+      Q('¿Qué imprime este código en un STM32?', ['4', '260', '250', 'Error de compilación'], 'uint8_t solo llega a 255: 260 da la vuelta a 4 en cualquier arquitectura.', { code: 'uint8_t x = 250;\nx = x + 10;\nprintf("%u", x);', c: 'st_bits32', h: 'Un uint8_t llega a 255 en cualquier chip.' }),
+      { t: 'match', q: 'Une cada gama de ARM con su uso.', pairs: [['Cortex-A', 'Móviles y ordenadores con Linux'], ['Cortex-R', 'Tiempo real crítico (discos, frenos)'], ['Cortex-M', 'Microcontroladores']], c: 'st_core', h: 'A de aplicación, R de tiempo real, M de microcontrolador.' },
+      Q('En la Uno, int vale como máximo 32 767. ¿Y en un STM32?', ['2 147 483 647: int es de 32 bits en ARM', '32 767, igual', '255', '65 535'], 'El tamaño de int depende de la arquitectura. Para código portable, int16_t, uint32_t…', { c: 'st_bits32', h: 'Mira cuántos bits ocupa int en ARM.' }),
+      Q('¿Por qué se usan tanto los STM32 en la industria?', ['Una familia enorme y compatible, herramientas gratuitas y suministro garantizado durante años', 'Porque son los únicos de 32 bits', 'Porque se programan en Arduino', 'Porque no necesitan alimentación'], 'Puedes cambiar de chip dentro de la familia sin reescribirlo todo.', { c: 'st_family', h: 'Piensa en lo que necesita una empresa que fabrica el mismo aparato durante años.' }),
+      I('<b>Resumen</b>\n· 32 bits: sumas de 4 bytes en una instrucción y 4 GB de direcciones.\n· int mide 32 bits en ARM: usa uint8_t, uint32_t… para no depender del chip.\n· ARM diseña el núcleo Cortex-M; ST pone memoria y periféricos.')
     ]),
-    L('st2', 'Los núcleos Cortex-M', 'chip', ['st_cores', 'st_fpu', 'st_core', 'st_dmamem'], [
-      I('<b>Cortex-M0 y M0+</b> (ARMv6-M): núcleos pequeños y eficientes, sin división por hardware y con pocas instrucciones. En STM32 los llevan las familias F0, G0, L0 y C0.'),
-      I('<b>Cortex-M3</b> (ARMv7-M): división por hardware y Thumb-2 completo. Es el de la clásica F103 (Blue Pill).\n<b>Cortex-M4F</b> (ARMv7E-M): añade instrucciones DSP (multiplicar y acumular en un ciclo, SIMD) y una <b>FPU</b> de precisión simple. Familias F3, F4, G4 y L4.'),
-      I('<b>Cortex-M7</b>: más etapas, ejecuta dos instrucciones por ciclo, tiene cachés y memorias TCM; en algunos modelos, FPU de doble precisión (F7, H7).\n<b>Cortex-M33</b> (ARMv8-M): como un M4 moderno con <b>TrustZone</b> para separar código seguro (L5, U5, H5).'),
-      { t: 'match', q: 'Une cada núcleo con un STM32 que lo lleve.', pairs: [['Cortex-M0+', 'STM32G0'], ['Cortex-M3', 'STM32F103'], ['Cortex-M4F', 'STM32F411'], ['Cortex-M7', 'STM32H743']], c: 'st_cores' },
-      Q('¿Qué hace esta línea en un Cortex-M0+?', ['Llama a una rutina de software de coma flotante: decenas de ciclos', 'Una sola instrucción de FPU', 'No compila', 'Convierte a entero automáticamente'], 'El M0+ no tiene FPU: los float se emulan.', { code: 'float y = x * 0.5f;', c: 'st_fpu' }),
-      Q('En un Cortex-M4F, ¿qué problema tiene esta línea?', ['0.1 es una constante double: fuerza una operación de doble precisión emulada', 'Ninguno', 'b se convierte a entero', 'No se puede multiplicar float'], 'La FPU del M4 es de precisión simple. Escribe 0.1f para que todo sea float.', { code: 'float a = b * 0.1;', c: 'st_fpu' }),
-      Q('¿Para qué sirve TrustZone en un Cortex-M33?', ['Para aislar el código y las claves seguras del resto del firmware', 'Para ir más rápido', 'Para ahorrar batería', 'Para tener más pines'], 'Un fallo en la parte normal no puede leer los secretos de la parte segura.', { c: 'st_cores' }),
-      I('Todos los Cortex-M comparten el <b>NVIC</b> (controlador de interrupciones), el <b>SysTick</b>, el modelo de excepciones y la depuración por <b>SWD</b>. Lo que aprendas aquí con un F4 te sirve para casi cualquier Cortex-M.'),
-      Q('Pasas de un STM32F4 a un nRF52 (ambos Cortex-M4F). ¿Qué NO cambia?', ['El NVIC, el SysTick y el juego de instrucciones', 'Los registros de GPIO', 'El reloj y el PLL', 'Los nombres de los periféricos'], 'El núcleo es el mismo; los periféricos son de cada fabricante.', { c: 'st_core' }),
-      Q('En un H7 con caché de datos, la CPU lee un búfer que acaba de llenar el DMA y ve datos viejos. ¿Por qué?', ['La caché guarda una copia antigua: hay que invalidarla o usar memoria no cacheable', 'El DMA está roto', 'Falta volatile', 'La Flash es lenta'], 'El DMA escribe en la RAM sin pasar por la caché de la CPU.', { c: 'st_dmamem' })
+    L('st2', 'Los núcleos Cortex-M', 'chip', ['st_cores', 'st_fpu', 'st_core'], [
+      Q('Un Cortex-M0+ (sin unidad de coma flotante) multiplica dos float. ¿Qué crees que pasa?', ['Funciona, pero por software: decenas de instrucciones', 'Error de compilación', 'Una sola instrucción', 'Convierte a enteros y pierde los decimales'], 'El compilador lo convierte en una rutina de software. Compara núcleos.', { ...PRED, c: 'st_fpu', h: 'Sin hardware para algo, el compilador lo hace con instrucciones normales.' }),
+      { t: 'explore', text: 'Elige núcleo y operación. ✓ significa que el núcleo lo hace por hardware.', viz: 'st_cores', params: P_CORES(0, 0),
+        tasks: [{ q: 'fhw', min: 1, max: 1, text: 'Encuentra un núcleo que multiplique float por hardware', done: 'El M4F (y el M7, y el M33 con FPU): una instrucción.', hint: 'Pon la operación «float ×» y sube de núcleo.' },
+          { q: 'dhw', min: 1, max: 1, text: 'Ahora uno que multiplique double por hardware', done: 'Solo el M7 de los H7 y algunos F7 tiene FPU de doble precisión.' },
+          { q: 'nodiv', min: 1, max: 1, text: 'Busca el que ni siquiera divide enteros por hardware', done: 'El M0+: lo mínimo, para chips baratos y de bajo consumo.' }] },
+      I('La escalera de núcleos:\n<b>M0+</b>: mínimo y barato (F0, G0, L0, C0).\n<b>M3</b>: división por hardware (F1).\n<b>M4F</b>: instrucciones DSP y FPU de precisión simple (F3, F4, G4, L4).\n<b>M7</b>: cachés y dos instrucciones por ciclo (F7, H7).\n<b>M33</b>: un M4 moderno con TrustZone (L5, U5, H5).', { tune: { viz: 'st_cores', params: P_CORES(2, 2) }, more: 'Las instrucciones DSP multiplican y acumulan en un ciclo o hacen dos operaciones de 16 bits a la vez: justo lo que piden los filtros digitales. TrustZone divide el chip en un mundo seguro y otro normal: un fallo en el normal no puede leer las claves del seguro.' }),
+      I('La FPU del M4F es de <b>precisión simple</b>: los float van por hardware y los double se emulan. Una constante sin «f» es double y arrastra toda la cuenta.', { code: 'float y = x * 0.5f;  // FPU: 1 instrucción\nfloat z = x * 0.5;   // 0.5 es double: software' }),
+      I('Todos los Cortex-M comparten el <b>NVIC</b> (interrupciones), el <b>SysTick</b> (temporizador del núcleo) y la depuración por <b>SWD</b>. Lo que aprendas con un F4 te sirve en cualquier Cortex-M; lo que cambia de marca a marca son los periféricos.', { svg: SVG_CORE }),
+      { t: 'steps', text: 'Eliges chip para un filtro de audio que hace 48 000 multiplicaciones de float por segundo.', steps: ['¿Qué operación domina? <b>Multiplicar float</b>', '¿Quién la hace por hardware? <b>M4F, M7 y M33 con FPU</b>', 'En un M0+, cada una son decenas de ciclos: con unos 40, casi 2 millones de ciclos por segundo solo para eso', 'En un M4F, unas 48 000 instrucciones: nada para 100 MHz'], result: 'Un M4F, como la F411, va sobrado.' },
+      { t: 'match', q: 'Une cada núcleo con un STM32 que lo lleve.', pairs: [['Cortex-M0+', 'STM32G0'], ['Cortex-M3', 'STM32F103'], ['Cortex-M4F', 'STM32F411'], ['Cortex-M7', 'STM32H743']], c: 'st_cores', h: 'Busca la serie: F1 es M3, F4 es M4F, H7 es M7.' },
+      Q('¿Qué hace esta línea en un Cortex-M0+?', ['Llama a una rutina de software de coma flotante: decenas de ciclos', 'Una sola instrucción de FPU', 'No compila', 'Convierte a entero automáticamente'], 'El M0+ no tiene FPU: los float se emulan.', { code: 'float y = x * 0.5f;', c: 'st_fpu', h: 'El M0+ no tiene FPU.' }),
+      Q('En un Cortex-M4F, ¿qué problema tiene esta línea?', ['0.1 es una constante double: fuerza una operación de doble precisión emulada', 'Ninguno', 'b se convierte a entero', 'No se pueden multiplicar float'], 'La FPU del M4 es de precisión simple. Escribe la constante con f.', { code: 'float a = b * 0.1;', c: 'st_fpu', h: 'Fíjate en si la constante lleva f.' }),
+      Q('¿Para qué sirve TrustZone en un Cortex-M33?', ['Para aislar el código y las claves seguras del resto del firmware', 'Para ir más rápido', 'Para ahorrar batería', 'Para tener más pines'], 'Un fallo en la parte normal no puede leer los secretos de la segura.', { c: 'st_cores', h: 'Piensa en guardar secretos.' }),
+      Q('Pasas de un STM32F4 a un nRF52 (ambos Cortex-M4F). ¿Qué NO cambia?', ['El NVIC, el SysTick y el juego de instrucciones', 'Los registros de GPIO', 'El reloj y el PLL', 'Los nombres de los periféricos'], 'El núcleo es el mismo; los periféricos son de cada fabricante.', { c: 'st_core', h: 'El núcleo es el mismo: ¿qué trae el núcleo?' }),
+      Q('Necesitas un chip barato que lea un botón y encienda un relé. ¿Qué núcleo basta?', ['Cortex-M0+', 'Cortex-M7', 'Cortex-M33 con TrustZone', 'Cortex-M4F'], 'Sin cálculo ni seguridad, lo mínimo vale y gasta menos.', { c: 'st_cores', h: 'No hay cálculo ni secretos: busca lo mínimo.' }),
+      I('<b>Resumen</b>\n· M0+ mínimo; M3 divide; M4F suma DSP y FPU simple; M7 potencia; M33 seguridad.\n· En un M4F, float por hardware y double por software: escribe las constantes float con «f» al final.\n· NVIC, SysTick y SWD son iguales en todos los Cortex-M.')
     ]),
     L('st3', 'Familias STM32 y cómo leer un nombre', 'chip', ['st_partnum', 'st_family'], [
-      I('Las familias se agrupan por letra:\n<b>F</b>: uso general clásico (F0, F1, F4, F7).\n<b>G</b>: uso general moderno (G0, G4).\n<b>L</b> y <b>U</b>: bajo consumo (L0, L4, U5).\n<b>H</b>: alto rendimiento (H7).\n<b>W</b>: con radio (WB, WL).'),
-      { t: 'match', q: 'Une cada chip con lo que lo define.', pairs: [['STM32F411', 'Cortex-M4F general a 100 MHz'], ['STM32G474', 'Analógica y control de motores avanzados'], ['STM32L476', 'Bajo consumo'], ['STM32H743', 'Cortex-M7 a 480 MHz']], c: 'st_family' },
-      I('Leamos <b>STM32F411CEU6</b>:\nSTM32 · <b>F</b> uso general · <b>411</b> línea · <b>C</b> 48 patas · <b>E</b> 512 KB de Flash · <b>U</b> encapsulado UFQFPN · <b>6</b> de −40 a 85 °C.'),
-      { t: 'match', q: 'Une cada letra con su significado.', pairs: [['C (nº de patas)', '48 patas'], ['R (nº de patas)', '64 patas'], ['E (Flash)', '512 KB'], ['8 (Flash)', '64 KB']], c: 'st_partnum' },
-      Q('¿Cuánta Flash tiene un STM32F103C8T6?', ['64 KB', '8 KB', '128 KB', '103 KB'], 'El 8 es el código de Flash: 64 KB.', { c: 'st_partnum' }),
-      Q('¿Cuántas patas tiene un STM32F446RET6?', ['64', '48', '100', '446'], 'R = 64 patas.', { c: 'st_partnum' }),
-      Q('Diferencia entre un sufijo “T” y uno “U” de encapsulado:', ['T es LQFP con patas; U es UFQFPN sin patas', 'T es de más temperatura', 'U es de más Flash', 'Ninguna'], 'El QFN es más pequeño pero más difícil de soldar a mano.', { c: 'st_partnum' }),
-      Q('¿Qué indica el último dígito 6?', ['El rango de temperatura: de −40 a 85 °C', 'La versión del silicio', 'Los MHz', 'El número de UART'], 'Un 7 indica hasta 105 °C.', { c: 'st_partnum' }),
-      I('Para elegir chip, mira: periféricos (¿DAC? ¿CAN? ¿USB?), memoria, encapsulado, consumo, precio y disponibilidad. El selector de microcontroladores de CubeMX filtra por todo eso.'),
-      Q('Necesitas CAN y DAC en el mismo chip. ¿Cuál vale?', ['STM32F446RE', 'STM32F411CE', 'STM32F401CC', 'STM32F030F4'], 'La F401 y la F411 no tienen ni CAN ni DAC; la F446 tiene ambos.', { c: 'st_family' }),
-      Q('¿Por qué es popular la G4 en electrónica de potencia?', ['Tiene periféricos analógicos y temporizadores avanzados para control de motores y convertidores', 'Porque no tiene periféricos', 'Porque es de 8 bits', 'Porque solo funciona a 5 V'], 'Comparadores, amplificadores internos y temporizadores de alta resolución en algunos modelos.', { c: 'st_family' })
+      Q('En un chip pone STM32F103C8T6. ¿Qué crees que significa el 8?', ['Un código: 64 KB de Flash', '8 KB de Flash', '8 MHz', '8 UART'], 'Las letras y cifras finales son códigos de una tabla, no cantidades. Vamos a descifrarlos.', { ...PRED, c: 'st_partnum', h: 'Desconfía de leerlo como una cantidad.' }),
+      { t: 'explore', text: 'Construye el nombre de un chip moviendo cada código.', viz: 'st_part', params: P_PART(0, 0, 0, 0),
+        tasks: [{ q: 'g1', min: 1, max: 1, text: 'Un chip de 64 patas y 512 KB de Flash', done: 'R = 64 patas, E = 512 KB: «RE», como la F411RE o la F446RE de las Nucleo.', hint: 'Patas R y Flash E.' },
+          { q: 'g2', min: 1, max: 1, text: '48 patas, 64 KB y encapsulado sin patas (QFN)', done: 'C8U: 48 patas, 64 KB, UFQFPN.' },
+          { q: 'g3', min: 1, max: 1, text: 'Haz que aguante hasta 105 °C', done: 'El último dígito 7 amplía el rango de temperatura.' }] },
+      I('La letra tras STM32 dice la familia: <b>F</b> uso general clásico, <b>G</b> uso general moderno, <b>L</b> y <b>U</b> bajo consumo, <b>H</b> alto rendimiento, <b>W</b> con radio.', { svg: SVG_FAMILY }),
+      I('Leamos <b>STM32F411CEU6</b>: F familia · 411 línea · C 48 patas · E 512 KB de Flash · U encapsulado sin patas · 6 de −40 a 85 °C.', { tune: { viz: 'st_part', params: P_PART(0, 3, 1, 0) } }),
+      I('Dentro de una serie, cada chip trae <b>sus</b> periféricos. Antes de elegir, filtra en el selector de CubeMX por lo que necesites (DAC, CAN, USB, memoria, encapsulado, precio).', { svg: table([['F401 / F411', 'Sin DAC ni CAN'], ['F446', 'Con DAC y CAN'], ['F103', 'USB y CAN, pero no a la vez'], ['G474', 'Comparadores y amplificadores internos']], 'Lee la lista de periféricos') }),
+      { t: 'steps', text: 'Descifra STM32G474RET6.', steps: ['STM32 · <b>G</b>: uso general moderno', '<b>474</b>: la línea (G4, con mucha analógica para potencia)', '<b>R</b>: 64 patas · <b>E</b>: 512 KB de Flash', '<b>T</b>: LQFP, con patas · <b>6</b>: de −40 a 85 °C'], result: 'Un G4 de 64 patas y 512 KB, fácil de soldar a mano.' },
+      Q('¿Cuánta Flash tiene un STM32F103C8T6?', ['64 KB', '8 KB', '128 KB', '103 KB'], 'El 8 es el código de Flash: 64 KB.', { c: 'st_partnum', h: 'El 8 es un código: búscalo en la tabla de Flash.' }),
+      Q('¿Cuántas patas tiene un STM32F446RET6?', ['64', '48', '100', '446'], 'R = 64 patas.', { c: 'st_partnum', h: 'Mira la letra que va justo después de la línea.' }),
+      { t: 'match', q: 'Une cada código con su significado.', pairs: [['C (patas)', '48 patas'], ['R (patas)', '64 patas'], ['E (Flash)', '512 KB'], ['8 (Flash)', '64 KB']], c: 'st_partnum', h: 'La primera letra tras la línea son patas; la segunda, Flash.' },
+      { t: 'match', q: 'Une cada chip con lo que lo define.', pairs: [['STM32F411', 'Cortex-M4F general a 100 MHz'], ['STM32G474', 'Analógica y control de motores'], ['STM32L476', 'Bajo consumo'], ['STM32H743', 'Cortex-M7 a 480 MHz']], c: 'st_family', h: 'Fíjate en la letra: F, G, L, H.' },
+      Q('Diferencia entre un sufijo «T» y uno «U» de encapsulado:', ['T es LQFP con patas; U es UFQFPN sin patas', 'T aguanta más temperatura', 'U tiene más Flash', 'Ninguna'], 'El QFN es más pequeño pero más difícil de soldar a mano.', { c: 'st_partnum', h: 'Una tiene patas visibles y la otra no.' }),
+      Q('Necesitas CAN y DAC en el mismo chip. ¿Cuál vale?', ['STM32F446RE', 'STM32F411CE', 'STM32F401CC', 'STM32F030F4'], 'La F401 y la F411 no tienen ni CAN ni DAC; la F446 tiene ambos.', { c: 'st_family', h: 'La F401 y la F411 no tienen ninguno de los dos.' }),
+      Q('¿Qué indica el último dígito 6?', ['El rango de temperatura: de −40 a 85 °C', 'La versión del silicio', 'Los MHz', 'El número de UART'], 'Un 7 indica hasta 105 °C.', { c: 'st_partnum', h: 'Es lo último que se mira: el ambiente en que trabajará.' }),
+      I('<b>Resumen</b>\n· Letra de familia: F, G, L/U, H, W.\n· Tras la línea: patas (C, R, V, Z), Flash (8, B, C, E, G), encapsulado (T, U) y temperatura (6, 7).\n· Comprueba los periféricos de cada chip antes de elegir.')
     ]),
-    L('st4', 'Placas: Nucleo, Black Pill y Blue Pill', 'pcb', ['st_boards', 'st_pinlim', 'st_printf'], [
-      I('Las <b>Nucleo-64</b> de ST llevan un ST-LINK integrado, conectores tipo Arduino y “morpho”, el LED LD2 en <b>PA5</b>, el pulsador B1 en <b>PC13</b> y la USART2 (PA2/PA3) conectada a un puerto serie virtual por el mismo USB.'),
-      Q('En una Nucleo-F411RE, ¿por dónde sale printf sin cablear nada?', ['Por USART2, que llega al PC a través del ST-LINK', 'Por USART1', 'Por el USB del F411', 'No sale'], 'El ST-LINK hace de puente USB-serie.', { c: 'st_boards' }),
-      I('La <b>Black Pill</b> (de WeAct) lleva un F401CC o un F411CE, USB-C, cristal de 25 MHz y otro de 32,768 kHz, LED en <b>PC13</b> (se enciende a nivel bajo), pulsador KEY en <b>PA0</b> y botones NRST y BOOT0. Se programa con un ST-LINK externo o por DFU.'),
-      Q('En la Black Pill, ¿qué hace esta línea?', ['Enciende el LED: está conectado a 3,3 V y se activa a nivel bajo', 'Apaga el LED', 'Configura PC13 como entrada', 'Nada'], 'LED entre 3,3 V y el pin: un 0 lo enciende.', { code: 'HAL_GPIO_WritePin(GPIOC,\n  GPIO_PIN_13, GPIO_PIN_RESET);', c: 'st_boards' }),
-      I('La <b>Blue Pill</b> (F103C8, Cortex-M3 a 72 MHz, sin FPU) fue muy popular, pero hoy abundan los chips clonados o falsificados, y muchas traen mal la resistencia de pull-up del USB. La Black Pill es mejor punto de partida.'),
-      Q('¿Por qué empezar con la Black Pill y no con la Blue Pill?', ['Cortex-M4F con FPU, más RAM y Flash, y menos problemas de clones', 'Porque tiene WiFi', 'Porque es de 5 V', 'Porque no necesita programador'], 'Más potencia por el mismo precio.', { c: 'st_boards' }),
-      Q('Muchos pines de STM32 son “FT”. ¿Puedes conectar un sensor de 5 V a un pin FT?', ['Sí, si la hoja de datos lo marca como FT y el pin no está en modo analógico', 'Sí, cualquier pin', 'Nunca', 'Solo con el chip apagado'], 'FT = tolerante a 5 V en entrada digital. En modo analógico deja de serlo.', { c: 'st_pinlim' }),
-      Q('¿Por qué no alimentar la placa a la vez por USB y por una fuente de 5 V externa en el mismo pin?', ['Las dos fuentes pueden pelearse y meter corriente una en la otra', 'Porque se duplica la tensión', 'No pasa nada', 'Porque el STM32 se vuelve de 5 V'], 'Elige una fuente o usa un diodo o un circuito de conmutación.', { c: 'st_boards' }),
-      { t: 'match', q: 'Une cada elemento con su pin.', pairs: [['LED LD2 de la Nucleo', 'PA5'], ['Pulsador B1 de la Nucleo', 'PC13'], ['LED de la Black Pill', 'PC13 '], ['Pulsador KEY de la Black Pill', 'PA0']], c: 'st_boards' },
-      Q('Los clones baratos de ST-LINK V2 con forma de pendrive…', ['Suelen grabar y depurar bien, pero casi nunca sacan SWO', 'No funcionan nunca', 'Son más rápidos que el original', 'Solo sirven para la Blue Pill'], 'Para printf por SWO necesitas un ST-LINK que lo tenga, como el de las Nucleo.', { c: 'st_printf' })
+    L('st4', 'Placas: Nucleo, Black Pill y Blue Pill', 'pcb', ['st_boards', 'st_pinlim'], [
+      Q('En la Black Pill el LED está entre 3,3 V y el pin PC13. Escribes un 1 en el pin. ¿Qué crees que hace el LED?', ['Se apaga: sus dos patas quedan a 3,3 V', 'Se enciende', 'Parpadea', 'Se quema'], 'Para que circule corriente hace falta diferencia de tensión. Compruébalo en las dos placas.', { ...PRED, c: 'st_boards', h: 'Mira la tensión a cada lado del LED.' }),
+      { t: 'explore', text: 'Elige placa y el valor que escribes en el pin del LED.', viz: 'st_board', params: P_BOARD(0, 0),
+        tasks: [{ q: 'nuOn', min: 1, max: 1, text: 'Enciende el LED de la Nucleo', done: 'En la Nucleo el LED va del pin a masa: un 1 lo enciende.', hint: 'Escribe un 1.' },
+          { q: 'bpOn', min: 1, max: 1, text: 'Cambia a la Black Pill y enciende su LED', done: 'Activo a nivel bajo: un 0 lo enciende.', hint: 'Prueba el otro valor.' }] },
+      I('La <b>Nucleo-64</b> de ST lleva un <b>ST-LINK integrado</b> (programador y depurador), el LED LD2 en <b>PA5</b>, el pulsador B1 en <b>PC13</b> y la USART2 (PA2/PA3) conectada al PC por el mismo USB.', { svg: table([['ST-LINK', 'Graba, depura y hace de puerto serie'], ['LD2', 'PA5, activo a nivel alto'], ['B1', 'PC13'], ['USART2', 'PA2 y PA3 → USB del PC']], 'Nucleo-64') }),
+      I('La <b>Black Pill</b> (WeAct) lleva una F401CC o una F411CE, USB-C, cristal de 25 MHz, LED en <b>PC13</b> activo a nivel bajo y KEY en <b>PA0</b>. Se graba con un ST-LINK externo o por USB. La <b>Blue Pill</b> (F103, M3 sin FPU) abunda en clones y suele traer mal la pull-up del USB.', { svg: table([['Black Pill', 'F401/F411 · M4F · LED PC13 (a 0)'], ['Blue Pill', 'F103 · M3 · clones frecuentes'], ['Nucleo-64', 'ST-LINK integrado · LED PA5']], 'Tres placas'), more: 'Grabar por USB usa el cargador de ROM del chip (DFU), que verás al final de la especialidad. Para empezar, la Black Pill da más por el mismo precio que la Blue Pill.' }),
+      I('Límites de un pin: unos <b>25 mA</b> y un total para todo el chip. Los pines <b>FT</b> toleran 5 V, pero solo como entrada digital. Para relés o motores, un transistor. Y alimenta la placa por <b>una sola fuente</b>.', { svg: SVG_PINLIM }),
+      { t: 'steps', text: 'Un relé de 5 V pide 70 mA. ¿Cómo lo manejas desde la Black Pill?', steps: ['¿Lo aguanta un pin? 70 mA &gt; 25 mA: <b>no</b>', 'Pon un transistor NPN (o un MOSFET) que conmute la corriente del relé', 'Corriente de base con 3,3 V y 1 kΩ: (3,3 − 0,7) / 1000 ≈ 2,6 mA: el pin va sobrado', 'Añade un <b>diodo</b> en paralelo con la bobina para el pico al apagar'], result: 'El pin solo da la orden; el transistor mueve la carga.' },
+      Q('En una Nucleo-F411RE, ¿por dónde sale printf sin cablear nada?', ['Por USART2, que llega al PC a través del ST-LINK', 'Por USART1', 'Por el USB del F411', 'No sale'], 'El ST-LINK hace de puente USB-serie.', { c: 'st_boards', h: 'El ST-LINK integrado hace algo más que grabar.' }),
+      Q('En la Black Pill, ¿qué hace esta línea?', ['Enciende el LED: está conectado a 3,3 V y se activa a nivel bajo', 'Apaga el LED', 'Configura PC13 como entrada', 'Nada'], 'Con el pin a 0 V circula corriente desde 3,3 V.', { code: '// RESET = escribir un 0 en el pin\nHAL_GPIO_WritePin(GPIOC,\n  GPIO_PIN_13, GPIO_PIN_RESET);', c: 'st_boards', h: 'RESET pone el pin a 0 V y el LED está conectado a 3,3 V.' }),
+      { t: 'match', q: 'Une cada elemento con su pin.', pairs: [['LED LD2 de la Nucleo', 'PA5'], ['Pulsador B1 de la Nucleo', 'PC13'], ['LED de la Black Pill', 'PC13 '], ['Pulsador KEY de la Black Pill', 'PA0']], c: 'st_boards', h: 'Las dos placas usan PC13, pero para cosas distintas.' },
+      Q('Un sensor da una salida digital de 5 V. ¿Puedes conectarla a un pin FT?', ['Sí, si la hoja de datos lo marca FT y el pin no está en modo analógico', 'Sí, a cualquier pin', 'Nunca', 'Solo con el chip apagado'], 'FT = tolerante a 5 V como entrada digital.', { c: 'st_pinlim', h: 'FT solo vale en un modo concreto.' }),
+      Q('Un relé de 70 mA conectado directamente a un pin. ¿Qué opinas?', ['Mal: un pin da unos 25 mA; usa un transistor con diodo', 'Bien', 'Bien si el pin es FT', 'Bien a velocidad baja'], 'Además hay un límite total para todos los pines del chip.', { c: 'st_pinlim', h: 'Compara con los 25 mA de un pin.' }),
+      Q('¿Por qué empezar con la Black Pill y no con la Blue Pill?', ['Cortex-M4F con FPU, más memoria y menos problemas de clones', 'Porque tiene WiFi', 'Porque es de 5 V', 'Porque no necesita programador nunca'], 'Más potencia por el mismo precio.', { c: 'st_boards', h: 'Compara núcleos y problemas de clones.' }),
+      Q('¿Por qué no alimentar la placa a la vez por USB y por una fuente de 5 V en el mismo pin?', ['Las dos fuentes pueden pelearse y meter corriente una en la otra', 'Porque se duplica la tensión', 'No pasa nada', 'Porque el STM32 pasa a ser de 5 V'], 'Elige una fuente o usa un diodo o un circuito de conmutación.', { c: 'st_boards', h: 'Dos fuentes empujando el mismo punto…' }),
+      I('<b>Resumen</b>\n· Nucleo: ST-LINK integrado, LED en PA5 (a 1), printf por USART2.\n· Black Pill: F401/F411, LED en PC13 activo a nivel bajo.\n· Un pin da unos 25 mA; FT solo en entrada digital; cargas grandes con transistor.')
     ]),
-    L('st5', 'El mapa de memoria', 'memory', ['st_memmap', 'st_regaddr', 'st_volatile', 'st_boot0', 'st_bsrr'], [
-      I('Con 32 bits hay 4 GB de direcciones, y el chip las reparte en regiones. En un STM32F4:\n<b>0x08000000</b>: Flash (programa).\n<b>0x20000000</b>: SRAM (variables y pila).\n<b>0x40000000</b>: periféricos.\n<b>0xE0000000</b>: periféricos del núcleo (NVIC, SysTick).'),
-      { t: 'match', q: 'Une cada dirección con lo que hay.', pairs: [['0x08000000', 'Flash'], ['0x20000000', 'SRAM'], ['0x40020000', 'GPIOA'], ['0xE000E010', 'SysTick']], c: 'st_memmap' },
-      Q('¿Qué significa “periférico mapeado en memoria”?', ['Que sus registros se leen y escriben como si fueran posiciones de memoria', 'Que el periférico tiene su propia RAM', 'Que se copia en la Flash', 'Que solo se usa con DMA'], 'No hay instrucciones especiales de E/S: basta un puntero.', { c: 'st_memmap' }),
-      I('Esta línea pone a 1 el pin PA5 escribiendo directamente en la dirección del registro ODR de GPIOA:', { code: '*(volatile uint32_t *)0x40020014\n    = (1U << 5);' }),
-      Q('¿Por qué el puntero es volatile?', ['Para que el compilador haga cada acceso: el registro tiene efectos y puede cambiar solo', 'Para que sea más rápido', 'Para guardarlo en Flash', 'Porque es de 32 bits'], 'Sin volatile, el optimizador podría juntar o eliminar escrituras.', { code: '*(volatile uint32_t *)0x40020014\n    = (1U << 5);', c: 'st_volatile' }),
-      G('st_regAddr'), G('st_regAddr'),
-      I('Al arrancar, según el pin <b>BOOT0</b>, la Flash (o la memoria del cargador de ST) aparece también en la dirección <b>0x00000000</b>. Por eso el núcleo encuentra allí su tabla de vectores.'),
-      Q('Con BOOT0 a 1 al hacer reset, ¿desde dónde arranca un STM32F4?', ['Desde la memoria de sistema: el cargador de ST', 'Desde la Flash', 'Desde la SRAM siempre', 'No arranca'], 'Así puedes cargar firmware por UART o USB sin programador.', { c: 'st_boot0' }),
-      Q('La F411 tiene 128 KB de SRAM. ¿Cuál es la primera dirección que queda fuera?', ['0x20020000', '0x20128000', '0x20001000', '0x20012800'], '128 KB = 0x20000 bytes: 0x20000000 + 0x20000.', { c: 'st_memmap' }),
-      I('Curiosidad del M3 y el M4: el <b>bit-banding</b> da a cada bit de la SRAM y de los periféricos su propia palabra en una zona “alias”, para cambiar un bit con una sola escritura. No existe en M0, M7 ni M33.'),
-      Q('¿Qué ventaja tiene escribir un bit por bit-banding?', ['Es atómico: no hay leer-modificar-escribir que una interrupción pueda romper', 'Ocupa menos Flash', 'Funciona en todos los Cortex-M', 'Va a 1 GHz'], 'Una sola escritura cambia un solo bit.', { c: 'st_bsrr' })
+    L('st5', 'El mapa de memoria', 'memory', ['st_memmap', 'st_regaddr', 'st_volatile', 'st_boot0'], [
+      Q('En un STM32, ¿cómo crees que se enciende un pin a nivel de hardware?', ['Escribiendo un número en una dirección de memoria concreta', 'Con una instrucción especial de entrada y salida', 'Llamando al sistema operativo', 'Mandando un mensaje por la UART'], 'Los periféricos aparecen como direcciones: escribir en ellas es dar órdenes al hardware.', { ...PRED, c: 'st_memmap', h: 'Hay 4 GB de direcciones y no todo son memorias.' }),
+      { t: 'explore', text: 'Elige región y tamaño: mira dónde empieza, dónde acaba y la primera dirección que queda fuera.', viz: 'st_mem', params: P_MEM(0, 16),
+        tasks: [{ q: 'end', min: 0x20020000, max: 0x20020000, text: 'Haz que la primera dirección fuera sea 0x20020000 (la SRAM de una F411)', done: '128 KB = 0x20000 bytes: 0x20000000 + 0x20000.', hint: 'SRAM y 128 KB.' },
+          { q: 'end', min: 0x08080000, max: 0x08080000, text: 'Ahora el final de 512 KB de Flash', done: '512 KB = 0x80000: 0x08000000 + 0x80000 = 0x08080000.' }] },
+      I('Los 4 GB de direcciones se reparten en regiones fijas:\n<b>0x08000000</b> Flash · <b>0x20000000</b> SRAM · <b>0x40000000</b> periféricos · <b>0xE0000000</b> periféricos del núcleo (NVIC, SysTick).', { tune: { viz: 'st_mem', params: P_MEM(1, 128) } }),
+      I('Los periféricos están <b>mapeados en memoria</b>: cada registro tiene su dirección y se usa con un puntero. Cada periférico tiene una <b>base</b> y cada registro un <b>desplazamiento</b>: GPIOA está en 0x40020000 y su registro de salida ODR, en +0x14.', { code: '// Pone PA5 a 1 escribiendo en GPIOA->ODR\n*(volatile uint32_t *)0x40020014 = (1U << 5);' }),
+      I('¿Por qué <b>volatile</b>? El optimizador quita lecturas y escrituras que le parecen inútiles. En un registro cada acceso tiene efecto: volatile le obliga a hacerlos todos.', { svg: SVG_VOLATILE, more: 'Ya lo usaste en el curso base con variables que cambia una interrupción: es la misma idea. Un registro puede cambiar solo (un dato que llega) y escribirlo dos veces seguidas puede ser justo lo que quieres.' }),
+      I('Al arrancar, el pin <b>BOOT0</b> decide qué aparece en la dirección 0x00000000: con BOOT0 a 0, tu programa de la Flash; con BOOT0 a 1, el cargador que ST grabó en el chip (la memoria de sistema).', { tune: { viz: 'st_boot0', params: P_B0(0, 0) } }),
+      { t: 'steps', text: '¿En qué dirección está GPIOA->IDR (desplazamiento 0x10)?', steps: ['Base de GPIOA: <b>0x40020000</b>', 'Desplazamiento de IDR: <b>0x10</b> (en hexadecimal: 16 bytes)', 'Suma en hexadecimal: 0x40020000 + 0x10', '= <b>0x40020010</b>'], result: 'Base + desplazamiento, sin pasar a decimal.' },
+      { t: 'match', q: 'Une cada dirección con lo que hay.', pairs: [['0x08000000', 'Flash'], ['0x20000000', 'SRAM'], ['0x40020000', 'GPIOA'], ['0xE000E010', 'SysTick']], c: 'st_memmap', h: 'Fíjate en las primeras cifras: 0x08, 0x20, 0x40, 0xE0.' },
+      G('st_regAddr'),
+      Q('¿Por qué el puntero es volatile?', ['Para que el compilador haga cada acceso: el registro tiene efectos y puede cambiar solo', 'Para que sea más rápido', 'Para guardarlo en Flash', 'Porque es de 32 bits'], 'Sin volatile, el optimizador podría juntar o eliminar escrituras.', { code: '*(volatile uint32_t *)0x40020014\n    = (1U << 5);', c: 'st_volatile', h: 'Piensa en lo que hace el optimizador con escrituras que parecen repetidas.' }),
+      Q('Con BOOT0 a 1 al hacer reset, ¿desde dónde arranca un STM32F4?', ['Desde la memoria de sistema: el cargador de ST', 'Desde la Flash', 'Desde la SRAM siempre', 'No arranca'], 'Así puedes cargar firmware por UART o USB sin programador.', { c: 'st_boot0', h: 'Mira qué memoria aparece en la dirección 0 según BOOT0.' }),
+      Q('La F411 tiene 128 KB de SRAM. ¿Cuál es la primera dirección que queda fuera?', ['0x20020000', '0x20128000', '0x20001000', '0x20012800'], '128 KB = 0x20000 bytes: 0x20000000 + 0x20000.', { c: 'st_memmap', h: 'Pasa 128 KB a hexadecimal: 128 × 1024 = 131 072.' }),
+      G('st_regAddr'),
+      Q('¿Qué significa «periférico mapeado en memoria»?', ['Que sus registros se leen y escriben como posiciones de memoria', 'Que el periférico tiene su propia RAM', 'Que se copia en la Flash', 'Que solo se usa con DMA'], 'No hay instrucciones especiales: basta un puntero.', { c: 'st_memmap', h: 'Piensa en cómo se accede a un registro desde C.' }),
+      I('<b>Resumen</b>\n· Flash en 0x08000000, SRAM en 0x20000000, periféricos desde 0x40000000.\n· Dirección de un registro = base del periférico + desplazamiento (en hexadecimal).\n· Los registros se tocan con punteros volatile. BOOT0 decide qué arranca.')
     ]),
     PRJ('st-p1', 'Proyecto: identifica tu placa', 'st_identify')
   ] };
 
-  const M2 = { id: 'st-m2', title: 'Herramientas y depuración', desc: 'STM32CubeIDE, CubeMX, ST-LINK y SWD, depurador, printf y la cadena de compilación.', nodes: [
-    L('st6', 'STM32CubeIDE y CubeMX', 'code', ['st_cubemx', 'st_swdrec'], [
-      I('<b>STM32CubeIDE</b> es un entorno gratuito basado en Eclipse con el compilador GCC, el depurador GDB y <b>CubeMX</b> integrado. CubeMX guarda la configuración del chip en un archivo <b>.ioc</b> y genera el código de inicialización.'),
-      { t: 'order', q: 'Ordena el flujo de trabajo con CubeIDE.', items: ['Crear el proyecto y elegir placa o chip', 'Asignar pines y periféricos en el .ioc', 'Configurar el árbol de relojes', 'Generar el código', 'Escribir tu código en las zonas USER CODE', 'Compilar y depurar'], e: 'Configuración gráfica primero; tu lógica, después y en su sitio.', c: 'st_cubemx' },
-      I('En la vista de pines haces clic en un pin y le asignas función. Si le pones una <b>etiqueta de usuario</b> (por ejemplo “LED”), CubeMX crea en main.h las macros LED_Pin y LED_GPIO_Port.'),
-      Q('¿Dónde están definidas LED_GPIO_Port y LED_Pin?', ['En main.h, generadas a partir de la etiqueta del pin en CubeMX', 'En la HAL de ST', 'Hay que escribirlas a mano en main.c', 'En el script del enlazador'], 'Si cambias el pin en CubeMX, el código sigue funcionando.', { code: 'HAL_GPIO_TogglePin(LED_GPIO_Port,\n                   LED_Pin);', c: 'st_cubemx' }),
-      I('Archivos generados más importantes:\n<b>main.c</b>: main, SystemClock_Config y MX_xxx_Init.\n<b>stm32f4xx_it.c</b>: los manejadores de interrupción.\n<b>stm32f4xx_hal_msp.c</b>: pines y relojes de cada periférico.\n<b>startup_*.s</b> y <b>*.ld</b>: arranque y enlazador.'),
-      { t: 'match', q: 'Une cada archivo con su contenido.', pairs: [['main.c', 'main y SystemClock_Config'], ['stm32f4xx_it.c', 'Manejadores de interrupción'], ['stm32f4xx_hal_msp.c', 'Pines y relojes de cada periférico'], ['STM32F411CEUX_FLASH.ld', 'Mapa de memoria para el enlazador']], c: 'st_cubemx' },
-      Q('Escribes tu bucle fuera de USER CODE y vuelves a generar el código. ¿Qué pasa?', ['Se pierde: CubeMX solo conserva lo que va entre BEGIN y END', 'Se conserva', 'Aparece un aviso y se guarda una copia', 'CubeMX lo mueve'], 'Regla de oro de CubeMX.', { code: '  while (1)\n  {\n    mi_bucle();   // <- aquí\n    /* USER CODE END WHILE */', c: 'st_cubemx' }),
-      Q('¿Dónde se configuran los pines de la USART2 (modo alternativo, velocidad)?', ['En HAL_UART_MspInit, dentro de stm32f4xx_hal_msp.c', 'En main.h', 'En el script del enlazador', 'En SystemInit'], 'Las funciones Msp hacen la parte de “bajo nivel” de cada periférico.', { c: 'st_cubemx' }),
-      Q('¿Por qué conviene poner SYS › Debug en “Serial Wire”?', ['Reserva PA13 y PA14 para el depurador y evita quedarte sin acceso SWD', 'Para que vaya más rápido', 'Para activar printf', 'Para usar el USB'], 'En la F1, elegir “No Debug” genera código que desactiva el SWD.', { c: 'st_swdrec' }),
-      I('Puedes regenerar sin miedo si respetas las zonas USER CODE. Aun así, haz un commit en git antes de regenerar: si algo cambia de forma inesperada, lo verás en el diff.')
+  const M2 = { id: 'st-m2', title: 'Herramientas y depuración', desc: 'STM32CubeIDE y CubeMX, el ST-LINK por SWD, el depurador, printf y la cadena de compilación.', nodes: [
+    L('st6', 'STM32CubeIDE y CubeMX', 'code', ['st_cubemx'], [
+      Q('CubeMX genera el código de tu proyecto. Escribes tu programa en main.c, cambias un pin en CubeMX y regeneras. ¿Qué crees que pasa con lo que escribiste?', ['Depende de dónde: solo se conserva lo que está en zonas marcadas', 'Se conserva todo siempre', 'Se borra todo siempre', 'CubeMX no deja regenerar'], 'CubeMX reescribe sus archivos, pero respeta unas zonas concretas. Míralo.', { ...PRED, c: 'st_cubemx', h: 'CubeMX reescribe sus archivos; algo tiene que avisarle de lo que es tuyo.' }),
+      { t: 'explore', text: 'Coloca tu línea y regenera el código.', viz: 'st_regen', params: P_REGEN(0, 0),
+        tasks: [{ q: 'lost', min: 1, max: 1, text: 'Deja tu línea fuera de USER CODE y regenera', done: 'Borrada sin aviso.', hint: 'Pon «Regenerar» en sí.' },
+          { q: 'ok', min: 1, max: 1, text: 'Muévela dentro de la zona y vuelve a regenerar', done: 'Lo que está entre USER CODE BEGIN y END sobrevive.' }] },
+      I('<b>STM32CubeIDE</b> es gratuito: editor, compilador GCC, depurador y <b>CubeMX</b> integrado. CubeMX guarda la configuración en un archivo <b>.ioc</b> (pines, relojes, periféricos) y genera el código de arranque.', { svg: chain(['Elegir chip|o placa', 'Pines y|periféricos', 'Relojes', 'Generar|código', 'Tu código en|USER CODE', 'Compilar|y depurar']) }),
+      I('Si pones una <b>etiqueta</b> a un pin (por ejemplo «LED»), CubeMX crea en main.h las macros LED_Pin y LED_GPIO_Port. Si mañana cambias el pin, tu código no cambia.', { code: 'HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);  // invierte el LED\nHAL_Delay(500);                              // espera 500 ms' }),
+      I('Archivos que genera:\n<b>main.c</b>: main, SystemClock_Config y MX_xxx_Init.\n<b>stm32f4xx_it.c</b>: manejadores de interrupción.\n<b>stm32f4xx_hal_msp.c</b>: relojes y pines de cada periférico.\n<b>startup_*.s</b> y <b>*.ld</b>: arranque y mapa de memoria.', { svg: table([['main.c', 'main y la configuración del reloj'], ['…_it.c', 'Manejadores de interrupción'], ['…_hal_msp.c', 'Bajo nivel de cada periférico'], ['*.ld', 'Mapa de memoria para el enlazador']]), more: 'Las funciones HAL_… son la biblioteca de ST que CubeMX usa en el código generado; las verás a fondo en el módulo siguiente. Haz un commit en git antes de regenerar: si algo cambia de forma inesperada, lo verás en el diff.' }),
+      { t: 'steps', text: 'Añade un pulsador en PA0 a un proyecto que ya funciona.', code: 'if (HAL_GPIO_ReadPin(BOTON_GPIO_Port, BOTON_Pin)\n    == GPIO_PIN_RESET) {\n  /* pulsado (con pull-up, a 0) */\n}', steps: ['Abre el .ioc: PA0 como GPIO_Input con pull-up y etiqueta «BOTON»', 'Haz un commit en git y pulsa Generate Code', 'CubeMX añade BOTON_Pin y BOTON_GPIO_Port a main.h y configura el pin en MX_GPIO_Init', 'Lee el pin en tu bucle, dentro de USER CODE'], result: 'Dos minutos y sin tocar nada fuera de tus zonas.' },
+      { t: 'order', q: 'Ordena el flujo de trabajo con CubeIDE.', items: ['Crear el proyecto y elegir placa o chip', 'Asignar pines y periféricos en el .ioc', 'Configurar el árbol de relojes', 'Generar el código', 'Escribir tu código en las zonas USER CODE', 'Compilar y depurar'], e: 'Configuración gráfica primero; tu lógica, después y en su sitio.', c: 'st_cubemx', h: 'Primero se configura en el .ioc; tu lógica va al final.' },
+      Q('¿Dónde están definidas LED_GPIO_Port y LED_Pin?', ['En main.h, generadas a partir de la etiqueta del pin', 'En la HAL de ST', 'Hay que escribirlas a mano en main.c', 'En el script del enlazador'], 'Si cambias el pin en CubeMX, el código sigue funcionando.', { code: 'HAL_GPIO_TogglePin(LED_GPIO_Port,\n                   LED_Pin);', c: 'st_cubemx', h: 'Salen de la etiqueta que pones al pin.' }),
+      { t: 'match', q: 'Une cada archivo con su contenido.', pairs: [['main.c', 'main y SystemClock_Config'], ['stm32f4xx_it.c', 'Manejadores de interrupción'], ['stm32f4xx_hal_msp.c', 'Pines y relojes de cada periférico'], ['STM32F411CEUX_FLASH.ld', 'Mapa de memoria para el enlazador']], c: 'st_cubemx', h: '«it» viene de interrupciones; «msp», del bajo nivel de cada periférico.' },
+      Q('Escribes tu bucle fuera de USER CODE y vuelves a generar. ¿Qué pasa?', ['Se pierde: CubeMX solo conserva lo que va entre BEGIN y END', 'Se conserva', 'Aparece un aviso y se guarda una copia', 'CubeMX lo mueve a su sitio'], 'Entre END WHILE y BEGIN 3 no hay zona de usuario: regla de oro de CubeMX.', { code: '  while (1)\n  {\n    /* USER CODE END WHILE */\n    mi_bucle();   // <- aquí\n    /* USER CODE BEGIN 3 */\n  }\n  /* USER CODE END 3 */', c: 'st_cubemx', h: 'Mira si la línea queda entre un BEGIN y su END.' }),
+      Q('¿Dónde se configuran los pines de la USART2 (modo, velocidad)?', ['En HAL_UART_MspInit, dentro de stm32f4xx_hal_msp.c', 'En main.h', 'En el script del enlazador', 'En el arranque en ensamblador'], 'Las funciones Msp hacen el bajo nivel de cada periférico.', { c: 'st_cubemx', h: 'Busca la función Msp de la UART.' }),
+      Q('Antes de regenerar, ¿qué costumbre te salva de sorpresas?', ['Hacer un commit en git para ver luego el diff', 'Borrar el .ioc', 'Cerrar CubeIDE', 'Compilar dos veces'], 'Si algo cambia sin querer, lo verás y podrás volver atrás.', { c: 'st_cubemx', h: 'Piensa en cómo comparar antes y después.' }),
+      I('<b>Resumen</b>\n· El .ioc guarda la configuración; CubeMX genera main.c, _it.c, _msp.c, arranque y .ld.\n· Las etiquetas de pin se convierten en macros de main.h.\n· Tu código, solo entre USER CODE BEGIN y END.')
     ]),
-    L('st7', 'ST-LINK y SWD', 'bus', ['st_swd', 'st_swdrec', 'st_dbglp', 'st_debug'], [
-      I('<b>SWD</b> (Serial Wire Debug) necesita solo dos señales: <b>SWDIO</b> (datos, PA13) y <b>SWCLK</b> (reloj, PA14), más GND. Opcionalmente <b>NRST</b> (reset) y <b>SWO</b> (traza, PB3). JTAG usaría cuatro o cinco.'),
-      { t: 'match', q: 'Une cada señal con su función.', pairs: [['SWDIO', 'Datos bidireccionales (PA13)'], ['SWCLK', 'Reloj del depurador (PA14)'], ['NRST', 'Reset del chip'], ['SWO', 'Salida de traza (PB3)']], c: 'st_swd' },
-      Q('Además de SWDIO y SWCLK, ¿qué cable es imprescindible?', ['GND', 'NRST', '5 V', 'BOOT0'], 'Sin masa común no hay referencia para las señales.', { c: 'st_swd' }),
-      I('El ST-LINK original lee la tensión de tu placa para adaptar sus niveles. Los clones suelen dar 3,3 V por un pin y conviene no alimentar la placa a la vez por otro lado.'),
-      Q('Tu programa ha configurado PA13 y PA14 como GPIO y el depurador ya no conecta. ¿Qué haces?', ['Conectar en modo “Under reset” (o arrancar con BOOT0 a 1) y borrar la Flash', 'Tirar la placa', 'Cambiar de cable USB', 'Bajar la tensión'], 'Bajo reset, el depurador para el núcleo antes de que tu código toque esos pines.', { c: 'st_swdrec' }),
-      I('<b>Connect under reset</b>: el ST-LINK mantiene NRST a nivel bajo, se conecta y detiene el núcleo justo al soltarlo, antes de ejecutar tu código. Si no tienes NRST cableado, BOOT0 a 1 arranca el cargador de ST y tu programa no se ejecuta.'),
-      { t: 'order', q: 'Ordena cómo recuperar un chip que no conecta.', items: ['Cablea NRST además de SWDIO, SWCLK y GND', 'Elige el modo de conexión “Under reset”', 'Conecta con CubeProgrammer', 'Haz un borrado completo', 'Graba un programa que deje el SWD activo'], e: 'Si aun así no conecta, prueba con BOOT0 a 1.', c: 'st_swdrec' },
-      Q('La conexión falla con cables de 30 cm pero va bien con 10 cm. ¿Qué pruebas?', ['Bajar la frecuencia de SWD en la configuración del depurador', 'Subir la tensión', 'Cambiar de chip', 'Quitar GND'], 'A más velocidad, más importan la longitud y el ruido.', { c: 'st_swd' }),
-      Q('El chip está en modo Stop y el depurador pierde la conexión. ¿Por qué?', ['En bajo consumo se paran los relojes de depuración salvo que los actives en DBGMCU', 'Porque el ST-LINK se apaga', 'Porque se borra la Flash', 'Porque SWD no funciona con la F4'], 'HAL_DBGMCU_EnableDBGStopMode() lo mantiene mientras desarrollas.', { c: 'st_dbglp' }),
-      Q('¿Qué ventaja tiene el SWD frente a cargar el programa por un cargador serie para desarrollar?', ['Grabas en segundos y además puedes pausar y leer memoria y registros', 'Ninguna', 'No necesita cables', 'Funciona sin alimentación'], 'Un depurador es tu mejor instrumento de medida para el software.', { c: 'st_debug' })
+    L('st7', 'ST-LINK y SWD', 'bus', ['st_swd', 'st_swdrec', 'st_debug'], [
+      Q('Conectas el ST-LINK con SWDIO y SWCLK, pero olvidas el cable de masa. ¿Qué crees que pasa?', ['No conecta o falla: las señales no tienen referencia común', 'Funciona igual', 'Se quema el chip', 'Funciona más lento'], 'Una tensión siempre se mide respecto a algo. Pruébalo.', { ...PRED, c: 'st_swd', h: 'Una tensión siempre se mide respecto a algo.' }),
+      { t: 'explore', text: 'Conecta el depurador y ajusta cable y velocidad.', viz: 'st_swd', params: P_SWD(0, 10, 4),
+        tasks: [{ q: 'ok', min: 1, max: 1, text: 'Consigue conectar', done: 'Masa común y una frecuencia que el cable aguanta.', hint: 'Conecta GND.' },
+          { q: 'ok30', min: 1, max: 1, text: 'Ahora con un cable de 30 cm o más', done: 'Cable largo: baja la frecuencia de SWD.', hint: 'Baja la frecuencia.' }] },
+      I('<b>SWD</b> (Serial Wire Debug) usa dos señales: <b>SWDIO</b> (datos, PA13) y <b>SWCLK</b> (reloj, PA14), más <b>GND</b>. Opcionales: <b>NRST</b> (reset) y <b>SWO</b> (traza, PB3).', { svg: table([['SWDIO', 'Datos en los dos sentidos · PA13'], ['SWCLK', 'Reloj del depurador · PA14'], ['GND', 'Masa común: imprescindible'], ['NRST · SWO', 'Opcionales: reset y traza (PB3)']], 'Cables del SWD') }),
+      I('Con SWD no solo grabas en segundos: puedes <b>parar el núcleo</b>, leer y escribir cualquier dirección, poner puntos de ruptura y seguir. Es tu instrumento de medida para el software.', { svg: chain(['CubeIDE|(gdb)', 'ST-LINK|USB ↔ SWD', 'STM32|núcleo parado']) }),
+      I('Si tu programa usa PA13 y PA14 como pines normales, el depurador pierde el acceso en cuanto arranca. <b>Connect under reset</b>: el ST-LINK mantiene NRST a 0, conecta y para el núcleo antes de la primera instrucción. Plan B: arrancar con BOOT0 a 1.', { svg: SVG_SWDREC, more: 'Para que no pase: en CubeMX, SYS › Debug = Serial Wire reserva esos pines. En la F1, la opción «No Debug» genera código que desactiva el SWD.' }),
+      { t: 'steps', text: 'El depurador ya no conecta tras grabar un programa nuevo. Recupera el chip.', steps: ['Cablea NRST además de SWDIO, SWCLK y GND', 'En la configuración de conexión, elige el modo «Under reset»', 'Conecta con STM32CubeProgrammer', 'Haz un borrado completo de la Flash', 'Graba un programa con SYS › Debug = Serial Wire'], result: 'Si aun así no conecta, arranca con BOOT0 a 1 y repite.' },
+      { t: 'match', q: 'Une cada señal con su función.', pairs: [['SWDIO', 'Datos bidireccionales (PA13)'], ['SWCLK', 'Reloj del depurador (PA14)'], ['NRST', 'Reset del chip'], ['SWO', 'Salida de traza (PB3)']], c: 'st_swd', h: 'IO de datos, CLK de reloj, RST de reset.' },
+      Q('Además de SWDIO y SWCLK, ¿qué cable es imprescindible?', ['GND', 'NRST', '5 V', 'BOOT0'], 'Sin masa común no hay referencia.', { c: 'st_swd', h: 'Las señales se miden respecto a él.' }),
+      Q('Tu programa ha configurado PA13 y PA14 como GPIO y el depurador ya no conecta. ¿Qué haces?', ['Conectar en modo «Under reset» (o arrancar con BOOT0 a 1) y borrar la Flash', 'Tirar la placa', 'Cambiar de cable USB', 'Bajar la tensión'], 'Bajo reset, el depurador para el núcleo antes de que tu código toque esos pines.', { c: 'st_swdrec', h: 'Hay que llegar antes de que tu código se ejecute.' }),
+      { t: 'order', q: 'Ordena cómo recuperar un chip que no conecta.', items: ['Cablea NRST además de SWDIO, SWCLK y GND', 'Elige el modo de conexión «Under reset»', 'Conecta con CubeProgrammer', 'Haz un borrado completo', 'Graba un programa que deje el SWD activo'], e: 'Si aun así no conecta, prueba con BOOT0 a 1.', c: 'st_swdrec', h: 'Primero el cable que permite conectar bajo reset.' },
+      Q('La conexión falla con cables de 30 cm pero va bien con 10 cm. ¿Qué pruebas?', ['Bajar la frecuencia de SWD', 'Subir la tensión', 'Cambiar de chip', 'Quitar GND'], 'A más velocidad, más importan la longitud y el ruido.', { c: 'st_swd', h: 'Cuanto más largo el cable, más lento.' }),
+      Q('¿Por qué conviene poner SYS › Debug en «Serial Wire» en CubeMX?', ['Reserva PA13 y PA14 para el depurador y evita perder el acceso SWD', 'Para que vaya más rápido', 'Para activar printf', 'Para usar el USB'], 'Así ningún código generado los reconfigura.', { c: 'st_swdrec', h: 'Piensa en qué pines necesita el depurador.' }),
+      Q('¿Qué ventaja tiene el SWD frente a grabar por un cargador serie para desarrollar?', ['Grabas en segundos y además puedes parar el programa y leer memoria y registros', 'Ninguna', 'No necesita cables', 'Funciona sin alimentación'], 'Un depurador es tu mejor instrumento para el software.', { c: 'st_debug', h: 'Piensa en lo que puedes hacer con el núcleo parado.' }),
+      I('<b>Resumen</b>\n· SWD = SWDIO (PA13) + SWCLK (PA14) + GND; NRST y SWO opcionales.\n· Cables largos: baja la frecuencia.\n· Si tu código desactiva el SWD: conecta bajo reset o con BOOT0 a 1, y borra.')
     ]),
     L('st8', 'Depurar como un profesional', 'code', ['st_debug', 'st_hardfault', 'st_volatile', 'st_cycles'], [
-      I('En CubeIDE: un <b>punto de ruptura</b> detiene el programa en una línea. Después puedes avanzar <b>Step Into</b> (F5), <b>Step Over</b> (F6), <b>Step Return</b> (F7) o continuar con <b>Resume</b> (F8).'),
-      { t: 'match', q: 'Une cada acción con lo que hace.', pairs: [['Step Into', 'Entra dentro de la función'], ['Step Over', 'Ejecuta la función entera y para en la siguiente línea'], ['Step Return', 'Termina la función actual y vuelve'], ['Resume', 'Sigue hasta el siguiente punto de ruptura']], c: 'st_debug' },
-      I('Vistas útiles:\n<b>Expressions</b> y <b>Live Expressions</b> (se actualizan sin parar el programa).\n<b>SFRs</b>: los registros de periféricos con sus bits.\n<b>Memory</b>: cualquier dirección.\n<b>Registers</b>: R0–R15 y xPSR del núcleo.'),
-      Q('Quieres ver cómo cambia una variable mientras el programa corre, sin pararlo. ¿Qué usas?', ['Live Expressions', 'Un punto de ruptura', 'Step Into', 'El archivo .map'], 'Se leen por SWD en segundo plano.', { c: 'st_debug' }),
-      Q('¿Qué es un watchpoint?', ['Un punto de ruptura que salta cuando se lee o escribe una dirección', 'Un punto de ruptura en una línea', 'Un temporizador del depurador', 'Una variable volatile'], 'Ideal para cazar quién está pisando una variable.', { c: 'st_debug' }),
-      Q('Con -O2, el depurador dice “optimized out” al mirar i. ¿Por qué?', ['El compilador la tiene en un registro o la ha eliminado', 'Hay un error en el código', 'El ST-LINK falla', 'La Flash está llena'], 'Para depurar, compila con -Og o -O0.', { code: 'for (int i = 0; i < 10; i++)\n  suma += datos[i];', c: 'st_volatile' }),
-      I('Un <b>HardFault</b> salta cuando el núcleo hace algo imposible: acceder a una dirección inválida, ejecutar algo que no es código o desbordar la pila. El Fault Analyzer de CubeIDE lee los registros CFSR, HFSR y BFAR y el PC apilado.'),
-      Q('¿Qué ocurre aquí?', ['HardFault: salta a una dirección sin código válido', 'No hace nada', 'Reinicia la placa limpiamente', 'Error de compilación'], 'Llamar a un puntero a función nulo es un clásico.', { code: 'void (*f)(void) = NULL;\nf();', c: 'st_hardfault' }),
-      Q('En un HardFault, ¿qué te dice el PC guardado en la pila?', ['Dónde estaba el programa cuando falló', 'La dirección de main', 'El valor de la pila', 'La frecuencia del reloj'], 'Búscalo en el desensamblado o en el .map.', { c: 'st_hardfault' }),
-      Nm('A 100 MHz, DWT->CYCCNT avanza 2500 cuentas durante una función. ¿Cuántos µs tarda?', 25, 'µs', '2500 ciclos / 100 MHz = 25 µs. El contador de ciclos es el cronómetro más fino que tienes.', { code: 'uint32_t t0 = DWT->CYCCNT;\nfiltro();\nuint32_t c = DWT->CYCCNT - t0;', c: 'st_cycles' }),
-      Q('Una variable que cambia en una interrupción no se actualiza nunca en main con -O2. ¿Qué falta?', ['volatile', 'static', 'const', 'extern'], 'Sin volatile, el compilador puede leerla una sola vez.', { c: 'st_volatile' })
+      Q('Una variable global aparece con un valor absurdo y no sabes qué línea la escribe. ¿Qué crees que lo encuentra antes?', ['Un watchpoint: el programa se para justo al escribirla', 'Muchos printf por todas partes', 'Leer todo el código', 'Reiniciar hasta que no pase'], 'El depurador puede vigilar una dirección de memoria. Antes, un cronómetro muy fino.', { ...PRED, c: 'st_debug', h: 'Hay una herramienta que vigila una dirección.' }),
+      { t: 'explore', text: 'DWT->CYCCNT cuenta ciclos del núcleo. Elige reloj y cuentas.', viz: 'st_cyc', params: P_CYC(16, 84),
+        tasks: [{ q: 'us', min: 24.99, max: 25.01, text: 'Mide 25 µs', done: '2500 ciclos a 100 MHz = 25 µs.', hint: 'Prueba con 100 MHz.' },
+          { q: 'us', min: 4.99, max: 5.01, text: 'Ahora 5 µs', done: '420 ciclos a 84 MHz = 5 µs.' },
+          { q: 'us', min: 99.9, max: 100.1, text: 'Y 100 µs', done: 'Tiempo = ciclos / frecuencia, en cualquier combinación.' }] },
+      I('Lo básico en CubeIDE: un <b>punto de ruptura</b> para el programa en una línea. Luego avanzas con <b>Step Into</b> (entra en la función), <b>Step Over</b> (la ejecuta entera), <b>Step Return</b> (sale de ella) o <b>Resume</b> (sigue).', { svg: SVG_DBG }),
+      I('Más vistas: un <b>watchpoint</b> para cuando se lee o escribe una dirección; <b>Live Expressions</b> leen variables sin parar el programa; <b>SFRs</b> muestra cada registro de periférico bit a bit.', { svg: table([['Watchpoint', '¿Quién escribe esta variable?'], ['Live Expressions', '¿Cómo cambia en marcha?'], ['SFRs', '¿Qué vale este registro?'], ['Memory', '¿Qué hay en esta dirección?']], 'Cada vista responde una pregunta') }),
+      I('Con <b>-O2</b> el compilador guarda variables en registros o las elimina: el depurador dice «optimized out». Para depurar, compila con <b>-Og</b>. Y si una variable la cambia una interrupción, <b>volatile</b>.', { code: 'for (int i = 0; i < 10; i++)\n  suma += datos[i];   // con -O2, i puede no existir' }),
+      I('Un <b>HardFault</b> salta cuando el núcleo hace algo imposible: leer una dirección que no existe, saltar a un puntero nulo o desbordar la pila. El hardware guarda el <b>PC</b> al entrar: te dice qué instrucción falló.', { svg: SVG_STACK, more: 'Los registros CFSR, HFSR y BFAR dicen la causa exacta; el Fault Analyzer de CubeIDE los lee por ti. Una pila desbordada pisa variables globales: el fallo aparece lejos de la causa.' }),
+      I('El cronómetro más fino: <b>DWT->CYCCNT</b> cuenta ciclos del núcleo. Tiempo = ciclos / frecuencia.', { code: 'CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;\nDWT->CYCCNT = 0;\nDWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;\n\nuint32_t t0 = DWT->CYCCNT;\nfiltro();\nuint32_t ciclos = DWT->CYCCNT - t0;' }),
+      { t: 'steps', text: 'filtro() tarda 2100 ciclos a 84 MHz. ¿Cumple un plazo de 30 µs?', steps: ['Tiempo = ciclos / f', '2100 / 84 000 000 s', '= 0,000025 s = <b>25 µs</b>', '25 µs &lt; 30 µs: <b>cumple</b>, con 5 µs de margen'], result: 'Sí, con un 17 % de margen.' },
+      { t: 'match', q: 'Une cada acción con lo que hace.', pairs: [['Step Into', 'Entra dentro de la función'], ['Step Over', 'Ejecuta la función entera y para en la siguiente línea'], ['Step Return', 'Termina la función actual y vuelve'], ['Resume', 'Sigue hasta el siguiente punto de ruptura']], c: 'st_debug', h: 'Into entra, Over pasa por encima, Return sale.' },
+      Q('Quieres ver cómo cambia una variable mientras el programa corre, sin pararlo. ¿Qué usas?', ['Live Expressions', 'Un punto de ruptura', 'Step Into', 'El archivo .map'], 'Se leen por SWD en segundo plano.', { c: 'st_debug', h: 'Necesitas ver sin parar.' }),
+      Q('Con -O2, el depurador dice «optimized out» al mirar i. ¿Por qué?', ['El compilador la tiene en un registro o la ha eliminado', 'Hay un error en el código', 'El ST-LINK falla', 'La Flash está llena'], 'Para depurar, compila con -Og o -O0.', { code: 'for (int i = 0; i < 10; i++)\n  suma += datos[i];', c: 'st_volatile', h: 'Mira el nivel de optimización.' }),
+      Q('¿Qué ocurre aquí?', ['HardFault: salta a una dirección sin código válido', 'No hace nada', 'Reinicia la placa limpiamente', 'Error de compilación'], 'Llamar a un puntero a función nulo es un clásico.', { code: 'void (*f)(void) = NULL;\nf();', c: 'st_hardfault', h: 'Llamar a una función que está en la dirección 0…' }),
+      Nm('A 100 MHz, DWT->CYCCNT avanza 2500 cuentas durante una función. ¿Cuántos µs tarda?', 25, 'µs', '2500 / 100 MHz = 25 µs.', { code: 'uint32_t t0 = DWT->CYCCNT;\nfiltro();\nuint32_t c = DWT->CYCCNT - t0;', c: 'st_cycles', h: 'Ciclos entre MHz dan microsegundos.' }),
+      Q('En un HardFault, ¿qué te dice el PC guardado en la pila?', ['Dónde estaba el programa cuando falló', 'La dirección de main', 'El tamaño de la pila', 'La frecuencia del reloj'], 'Búscalo en el desensamblado o en el .map.', { c: 'st_hardfault', h: 'Es lo que el hardware guarda al entrar.' }),
+      Q('Una variable que cambia en una interrupción no se actualiza nunca en main con -O2. ¿Qué falta?', ['volatile', 'static', 'const', 'extern'], 'Sin volatile, el compilador puede leerla una sola vez.', { c: 'st_volatile', h: 'Ya lo viste en el curso base con attachInterrupt.' }),
+      I('<b>Resumen</b>\n· Puntos de ruptura, pasos, watchpoints y Live Expressions: cada uno para una pregunta.\n· «optimized out»: compila con -Og; variables de interrupción, volatile.\n· HardFault: mira el PC apilado. CYCCNT mide en ciclos.')
     ]),
-    L('st9', 'printf por UART y por SWO', 'code', ['st_printf', 'st_brr', 'st_uarttime', 'st_isrrules'], [
-      I('printf usa la biblioteca newlib, que acaba llamando a <b>_write</b> (en syscalls.c). En CubeIDE, _write llama a <b>__io_putchar</b> por cada carácter, y esa función la escribes tú.'),
-      Q('¿Qué hace esta función?', ['Envía por la UART cada carácter que printf quiere imprimir', 'Lee un carácter', 'Activa la UART', 'Imprime en la pantalla del PC directamente'], 'Redirección de printf.', { code: 'int __io_putchar(int ch) {\n  HAL_UART_Transmit(&huart2,\n    (uint8_t *)&ch, 1, 10);\n  return ch;\n}', c: 'st_printf' }),
-      Q('printf("%f", x) no imprime nada. ¿Qué pasa?', ['newlib-nano no incluye float en printf por defecto: actívalo (-u _printf_float)', 'x vale cero', 'La UART va lenta', 'printf no funciona en ARM'], 'Ocupa unos KB más de Flash.', { c: 'st_printf' }),
-      Q('printf("hola") no aparece hasta que imprimes otra cosa con \\n. ¿Por qué?', ['stdout guarda en un búfer hasta el salto de línea', 'La UART pierde datos', 'Falta un retardo', 'El terminal está mal'], 'Termina con \\n o desactiva el búfer con setvbuf(stdout, NULL, _IONBF, 0).', { c: 'st_printf' }),
-      Nm('Un mensaje de 46 caracteres a 115 200 baudios (10 bits por carácter). ¿Cuántos ms tarda?', 4, 'ms', '46 × 10 / 115 200 ≈ 4 ms. Con HAL_UART_Transmit, la CPU espera todo ese tiempo.', { tol: 0.1, c: 'st_uarttime' }),
-      Q('¿Por qué no usar printf dentro de una interrupción?', ['Bloquea milisegundos y retrasa todo lo demás', 'Porque no compila', 'Porque gasta Flash', 'Porque cambia la prioridad'], 'Guarda el dato y que lo imprima main.', { c: 'st_isrrules' }),
-      I('<b>SWO</b> es un canal de traza por el pin PB3: con ITM_SendChar envías caracteres al depurador sin gastar una UART. Necesitas un ST-LINK con SWO y poner en la configuración de depuración la frecuencia real del núcleo.'),
-      Q('¿Qué hace esta versión?', ['Envía printf por el canal SWO del depurador', 'Envía por la UART', 'Escribe en la Flash', 'Hace parpadear PB3'], 'Se ve en la consola SWV de CubeIDE.', { code: 'int __io_putchar(int ch) {\n  return ITM_SendChar(ch);\n}', c: 'st_printf' }),
-      Q('Activas SWO y la consola muestra basura o nada. ¿Primera sospecha?', ['La frecuencia del núcleo configurada en el depurador no coincide con SYSCLK', 'El LED está mal', 'Falta un pull-up', 'La Flash está llena'], 'El ST-LINK necesita saberla para decodificar SWO.', { c: 'st_printf' }),
-      G('st_brr')
+    L('st9', 'printf por UART y por SWO', 'code', ['st_printf', 'st_uarttime', 'st_isrrules'], [
+      Q('Envías por la UART un mensaje de 100 caracteres a 115 200 baudios con HAL_UART_Transmit, que espera a que salga. ¿Cuánto crees que dura la espera?', ['Casi 9 ms', 'Nada: es instantáneo', 'Unos microsegundos', 'Un segundo'], 'Cada carácter son 10 bits: 1000 bits a 115 200 por segundo. Experimenta.', { ...PRED, c: 'st_uarttime', h: 'Cada carácter son 10 bits.' }),
+      { t: 'explore', text: 'Cambia la longitud del mensaje y los baudios.', viz: 'st_uarttx', params: P_UTX(100, 9600),
+        tasks: [{ q: 'ms', min: 0, max: 1, text: 'Consigue que el mensaje tarde menos de 1 ms', done: 'Mensajes cortos y baudios altos.', hint: 'Sube los baudios o acorta el mensaje.' },
+          { q: 'ms', min: 3.9, max: 4.1, text: 'Ahora uno que tarde unos 4 ms', done: '46 caracteres a 115 200 baudios: 460 bits / 115 200 ≈ 4 ms.' }] },
+      I('printf usa la biblioteca <b>newlib</b>, que llama a <b>_write</b> y esta a <b>__io_putchar</b> por cada carácter. Esa última la escribes tú y decide por dónde sale.', { svg: SVG_PRINTF }),
+      I('Por la UART: __io_putchar llama a <b>HAL_UART_Transmit</b>, la función de ST que envía bytes y espera a que salgan. En una Nucleo, la USART2 llega al PC por el ST-LINK.', { code: 'int __io_putchar(int ch) {\n  HAL_UART_Transmit(&huart2, (uint8_t *)&ch, 1, 10);\n  return ch;\n}' }),
+      I('Dos sorpresas: newlib-nano no imprime float salvo que lo actives (opción -u _printf_float) y stdout guarda en un búfer hasta el salto de línea.', { code: 'printf("t = %.1f\\n", t);  // necesita -u _printf_float\nprintf("hola");             // no sale hasta un \\n' }),
+      I('<b>SWO</b> (PB3) es un canal de traza del depurador: con ITM_SendChar, printf sale por el ST-LINK sin gastar una UART. Hace falta un ST-LINK con SWO (el de las Nucleo lo tiene; los clones de pendrive casi nunca) y decirle al depurador la frecuencia real del núcleo.', { code: 'int __io_putchar(int ch) {\n  return ITM_SendChar(ch);\n}' }),
+      { t: 'steps', text: '¿Cuánto bloquea un printf de 46 caracteres a 115 200 baudios?', steps: ['Cada carácter son 10 bits (inicio, 8 de datos y parada)', '46 × 10 = 460 bits', '460 / 115 200 = 0,004 s', '≈ <b>4 ms</b> con la CPU esperando'], result: 'Una eternidad para un bucle de control de 1 kHz.' },
+      Q('¿Qué hace esta función?', ['Envía por la UART cada carácter que printf quiere imprimir', 'Lee un carácter', 'Activa la UART', 'Imprime en la pantalla del PC directamente'], 'Es la redirección de printf.', { code: 'int __io_putchar(int ch) {\n  HAL_UART_Transmit(&huart2,\n    (uint8_t *)&ch, 1, 10);\n  return ch;\n}', c: 'st_printf', h: 'Fíjate a qué función llama.' }),
+      Q('printf("%f", x) no imprime nada. ¿Qué pasa?', ['newlib-nano no incluye float en printf por defecto: actívalo con -u _printf_float', 'x vale cero', 'La UART va lenta', 'printf no funciona en ARM'], 'Ocupa unos KB más de Flash.', { c: 'st_printf', h: 'La versión pequeña de la biblioteca recorta cosas.' }),
+      Nm('Un mensaje de 46 caracteres a 115 200 baudios (10 bits por carácter). ¿Cuántos ms tarda?', 4, 'ms', '46 × 10 / 115 200 ≈ 4 ms.', { tol: 0.1, c: 'st_uarttime', h: 'Bits totales entre baudios.' }),
+      Q('¿Por qué no usar printf dentro de una interrupción?', ['Bloquea milisegundos y retrasa todo lo demás', 'Porque no compila', 'Porque gasta Flash', 'Porque cambia la prioridad'], 'Guarda el dato y que lo imprima main.', { c: 'st_isrrules', h: 'Recuerda las reglas de una ISR del curso base.' }),
+      Q('Activas SWO y la consola muestra basura o nada. ¿Primera sospecha?', ['La frecuencia del núcleo configurada en el depurador no coincide con la real', 'El LED está mal', 'Falta una pull-up', 'La Flash está llena'], 'El ST-LINK la necesita para decodificar SWO.', { c: 'st_printf', h: 'El ST-LINK necesita un dato del reloj.' }),
+      Q('A 9600 baudios en 8N1, ¿cuántos bytes por segundo como máximo?', ['960', '1200', '9600', '96'], 'Cada byte son 10 bits en la línea.', { c: 'st_uarttime', h: 'Divide entre 10, no entre 8.' }),
+      Q('Los clones baratos de ST-LINK con forma de pendrive…', ['Suelen grabar y depurar bien, pero casi nunca sacan SWO', 'No funcionan nunca', 'Son más rápidos que el original', 'Solo sirven para la Blue Pill'], 'Para printf por SWO, un ST-LINK que lo tenga, como el de las Nucleo.', { c: 'st_printf', h: 'No todos los ST-LINK tienen la misma patilla.' }),
+      I('<b>Resumen</b>\n· printf → _write → __io_putchar: tú decides si sale por la UART o por SWO.\n· Cada carácter son 10 bits: a 115 200 baudios, unos 11 520 bytes/s, con la CPU esperando.\n· Activa float en newlib-nano y termina con \\n. Nada de printf en interrupciones.')
     ]),
-    L('st10', 'Más allá de CubeIDE', 'code', ['st_toolchain', 'st_sections', 'st_fpu', 'st_hal', 'st_profw'], [
-      I('Debajo de cualquier IDE está la cadena <b>arm-none-eabi</b>: gcc compila, ld enlaza, objcopy convierte formatos, size mide y gdb depura.'),
-      { t: 'match', q: 'Une cada archivo con lo que contiene.', pairs: [['.elf', 'Programa con símbolos y datos de depuración'], ['.bin', 'Imagen binaria pura, sin direcciones'], ['.hex', 'Imagen con direcciones en texto (Intel HEX)'], ['.map', 'Dónde ha quedado cada función y variable']], c: 'st_toolchain' },
-      Q('¿Qué hace la opción -mfloat-abi=hard?', ['Usa la FPU y pasa los float en sus registros', 'Desactiva la FPU', 'Compila más despacio', 'Usa doble precisión siempre'], 'Debe ir con -mfpu=fpv4-sp-d16 en un M4F.', { code: 'arm-none-eabi-gcc -mcpu=cortex-m4\n  -mthumb -mfpu=fpv4-sp-d16\n  -mfloat-abi=hard -Og -g ...', c: 'st_fpu' }),
-      Q('Grabas un .bin con una herramienta. ¿Qué tienes que indicarle?', ['La dirección de destino, normalmente 0x08000000', 'Nada', 'La frecuencia del reloj', 'El número de serie'], 'El .bin no lleva direcciones; el .hex y el .elf sí.', { c: 'st_toolchain' }),
-      I('Con <b>OpenOCD</b> y <b>GDB</b> depuras desde la terminal: OpenOCD habla con la sonda (ST-LINK) y abre un servidor; GDB se conecta a él, carga el .elf y pone puntos de ruptura.'),
-      Q('¿Qué papel tiene OpenOCD?', ['Servidor intermedio entre GDB y la sonda de depuración', 'Compilador', 'Editor de código', 'Sistema operativo'], 'GDB habla con OpenOCD; OpenOCD, con el ST-LINK.', { c: 'st_toolchain' }),
-      I('Alternativas: <b>PlatformIO</b> en VS Code (con el framework de ST o el núcleo Arduino STM32duino), o exportar desde CubeMX un proyecto con <b>Makefile</b> o CMake y usar tu editor favorito.'),
-      Q('¿Cuándo tiene sentido STM32duino (Arduino para STM32)?', ['Prototipos rápidos reutilizando bibliotecas de Arduino, aceptando menos control', 'Para producción crítica siempre', 'Nunca', 'Solo para la F7'], 'Para aprender el flujo profesional, mejor CubeMX + HAL o registros.', { c: 'st_hal' }),
-      G('st_memUse'), G('st_memUse'),
-      Q('¿Por qué compilar con make en un servidor de integración continua?', ['Las compilaciones son reproducibles y se prueban en cada cambio', 'Porque CubeIDE no compila', 'Porque el servidor programa la placa solo', 'Para que ocupe menos'], 'Misma versión de compilador, mismo resultado.', { c: 'st_profw' })
+    L('st10', 'Más allá de CubeIDE', 'code', ['st_toolchain', 'st_sections', 'st_fpu'], [
+      Q('Compilas y el programa ocupa 30 KB. ¿Crees que todo eso va a la Flash, a la RAM o a las dos?', ['Parte a cada una, y algunos datos ocupan sitio en las dos', 'Todo a la Flash', 'Todo a la RAM', 'Nada a la RAM hasta que arranca'], 'Las variables globales con valor inicial necesitan las dos memorias. Míralo.', { ...PRED, c: 'st_sections', h: 'Piensa en una variable global con valor inicial.' }),
+      { t: 'explore', text: 'Tres números describen tu programa: .text, .data y .bss. Muévelos.', viz: 'st_sec', params: P_SEC(64, 0, 4),
+        tasks: [{ q: 'dataBoth', min: 1, max: 1, text: 'Sube .data a 4000 B y mira qué barras crecen', done: '.data ocupa Flash (los valores iniciales) y RAM (las variables).', hint: 'Lleva .data al máximo.' },
+          { q: 'fOver', min: 1, max: 1, text: 'Haz que el programa no quepa en la Flash', done: 'El enlazador da error: mejor al compilar que en el campo.', hint: 'Sube .text.' }] },
+      I('Debajo de cualquier IDE está la cadena <b>arm-none-eabi</b>: gcc compila, ld enlaza (con el script .ld), objcopy convierte formatos, size mide y gdb depura.', { svg: SVG_TOOL }),
+      I('Archivos de salida: <b>.elf</b> con símbolos para depurar; <b>.hex</b> con direcciones en texto; <b>.bin</b> solo bytes (al grabarlo dices dónde: 0x08000000); <b>.map</b>, dónde quedó cada función y variable.', { svg: table([['.elf', 'Programa + símbolos de depuración'], ['.hex', 'Bytes con sus direcciones (texto)'], ['.bin', 'Solo bytes, sin direcciones'], ['.map', 'Dónde quedó cada cosa y cuánto ocupa']], 'Lo que sale de compilar') }),
+      I('<b>arm-none-eabi-size</b> da tres números: <b>text</b> (código y constantes: Flash), <b>data</b> (globales con valor inicial: Flash y RAM) y <b>bss</b> (globales a cero: solo RAM).\nFlash = text + data · RAM = data + bss.', { code: '$ arm-none-eabi-size app.elf\n   text    data     bss     dec\n  14212     120    3488   17820', more: 'Por qué .data necesita las dos memorias lo verás en «Qué pasa antes de main»: el valor inicial vive en la Flash y el arranque lo copia a la RAM.' }),
+      I('Flags de un M4F: el compilador debe saber que hay FPU. Con <b>-mfloat-abi=hard</b> la usa y pasa los float en sus registros.', { code: 'arm-none-eabi-gcc -mcpu=cortex-m4 -mthumb \\\n  -mfpu=fpv4-sp-d16 -mfloat-abi=hard -Og -g ...', more: 'Alternativas al IDE: PlatformIO, o exportar desde CubeMX un proyecto con Makefile o CMake. Para depurar desde la terminal, OpenOCD habla con el ST-LINK y abre un servidor al que se conecta gdb.' }),
+      { t: 'steps', text: 'size dice text = 14 212, data = 120, bss = 3488. ¿Cuánto ocupa en cada memoria?', steps: ['Flash = text + data = 14 212 + 120', '= <b>14 332 B</b> (unos 14 KB)', 'RAM estática = data + bss = 120 + 3488', '= <b>3608 B</b>, más la pila y el montón'], result: 'Sobra sitio en una F411 (512 KB y 128 KB).' },
+      { t: 'match', q: 'Une cada archivo con lo que contiene.', pairs: [['.elf', 'Programa con símbolos y datos de depuración'], ['.bin', 'Imagen binaria pura, sin direcciones'], ['.hex', 'Imagen con direcciones en texto (Intel HEX)'], ['.map', 'Dónde ha quedado cada función y variable']], c: 'st_toolchain', h: 'Piensa en quién lleva direcciones y quién símbolos.' },
+      Q('Grabas un .bin con una herramienta. ¿Qué tienes que indicarle?', ['La dirección de destino, normalmente 0x08000000', 'Nada', 'La frecuencia del reloj', 'El número de serie'], 'El .bin no lleva direcciones; el .hex y el .elf sí.', { c: 'st_toolchain', h: 'Un .bin solo son bytes.' }),
+      G('st_memUse'),
+      Q('¿Qué hace la opción -mfloat-abi=hard?', ['Usa la FPU y pasa los float en sus registros', 'Desactiva la FPU', 'Compila más despacio', 'Usa doble precisión siempre'], 'Va con -mfpu=fpv4-sp-d16 en un M4F.', { code: 'arm-none-eabi-gcc -mcpu=cortex-m4\n  -mthumb -mfpu=fpv4-sp-d16\n  -mfloat-abi=hard -Og -g ...', c: 'st_fpu', h: '«hard» = por hardware.' }),
+      Q('¿Qué papel tiene OpenOCD?', ['Servidor intermedio entre gdb y la sonda de depuración', 'Compilador', 'Editor de código', 'Sistema operativo'], 'gdb habla con OpenOCD; OpenOCD, con el ST-LINK.', { c: 'st_toolchain', h: 'Hace de puente.' }),
+      G('st_memUse'),
+      Q('¿Para qué sirve el archivo .map?', ['Para ver cuánto ocupa cada función y variable y en qué dirección quedó', 'Para depurar sin cables', 'Para configurar los pines', 'Para guardar datos en Flash'], 'Es lo primero que se mira cuando la Flash o la RAM se llenan.', { c: 'st_toolchain', h: 'Su nombre lo dice: un mapa.' }),
+      I('<b>Resumen</b>\n· gcc, ld, objcopy, size y gdb; OpenOCD entre gdb y el ST-LINK.\n· .elf para depurar; .bin para grabar (con dirección); .map para ver qué ocupa qué.\n· Flash = text + data; RAM = data + bss.')
     ]),
     PRJ('st-p2', 'Proyecto: baliza Morse con consola', 'st_morse')
   ] };
 
-  const M3 = { id: 'st-m3', title: 'Capas de software y arranque', desc: 'Registros con CMSIS, bits, HAL y LL, y todo lo que pasa antes de main.', nodes: [
-    L('st11', 'Registros con CMSIS', 'memory', ['st_regaddr', 'st_reg', 'st_volatile', 'st_rccen', 'st_docs'], [
-      I('<b>CMSIS</b> tiene dos partes: la de ARM (NVIC, SysTick, funciones como __disable_irq) y la cabecera del dispositivo que da ST (stm32f411xe.h), con una estructura por periférico y una macro por cada bit.'),
-      I('Así describe la cabecera un puerto GPIO: una estructura cuyos campos están en el mismo orden y separación que los registros, y una macro que apunta a la dirección base.', { code: 'typedef struct {\n  __IO uint32_t MODER;   // +0x00\n  __IO uint32_t OTYPER;  // +0x04\n  __IO uint32_t OSPEEDR; // +0x08\n  __IO uint32_t PUPDR;   // +0x0C\n  __IO uint32_t IDR;     // +0x10\n  __IO uint32_t ODR;     // +0x14\n  ...\n} GPIO_TypeDef;\n#define GPIOA ((GPIO_TypeDef *)GPIOA_BASE)' }),
-      Q('¿Cómo calcula el compilador la dirección de GPIOA->ODR?', ['Base de GPIOA más el desplazamiento del campo ODR (0x14)', 'Busca en una tabla en Flash', 'Pregunta al periférico', 'Es siempre 0x40000000'], 'Una estructura superpuesta sobre los registros.', { c: 'st_regaddr' }),
-      Q('¿Qué es __IO en la cabecera de CMSIS?', ['Una macro de volatile', 'Un tipo de 64 bits', 'Una función', 'Una sección de memoria'], 'Cada acceso a un registro debe realizarse de verdad.', { c: 'st_volatile' }),
-      Q('¿Qué hace esta línea?', ['Habilita el reloj del puerto GPIOA', 'Pone PA0 a 1', 'Resetea GPIOA', 'Configura PA0 como salida'], 'RCC_AHB1ENR_GPIOAEN es el bit 0 de AHB1ENR.', { code: 'RCC->AHB1ENR |= RCC_AHB1ENR_GPIOAEN;', c: 'st_rccen' }),
+  const M3 = { id: 'st-m3', title: 'Capas de software y arranque', desc: 'Registros con CMSIS, operaciones de bits, HAL y LL, lo que pasa antes de main, el enlazador y el SysTick.', nodes: [
+    L('st11', 'Registros con CMSIS', 'memory', ['st_regaddr', 'st_rccen', 'st_docs', 'st_volatile'], [
+      Q('Escribes en GPIOA->MODER para poner PA5 de salida, pero al leerlo sigue a 0. ¿Qué crees que falla?', ['El reloj de GPIOA está apagado', 'MODER es de solo lectura', 'Falta una espera', 'PA5 está roto'], 'Tras el reset, casi todos los periféricos están sin reloj para ahorrar. Primero, las direcciones.', { ...PRED, c: 'st_rccen', h: 'Tras el reset, casi todo el chip está «sin reloj» para ahorrar energía.' }),
+      { t: 'explore', text: 'Elige puerto y registro: la dirección es base + desplazamiento.', viz: 'st_addr', params: P_ADDR(0, 0),
+        tasks: [{ q: 'addr', min: 0x40020414, max: 0x40020414, text: 'Encuentra la dirección de GPIOB->ODR', done: '0x40020400 + 0x14.', hint: 'Puerto B y registro ODR.' },
+          { q: 'addr', min: 0x40020818, max: 0x40020818, text: 'Ahora la de GPIOC->BSRR', done: '0x40020800 + 0x18: cada puerto está 0x400 más arriba.' }] },
+      I('<b>CMSIS</b> tiene dos partes: la de ARM (NVIC, SysTick, __disable_irq…) y la cabecera de ST (stm32f411xe.h), con una estructura por periférico y una macro por cada bit.', { code: 'typedef struct {\n  __IO uint32_t MODER;   // +0x00\n  __IO uint32_t OTYPER;  // +0x04\n  __IO uint32_t OSPEEDR; // +0x08\n  __IO uint32_t PUPDR;   // +0x0C\n  __IO uint32_t IDR;     // +0x10\n  __IO uint32_t ODR;     // +0x14\n  ...\n} GPIO_TypeDef;' }),
+      I('GPIOA es un puntero a esa estructura colocado en la base del puerto: el compilador suma el desplazamiento de cada campo. Y cada campo es <b>__IO</b>, que es volatile.', { code: '#define GPIOA ((GPIO_TypeDef *)GPIOA_BASE)\n\nGPIOA->ODR |= (1U << 5);   // PA5 a 1' }),
+      I('Tras el reset, los relojes de casi todos los periféricos están <b>cerrados</b>. Antes de tocar uno, ábrelo en RCC: AHB1ENR (GPIO, DMA), APB1ENR (USART2, TIM2…) o APB2ENR (USART1, SYSCFG…).', { svg: SVG_RCC }),
+      I('Cuatro documentos: <b>hoja de datos</b> (patillaje, funciones alternativas, límites eléctricos), <b>manual de referencia</b> (cada registro bit a bit), <b>erratas</b> y <b>manual de programación</b> del núcleo (PM0214 para el M4).', { svg: SVG_DOCS }),
+      { t: 'steps', text: 'Enciende PA5 con registros, sin HAL.', code: 'RCC->AHB1ENR |= RCC_AHB1ENR_GPIOAEN;\nGPIOA->MODER &= ~(3U << (2 * 5));\nGPIOA->MODER |=  (1U << (2 * 5));\nGPIOA->ODR   |=  (1U << 5);', steps: ['Abre el reloj de GPIOA (bit GPIOAEN de AHB1ENR)', 'Limpia los 2 bits de modo de PA5 (bits 11 y 10)', 'Escribe 01 en ese campo: salida', 'Pon a 1 el bit 5 de ODR'], result: 'Cuatro líneas y el LED de la Nucleo se enciende. Los campos de bits, a fondo en la lección siguiente.' },
+      Q('¿Cómo calcula el compilador la dirección de GPIOA->ODR?', ['Base de GPIOA más el desplazamiento del campo ODR (0x14)', 'Busca en una tabla en Flash', 'Pregunta al periférico', 'Es siempre 0x40000000'], 'Una estructura superpuesta sobre los registros.', { c: 'st_regaddr', h: 'Una estructura colocada encima de los registros.' }),
+      Q('¿Qué es __IO en la cabecera de CMSIS?', ['Una macro de volatile', 'Un tipo de 64 bits', 'Una función', 'Una sección de memoria'], 'Cada acceso a un registro debe hacerse de verdad.', { c: 'st_volatile', h: 'Es una macro de una palabra clave de C.' }),
+      Q('¿Qué hace esta línea?', ['Habilita el reloj del puerto GPIOA', 'Pone PA0 a 1', 'Resetea GPIOA', 'Configura PA0 como salida'], 'RCC_AHB1ENR_GPIOAEN es el bit 0 de AHB1ENR.', { code: 'RCC->AHB1ENR |= RCC_AHB1ENR_GPIOAEN;', c: 'st_rccen', h: 'RCC controla los relojes.' }),
       G('st_regAddr'),
-      I('Documentos que vas a usar:\n<b>Manual de referencia</b> (RM): cada registro bit a bit.\n<b>Hoja de datos</b>: patillaje, tabla de funciones alternativas y límites eléctricos.\n<b>Hoja de erratas</b>: fallos conocidos del silicio.\n<b>Manual de programación</b> (PM0214 para el M4): el núcleo.'),
-      { t: 'match', q: '¿Dónde buscas cada cosa?', pairs: [['Los bits de USART_CR1', 'Manual de referencia'], ['Qué AF lleva PA9 a USART1_TX', 'Hoja de datos'], ['Un fallo conocido del I²C', 'Hoja de erratas'], ['Las instrucciones del Cortex-M4', 'Manual de programación']], c: 'st_docs' },
-      Q('¿Qué problema tiene esta línea para poner PA5 como salida?', ['Machaca los demás pines del puerto, incluidos PA13 y PA14 del SWD', 'Ninguno', 'Le falta volatile', 'Pone PA5 como entrada'], 'Asignar con = borra todo el registro. Usa |= y &= ~ sobre el campo.', { code: 'GPIOA->MODER = (1U << 10);', c: 'st_reg' })
+      { t: 'match', q: '¿Dónde buscas cada cosa?', pairs: [['Los bits de USART_CR1', 'Manual de referencia'], ['Qué AF lleva PA9 a USART1_TX', 'Hoja de datos'], ['Un fallo conocido del I²C', 'Hoja de erratas'], ['Las instrucciones del Cortex-M4', 'Manual de programación']], c: 'st_docs', h: 'Patillas y límites, en la hoja de datos; registros, en el manual de referencia.' },
+      Q('¿Dónde miras la corriente máxima de un pin?', ['En la hoja de datos', 'En el manual de referencia', 'En la hoja de erratas', 'En el manual de programación'], 'Los límites eléctricos son de cada chip concreto.', { c: 'st_docs', h: 'Los límites eléctricos dependen del chip concreto.' }),
+      Q('¿Por qué están apagados los relojes de los periféricos tras el reset?', ['Para ahorrar energía: solo gasta lo que enciendes', 'Para arrancar más rápido', 'Por seguridad contra lecturas', 'Por un fallo de diseño'], 'Cada periférico con reloj consume aunque no lo uses.', { c: 'st_rccen', h: 'Piensa en el consumo.' }),
+      I('<b>Resumen</b>\n· CMSIS da estructuras con los registros en su sitio: GPIOA->ODR = base + 0x14.\n· Todo campo es __IO (volatile).\n· Primero abre el reloj en RCC; luego configura.')
     ]),
     L('st12', 'Manipular bits sin romper nada', 'bin', ['st_reg', 'st_field', 'st_bsrr'], [
-      I('Las tres jugadas básicas sobre un registro:\n<b>reg |= m</b> → pone a 1 los bits de m.\n<b>reg &= ~m</b> → los pone a 0.\n<b>reg ^= m</b> → los invierte.\nLa máscara se escribe con desplazamientos: (1U &lt;&lt; 5) es el bit 5.'),
-      Q('¿Qué hace esta línea?', ['Pone a 1 el bit 5 de ODR sin tocar los demás', 'Pone ODR a 5', 'Borra el bit 5', 'Invierte todo el registro'], 'OR con una máscara de un solo bit.', { code: 'GPIOA->ODR |= (1U << 5);', c: 'st_reg' }),
-      Q('¿Y esta?', ['Pone a 0 el bit 3 de x', 'Pone a 1 el bit 3', 'Pone a 0 todos menos el 3', 'Invierte el bit 3'], '~ invierte la máscara; el AND conserva todo menos el bit 3.', { code: 'x &= ~(1U << 3);', c: 'st_reg' }),
-      I('Un <b>campo</b> de varios bits (como los 2 bits de modo de un pin en MODER) se cambia en dos pasos: primero se limpia y luego se escribe el valor nuevo.', { code: 'GPIOA->MODER &= ~(3U << (2 * 5));\nGPIOA->MODER |=  (1U << (2 * 5));' }),
-      TU('Consigue que MODER valga 0x00000400 (PA5 como salida).', 'st_reg', { pin: { label: 'Pin', val: 0, min: 0, max: 15, step: 1, dec: 0 }, mode: { label: 'Modo (0 ent · 1 sal · 2 AF · 3 anal)', val: 0, list: [0, 1, 2, 3], dec: 0 } }, { q: 'val', min: 1024, max: 1024, text: 'Objetivo: MODER = 0x00000400', hint: 'Pin 5, modo 1: 01 desplazado 10 posiciones.' }, '1 << 10 = 0x400.', { c: 'st_field' }),
-      G('st_moder'), G('st_moder'),
-      I('Leer-modificar-escribir (|=, &=) son <b>tres pasos</b>: leer, cambiar y escribir. Si una interrupción cambia el mismo registro entre medias, su cambio se pierde. Para GPIO existe <b>BSRR</b>: escribir un 1 actúa sobre un bit y los ceros no hacen nada.'),
-      G('st_bsrr'), G('st_bsrr'),
-      Q('¿Qué comprueba esta condición?', ['Si el pin PA0 está a nivel alto', 'Si PA0 es salida', 'Si el reloj de GPIOA está activo', 'Si hay una interrupción'], 'IDR refleja el nivel de los pines; el AND aísla el bit 0.', { code: 'if (GPIOA->IDR & (1U << 0)) { ... }', c: 'st_reg' }),
-      Q('¿Por qué se escribe 1U << 31 y no 1 << 31?', ['1 es un int con signo: desplazarlo al bit 31 es comportamiento indefinido en C', 'Por estilo', 'Porque 1U ocupa menos', 'No hay diferencia'], 'Con unsigned el resultado es 0x80000000 sin sorpresas.', { c: 'st_reg' }),
-      Nm('Escribes GPIOx->BSRR = (1U << (5 + 16)). ¿Qué bit del registro pones a 1?', 21, '', 'BR5 está en el bit 21: pone PA5 a 0.', { c: 'st_bsrr' })
+      Q('En una F407, MODER de GPIOA vale 0xA8000000 tras el reset: sus bits altos mantienen el depurador. Escribes GPIOA->MODER = (1U << 10). ¿Qué crees que pasa?', ['PA5 pasa a salida… y el depurador pierde PA13 y PA14', 'Solo cambia PA5', 'No pasa nada', 'Error de compilación'], 'El signo = sustituye el registro entero. Compruébalo.', { ...PRED, c: 'st_reg', h: '= sustituye todo el registro.' }),
+      { t: 'explore', text: 'Este es MODER de GPIOA de una F407 tras el reset. Elige operación y bit.', viz: 'st_reg32', params: P_R32(0, 0),
+        tasks: [{ q: 'val', min: 0xA8000400, max: 0xA8000400, text: 'Pon a 1 el bit 10 sin tocar nada más', done: '|= con una máscara: solo cambia ese bit.', hint: 'Operación |= y bit 10.' },
+          { q: 'val', min: 0x28000000, max: 0x28000000, text: 'Ahora borra el bit 31', done: '&= ~máscara pone a 0 solo ese bit.' },
+          { q: 'bad', min: 3, max: 32, text: 'Prueba = con el bit 10 y cuenta los bits rojos', done: 'Asignar con = borra todo lo demás: aquí, la configuración del depurador.' }] },
+      I('Las cuatro jugadas:\n<b>reg |= m</b> pone a 1 los bits de m.\n<b>reg &= ~m</b> los pone a 0.\n<b>reg ^= m</b> los invierte.\n<b>reg & m</b> lee si están a 1.\nLa máscara de un bit es (1U &lt;&lt; n).', { tune: { viz: 'st_reg32', params: P_R32(2, 5) }, more: 'Escribe 1U y no 1: 1 es un int con signo y desplazarlo al bit 31 es comportamiento indefinido en C. En el curso base usaste |, & y ~ con bytes; aquí es lo mismo con 32 bits.' }),
+      I('Un <b>campo</b> de varios bits se cambia en dos pasos: limpiar y escribir. En MODER cada pin ocupa <b>2 bits</b> (00 entrada, 01 salida, 10 función alternativa, 11 analógico) y el pin n empieza en el bit 2n.', { tune: { viz: 'st_reg', params: { pin: sl('Pin', 5, 0, 15), mode: li('Modo (0 ent · 1 sal · 2 AF · 3 anal)', 1, [0, 1, 2, 3]) } }, code: 'GPIOA->MODER &= ~(3U << (2 * 5));  // limpia\nGPIOA->MODER |=  (1U << (2 * 5));  // 01: salida' }),
+      I('Leer-modificar-escribir son <b>tres pasos</b>: si una interrupción cambia el mismo registro entre medias, su cambio se pierde. Para los pines existe <b>BSRR</b>: bits 0–15 ponen a 1, bits 16–31 ponen a 0, y los ceros no hacen nada. Una sola escritura: atómica.', { tune: { viz: 'st_bsrr', params: P_BSRR(5) }, more: 'En el M3 y el M4 existe además el bit-banding: cada bit de la SRAM y de los periféricos tiene su propia palabra en una zona «alias», y escribir en ella cambia solo ese bit. No existe en M0, M7 ni M33.' }),
+      { t: 'steps', text: 'Pon PB6 en función alternativa (10) sin tocar los demás pines.', steps: ['El campo de PB6 empieza en el bit 2 × 6 = <b>12</b>', 'Limpia: MODER &amp;= ~(3U &lt;&lt; 12)', '10 en binario es 2: MODER |= (2U &lt;&lt; 12)', '2 &lt;&lt; 12 = <b>0x2000</b>'], result: 'Bits 13–12 = 10; los demás, intactos.' },
+      Q('¿Qué hace esta línea?', ['Pone a 1 el bit 5 de ODR sin tocar los demás', 'Pone ODR a 5', 'Borra el bit 5', 'Invierte todo el registro'], 'OR con una máscara de un solo bit.', { code: 'GPIOA->ODR |= (1U << 5);', c: 'st_reg', h: 'OR con una máscara de un bit.' }),
+      Q('¿Y esta?', ['Pone a 0 el bit 3 de x', 'Pone a 1 el bit 3', 'Pone a 0 todos menos el 3', 'Invierte el bit 3'], '~ invierte la máscara; el AND conserva todo menos el bit 3.', { code: 'x &= ~(1U << 3);', c: 'st_reg', h: '~ invierte la máscara antes del AND.' }),
+      TU('Consigue que MODER valga 0x00000400 (PA5 como salida).', 'st_reg', { pin: sl('Pin', 0, 0, 15), mode: li('Modo (0 ent · 1 sal · 2 AF · 3 anal)', 0, [0, 1, 2, 3]) }, { q: 'val', min: 1024, max: 1024, text: 'Objetivo: MODER = 0x00000400', hint: 'Pin 5, modo 1: 01 desplazado 10 posiciones.' }, '1 << 10 = 0x400.', { c: 'st_field', h: 'Cada pin ocupa dos bits: el 5 empieza en el bit 10.' }),
+      G('st_moder'),
+      G('st_bsrr'),
+      Q('¿Qué comprueba esta condición?', ['Si el pin PA0 está a nivel alto', 'Si PA0 es salida', 'Si el reloj de GPIOA está activo', 'Si hay una interrupción'], 'IDR refleja el nivel de los pines; el AND aísla el bit 0.', { code: 'if (GPIOA->IDR & (1U << 0)) { ... }', c: 'st_reg', h: 'El AND aísla un bit.' }),
+      Q('¿Por qué se escribe 1U << 31 y no 1 << 31?', ['1 es un int con signo: desplazarlo al bit 31 es comportamiento indefinido', 'Por estilo', 'Porque 1U ocupa menos', 'No hay diferencia'], 'Con unsigned el resultado es 0x80000000 sin sorpresas.', { c: 'st_reg', h: 'Con signo o sin signo.' }),
+      Nm('Escribes GPIOx->BSRR = (1U << (5 + 16)). ¿Qué bit del registro pones a 1?', 21, '', 'BR5 está en el bit 21: pone el pin 5 a 0.', { c: 'st_bsrr', h: 'El 5 en la mitad alta.' }),
+      Q('¿Qué ventaja tiene cambiar un bit por bit-banding?', ['Es atómico: no hay leer-modificar-escribir que una interrupción pueda romper', 'Ocupa menos Flash', 'Funciona en todos los Cortex-M', 'Va a 1 GHz'], 'Una sola escritura cambia un solo bit.', { c: 'st_bsrr', h: 'Piensa en cuántas escrituras hace.' }),
+      I('<b>Resumen</b>\n· |= pone a 1, &= ~ pone a 0, ^= invierte, & lee. Nunca = sobre un registro compartido.\n· Campos: limpia y escribe; en MODER el pin n empieza en el bit 2n.\n· BSRR cambia pines en una sola escritura, sin carreras.')
     ]),
-    L('st13', 'HAL y LL', 'code', ['st_halcb', 'st_halstatus', 'st_hal', 'st_isrrules'], [
-      I('La HAL trabaja con <b>manejadores</b>: estructuras como UART_HandleTypeDef huart2 que guardan la instancia (USART2), la configuración y el estado. Casi todas las funciones devuelven un <b>HAL_StatusTypeDef</b>.'),
-      { t: 'match', q: 'Une cada estado con su significado.', pairs: [['HAL_OK', 'Todo bien'], ['HAL_ERROR', 'Error del periférico o parámetros'], ['HAL_BUSY', 'El periférico está ocupado con otra operación'], ['HAL_TIMEOUT', 'Se agotó el tiempo de espera']], c: 'st_halstatus' },
-      Q('¿Por qué comprobar lo que devuelve esta llamada?', ['Porque si la pantalla no responde devuelve un error y debes reaccionar', 'Porque si no, no compila', 'Para que vaya más rápido', 'No hace falta nunca'], 'Ignorar errores es el origen de muchos cuelgues raros.', { code: 'if (HAL_I2C_Master_Transmit(&hi2c1,\n    0x3C << 1, buf, 2, 10) != HAL_OK) {\n  /* reintentar o avisar */\n}', c: 'st_halstatus' }),
-      I('Cada periférico tiene tres estilos: <b>sondeo</b> (bloquea hasta terminar o hasta el tiempo límite), <b>_IT</b> (devuelve al instante y avisa con un callback en la interrupción) y <b>_DMA</b> (igual, pero los datos los mueve el DMA).'),
-      Q('¿Qué falla aquí?', ['buf es local: desaparece al salir de la función mientras la UART sigue enviándolo', 'Nada', 'Falta el tiempo de espera', 'HAL_UART_Transmit_IT no existe'], 'Con _IT y _DMA el búfer debe seguir vivo hasta el callback: static o global.', { code: 'void enviar(void) {\n  char buf[32] = "hola\\r\\n";\n  HAL_UART_Transmit_IT(&huart2,\n    (uint8_t *)buf, 6);\n}', c: 'st_halcb' }),
-      I('Los callbacks de la HAL están declarados <b>__weak</b>: hay una versión vacía en la biblioteca y, si escribes una función con el mismo nombre, el enlazador usa la tuya.'),
-      Q('¿Qué significa __weak en HAL_UART_TxCpltCallback?', ['Que puedes redefinirla en tu código y el enlazador usará la tuya', 'Que es lenta', 'Que no se puede usar', 'Que se ejecuta en otra tarea'], 'Así la HAL te avisa sin que modifiques sus archivos.', { c: 'st_halcb' }),
-      I('La <b>LL</b> (Low Layer) son funciones inline muy finas: LL_GPIO_SetOutputPin(GPIOA, LL_GPIO_PIN_5) acaba siendo una escritura en BSRR. En CubeMX puedes elegir HAL o LL para cada periférico (Project Manager › Advanced Settings).'),
-      Q('Bucle crítico que conmuta un pin a la máxima velocidad. ¿Qué eliges?', ['LL o registros', 'HAL_GPIO_TogglePin con HAL_Delay', 'printf', 'HAL con DMA'], 'Menos capas, menos ciclos.', { c: 'st_hal' }),
-      Q('Llamas a HAL_Delay dentro de una interrupción más urgente que el SysTick. ¿Qué pasa?', ['Se cuelga: el SysTick no puede interrumpir para avanzar el contador', 'Espera lo indicado', 'Espera el doble', 'Nada'], 'HAL_Delay depende de la interrupción del SysTick.', { c: 'st_isrrules' }),
-      Q('¿Qué ventaja real tiene la HAL frente a los registros?', ['Portabilidad: el mismo código sirve con pocos cambios en otra familia STM32', 'Es siempre más rápida', 'Ocupa menos Flash', 'No necesita relojes'], 'Pagas en tamaño y velocidad a cambio de portabilidad y rapidez de desarrollo.', { c: 'st_hal' })
+    L('st13', 'HAL y LL', 'code', ['st_halcb', 'st_halstatus', 'st_hal'], [
+      Q('Envías 1000 bytes por la UART con HAL_UART_Transmit (modo de sondeo). ¿Qué crees que hace la CPU mientras salen?', ['Esperar: nada más hasta que sale el último', 'Otras cosas a la vez', 'Dormir', 'Enviar más rápido'], 'Sondeo es preguntar una y otra vez si ha terminado. Compara con los otros modos.', { ...PRED, c: 'st_halcb', h: 'Sondeo = preguntar sin parar si ha terminado.' }),
+      { t: 'explore', text: 'Elige el modo de la HAL y cuántos bytes envías.', viz: 'st_halmode', params: P_HALM(0, 10),
+        tasks: [{ q: 'free1000', min: 95, max: 100, text: 'Envía 1000 bytes dejando libre más del 95 % de la CPU', done: 'Con _IT, una interrupción corta por byte.', hint: 'Con 1000 bytes, cambia de modo.' },
+          { q: 'free1000', min: 99.5, max: 100, text: 'Ahora deja la CPU casi entera (más del 99,5 %)', done: 'Con _DMA, el DMA mueve los bytes y solo avisa al final.' }] },
+      I('La <b>HAL</b> trabaja con <b>manejadores</b>: estructuras como huart2 que guardan la instancia (USART2), la configuración y el estado. Casi cada función devuelve un <b>HAL_StatusTypeDef</b>.', { svg: SVG_HALST }),
+      I('Tres estilos para cada periférico: <b>sondeo</b> (bloquea hasta terminar), <b>_IT</b> (vuelve al instante y avisa con un callback desde la interrupción) y <b>_DMA</b> (igual, pero los datos los mueve el DMA).', { code: 'HAL_UART_Transmit(&huart2, buf, n, 100);  // espera\nHAL_UART_Transmit_IT(&huart2, buf, n);    // vuelve ya\n\nvoid HAL_UART_TxCpltCallback(UART_HandleTypeDef *h) {\n  enviado = 1;   // la HAL avisa al acabar\n}', more: 'Los callbacks están declarados __weak: hay una versión vacía en la biblioteca y, si escribes una función con el mismo nombre, el enlazador usa la tuya. Con _IT y _DMA el búfer debe seguir vivo hasta el callback: static o global. El DMA lo verás a fondo en el módulo 6.' }),
+      I('La <b>LL</b> (Low Layer) son funciones inline muy finas: LL_GPIO_SetOutputPin acaba siendo una escritura en BSRR. Puedes mezclar: HAL en general y LL o registros en lo crítico.', { svg: SVG_LAYERS }),
+      { t: 'steps', text: 'Esperas 4 bytes por la UART y quieres reaccionar si no llegan.', code: 'HAL_StatusTypeDef r =\n  HAL_UART_Receive(&huart2, buf, 4, 100);\nif (r != HAL_OK) {\n  errores++;   /* reintentar o avisar */\n}', steps: ['La función espera hasta 100 ms a que lleguen 4 bytes', 'Si llegan, devuelve <b>HAL_OK</b>', 'Si pasan 100 ms sin los 4 bytes: <b>HAL_TIMEOUT</b>', 'Comprueba el retorno y decide: reintentar, avisar o seguir'], result: 'Ignorar el retorno convierte un cable suelto en datos absurdos.' },
+      { t: 'match', q: 'Une cada estado con su significado.', pairs: [['HAL_OK', 'Todo bien'], ['HAL_ERROR', 'Error del periférico o de parámetros'], ['HAL_BUSY', 'El periférico está ocupado con otra operación'], ['HAL_TIMEOUT', 'Se agotó el tiempo de espera']], c: 'st_halstatus', h: 'BUSY = ocupado; TIMEOUT = se acabó el tiempo.' },
+      Q('¿Por qué comprobar lo que devuelve esta llamada?', ['Si no llegan los datos, devuelve un error y debes reaccionar', 'Porque si no, no compila', 'Para que vaya más rápido', 'No hace falta nunca'], 'Ignorar errores es el origen de muchos cuelgues raros.', { code: 'if (HAL_UART_Receive(&huart2,\n    buf, 4, 100) != HAL_OK) {\n  /* reintentar o avisar */\n}', c: 'st_halstatus', h: 'Piensa en un cable suelto.' }),
+      Q('¿Qué falla aquí?', ['buf es local: desaparece al salir de la función mientras la UART sigue enviándolo', 'Nada', 'Falta el tiempo de espera', 'HAL_UART_Transmit_IT no existe'], 'Con _IT y _DMA el búfer debe seguir vivo hasta el callback: static o global.', { code: 'void enviar(void) {\n  char buf[32] = "hola\\r\\n";\n  HAL_UART_Transmit_IT(&huart2,\n    (uint8_t *)buf, 6);\n}', c: 'st_halcb', h: 'El búfer debe existir hasta el callback.' }),
+      Q('¿Qué significa __weak en HAL_UART_TxCpltCallback?', ['Que puedes redefinirla en tu código y el enlazador usará la tuya', 'Que es lenta', 'Que no se puede usar', 'Que se ejecuta en otra tarea'], 'Así la HAL te avisa sin que modifiques sus archivos.', { c: 'st_halcb', h: '«Débil»: se puede sustituir.' }),
+      Q('Bucle crítico que conmuta un pin a la máxima velocidad. ¿Qué eliges?', ['LL o registros', 'HAL_GPIO_TogglePin con HAL_Delay', 'printf', 'HAL con DMA'], 'Menos capas, menos ciclos.', { c: 'st_hal', h: 'Menos capas, menos ciclos.' }),
+      Q('¿Qué ventaja real tiene la HAL frente a los registros?', ['Portabilidad: el mismo código sirve con pocos cambios en otra familia STM32', 'Es siempre más rápida', 'Ocupa menos Flash', 'No necesita relojes'], 'Pagas en tamaño y velocidad.', { c: 'st_hal', h: 'Piensa en cambiar de familia de chip.' }),
+      Q('¿Cuándo tiene sentido STM32duino (Arduino para STM32)?', ['Prototipos rápidos reutilizando bibliotecas de Arduino, aceptando menos control', 'Para producción crítica siempre', 'Nunca', 'Solo para la F7'], 'Para aprender el flujo profesional, mejor CubeMX + HAL o registros.', { c: 'st_hal', h: 'Arduino es comodidad, no control.' }),
+      I('<b>Resumen</b>\n· HAL: manejadores, estados que hay que comprobar y callbacks __weak.\n· Sondeo bloquea; _IT y _DMA vuelven ya (búfer vivo hasta el callback).\n· LL y registros para lo crítico; HAL para lo general; Arduino para prototipos.')
     ]),
-    L('st14', 'Qué pasa antes de main', 'rocket', ['st_boot', 'st_sections', 'st_hsi', 'st_fpu', 'st_irqsetup'], [
-      I('Al salir de reset, el núcleo lee la dirección 0x00000000 (donde aparece la Flash): esa palabra es el valor inicial del <b>puntero de pila</b> (MSP). Luego lee 0x00000004: la dirección de <b>Reset_Handler</b>, y salta allí.'),
-      Q('La primera palabra de la Flash vale 0x20020000. ¿Qué es?', ['El valor inicial de la pila: el final de la SRAM de 128 KB', 'La dirección de main', 'Una instrucción', 'El tamaño del programa'], 'La pila crece hacia abajo desde el final de la RAM.', { c: 'st_boot' }),
-      Q('La segunda palabra vale 0x080001A9 (impar). ¿Por qué impar?', ['El bit 0 a 1 indica modo Thumb', 'Es un error', 'Está desalineada a propósito', 'Indica que hay FPU'], 'Los Cortex-M solo ejecutan Thumb: las direcciones de salto llevan el bit 0 a 1.', { c: 'st_boot' }),
-      I('Reset_Handler (en startup_stm32f411xe.s) hace, en este orden: llama a <b>SystemInit</b> (activa la FPU y fija la tabla de vectores), copia <b>.data</b> de Flash a RAM, pone <b>.bss</b> a cero, llama a __libc_init_array (inicializaciones de C y C++) y, por fin, a <b>main</b>.'),
-      { t: 'order', q: 'Ordena lo que ocurre desde el reset.', items: ['El núcleo carga el MSP de la primera palabra', 'Salta a Reset_Handler', 'SystemInit activa la FPU', 'Se copia .data y se pone .bss a cero', 'Se llama a main', 'main llama a SystemClock_Config'], e: 'El PLL se configura ya dentro de main.', c: 'st_boot' },
-      Q('Al llegar a la primera línea de main, ¿a qué frecuencia funciona una F411?', ['A 16 MHz con el HSI: el PLL lo configura después SystemClock_Config', 'A 100 MHz', 'A 32 kHz', 'Depende de la hora'], 'SystemInit no toca el PLL en las versiones actuales de Cube.', { c: 'st_hsi' }),
-      Q('¿En qué sección acaba esta variable?', ['.data: tiene valor inicial distinto de cero', '.bss', 'La pila', '.text'], 'Las static locales viven como globales.', { code: 'void f(void) {\n  static int contador = 5;\n  contador++;\n}', c: 'st_sections' }),
-      { t: 'match', q: 'Une cada declaración global con su sección.', pairs: [['const char msg[] = "hola";', '.rodata (Flash)'], ['int n = 7;', '.data (Flash y RAM)'], ['int buffer[256];', '.bss (RAM a cero)'], ['void f(void) { }', '.text (Flash)']], c: 'st_sections' },
-      Q('Una variable global sin inicializar, ¿cuánto vale al entrar en main?', ['0, garantizado: el arranque pone .bss a cero', 'Un valor aleatorio', '0xFF', 'Lo que tuviera antes del reset'], 'Es lo que exige el lenguaje C.', { c: 'st_sections' }),
-      Q('Si quitas la activación de la FPU de SystemInit y compilas con FPU, ¿qué pasa?', ['Falla con una excepción en la primera instrucción de coma flotante', 'Va más rápido', 'Los float se emulan solos', 'Nada'], 'La FPU arranca apagada: hay que darle acceso en SCB->CPACR.', { c: 'st_fpu' }),
-      Q('Escribes void USART2_IRQHandler_(void) con un guion bajo de más. ¿Qué pasa al llegar la interrupción?', ['Se ejecuta Default_Handler, un bucle infinito', 'Se ejecuta tu función igualmente', 'Error de compilación', 'Se ignora la interrupción'], 'Los nombres de la tabla de vectores son “débiles”: si no coinciden exactamente, se queda el manejador por defecto.', { c: 'st_irqsetup' })
+    L('st14', 'Qué pasa antes de main', 'rocket', ['st_boot', 'st_sections', 'st_fpu'], [
+      Q('Declaras int contador; como global, sin valor inicial. Al entrar en main, ¿cuánto crees que vale?', ['0, garantizado', 'Un valor aleatorio', '0xFF', 'Lo que tuviera antes del reset'], 'El lenguaje C lo promete, y alguien tiene que cumplirlo antes de main. Veamos quién.', { ...PRED, c: 'st_sections', h: 'El lenguaje C promete algo para las globales.' }),
+      { t: 'explore', text: 'Avanza desde el reset hasta main y mira registros y RAM.', viz: 'st_boot', params: P_BOOT(0),
+        tasks: [{ q: 'step', min: 1, max: 1, text: 'Avanza hasta que el núcleo tenga pila', done: 'La palabra 0 de la tabla es el valor inicial del MSP: el final de la RAM.' },
+          { q: 'step', min: 4, max: 4, text: 'Llega al paso en que las variables con valor inicial lo reciben', done: '.data se copia de la Flash a la RAM.' },
+          { q: 'step', min: 6, max: 6, text: 'Llega hasta main', done: 'Todo esto pasa antes de tu primera línea.' }] },
+      I('Al salir de reset, el núcleo lee la <b>tabla de vectores</b> del principio de la Flash: la palabra 0 es el valor inicial de la pila (MSP) y la 1, la dirección de <b>Reset_Handler</b>. Después vienen las direcciones de los manejadores de excepciones e interrupciones.', { code: 'Dirección   Contenido\n0x08000000  0x20020000  <- MSP inicial\n0x08000004  0x080001A9  <- Reset_Handler (+1: Thumb)\n0x08000008  ...         <- NMI_Handler\n0x0800000C  ...         <- HardFault_Handler' }),
+      I('Reset_Handler (en startup_stm32f411xe.s) llama a <b>SystemInit</b> (enciende la FPU), copia <b>.data</b> de Flash a RAM, pone <b>.bss</b> a cero y llama a <b>main</b>. Ya dentro de main, SystemClock_Config pone el reloj rápido.', { svg: chain(['Reset', 'MSP y|Reset_Handler', 'SystemInit|(FPU)', 'Copiar .data', '.bss a 0', 'main()']) }),
+      I('Dónde acaba cada cosa: <b>.text</b> código (Flash) · <b>.rodata</b> constantes (Flash) · <b>.data</b> globales con valor inicial (Flash y RAM) · <b>.bss</b> globales a cero (RAM).', { code: 'const char msg[] = "hola";  // .rodata\nint n = 7;                  // .data\nint buffer[256];            // .bss\nvoid f(void) { }            // .text', more: '¿Por qué .data está en las dos? El valor inicial (7) debe sobrevivir sin alimentación: vive en la Flash. La variable debe poder cambiar: vive en la RAM. El arranque copia de una a otra. Las static locales con valor inicial también van a .data.' }),
+      I('La <b>FPU</b> arranca apagada: SystemInit le da acceso en SCB->CPACR. Si compilas con FPU y quitas esa línea, la primera operación con float provoca un fallo.', { code: 'SCB->CPACR |= (0xFU << 20);  // CP10 y CP11: acceso total' }),
+      { t: 'steps', text: 'La primera palabra de la Flash de una F411 vale 0x20020000. ¿Qué es?', steps: ['Es la palabra 0 de la tabla: el <b>MSP</b> inicial', 'La SRAM empieza en 0x20000000 y mide 128 KB = 0x20000 bytes', '0x20000000 + 0x20000 = 0x20020000: <b>el final de la SRAM</b>', 'La pila crece hacia abajo desde ahí'], result: 'La pila empieza en lo más alto de la RAM.' },
+      Q('La segunda palabra vale 0x080001A9 (impar). ¿Por qué impar?', ['El bit 0 a 1 indica modo Thumb', 'Es un error', 'Está desalineada a propósito', 'Indica que hay FPU'], 'Los Cortex-M solo ejecutan Thumb: las direcciones de salto llevan el bit 0 a 1.', { c: 'st_boot', h: 'El bit 0 no forma parte de la dirección.' }),
+      { t: 'order', q: 'Ordena lo que ocurre desde el reset.', items: ['El núcleo carga el MSP de la primera palabra', 'Salta a Reset_Handler', 'SystemInit activa la FPU', 'Se copia .data y se pone .bss a cero', 'Se llama a main', 'main llama a SystemClock_Config'], e: 'El reloj rápido se configura ya dentro de main.', c: 'st_boot', h: 'La pila es lo primero; el reloj rápido, lo último.' },
+      Q('¿En qué sección acaba esta variable?', ['.data: tiene valor inicial distinto de cero', '.bss', 'La pila', '.text'], 'Las static locales viven como globales.', { code: 'void f(void) {\n  static int contador = 5;\n  contador++;\n}', c: 'st_sections', h: 'Las static locales viven como globales.' }),
+      { t: 'match', q: 'Une cada declaración global con su sección.', pairs: [['const char msg[] = "hola";', '.rodata (Flash)'], ['int n = 7;', '.data (Flash y RAM)'], ['int buffer[256];', '.bss (RAM a cero)'], ['void f(void) { }', '.text (Flash)']], c: 'st_sections', h: 'const a Flash; con valor, .data; sin valor, .bss.' },
+      Q('Si quitas la activación de la FPU de SystemInit y compilas con FPU, ¿qué pasa?', ['Falla con una excepción en la primera instrucción de coma flotante', 'Va más rápido', 'Los float se emulan solos', 'Nada'], 'La FPU arranca apagada.', { c: 'st_fpu', h: 'La FPU arranca apagada.' }),
+      Q('Tienes una tabla de 4 KB que nunca cambia. ¿Cómo ahorras 4 KB de RAM?', ['Declarándola const para que quede en Flash', 'Declarándola static', 'Declarándola volatile', 'Poniéndola dentro de main'], 'Sin const iría a .data: Flash y RAM.', { c: 'st_sections', h: 'const la deja en la Flash.' }),
+      I('<b>Resumen</b>\n· Tabla de vectores: palabra 0 = MSP; palabra 1 = Reset_Handler (impar, Thumb).\n· Antes de main: SystemInit, copia de .data, .bss a cero.\n· .text y .rodata en Flash; .data en las dos; .bss en RAM.')
     ]),
-    L('st15', 'El enlazador y tu memoria', 'memory', ['st_linker', 'st_sections', 'st_hardfault', 'st_toolchain', 'st_dmamem'], [
-      I('El <b>script del enlazador</b> (.ld) describe la memoria y dice dónde va cada sección.', { code: 'MEMORY {\n  RAM   (xrw) : ORIGIN = 0x20000000,\n                LENGTH = 128K\n  FLASH (rx)  : ORIGIN = 0x08000000,\n                LENGTH = 512K\n}' }),
-      Q('¿Qué ocurre si tu programa necesita más de 512 KB de Flash con este script?', ['El enlazador da un error de que la región FLASH se desborda', 'Se graba solo una parte', 'Se usa la RAM', 'Nada'], 'Mejor un error al compilar que un fallo en el campo.', { c: 'st_linker' }),
-      I('<b>.data</b> tiene dos direcciones: dónde se ejecuta (RAM) y dónde se guarda (Flash). El script lo expresa con “&gt; RAM AT&gt; FLASH” y exporta símbolos como _sidata, _sdata y _edata para que el arranque haga la copia.'),
-      Q('¿Por qué .data ocupa sitio tanto en Flash como en RAM?', ['Los valores iniciales deben sobrevivir sin alimentación (Flash) y la variable debe poder cambiar (RAM)', 'Por seguridad', 'Es un error del enlazador', 'Para ir más rápido'], 'El arranque copia de un sitio al otro.', { c: 'st_sections' }),
+    L('st15', 'El enlazador y tu memoria', 'memory', ['st_linker', 'st_sections', 'st_hardfault', 'st_toolchain'], [
+      Q('Tu programa ocupa 520 KB y el chip tiene 512 KB de Flash. ¿Cuándo crees que te enteras?', ['Al enlazar: el enlazador da un error de región desbordada', 'Al grabar, que falla a mitad', 'Cuando el programa llega a la parte que no cabe', 'Nunca: se comprime solo'], 'El enlazador conoce el tamaño de cada memoria por el script .ld.', { ...PRED, c: 'st_linker', h: 'El enlazador conoce el tamaño de cada memoria.' }),
+      { t: 'explore', text: 'Prueba tamaños y reserva el final de la Flash para datos.', viz: 'st_sec', params: P_SEC(256, 200, 16, 0),
+        tasks: [{ q: 'resOver', min: 1, max: 1, text: 'Reserva 128 KB para datos con un programa de 400 KB', done: '400 + 128 &gt; 512: no cabe. Reservar quita sitio al programa.', hint: 'Reserva 128 y .text 400.' },
+          { q: 'rOver', min: 1, max: 1, text: 'Ahora llena la RAM de más', done: '.data + .bss por encima de 128 KB: el enlazador también lo detecta.' }] },
+      I('El <b>script del enlazador</b> (.ld) describe las memorias con MEMORY y dice en cuál va cada sección. Si algo no cabe, error al enlazar.', { code: 'MEMORY {\n  RAM   (xrw) : ORIGIN = 0x20000000, LENGTH = 128K\n  FLASH (rx)  : ORIGIN = 0x08000000, LENGTH = 512K\n}' }),
+      I('<b>.data</b> tiene dos direcciones: dónde vive (RAM) y dónde se guarda su valor inicial (Flash). El script lo escribe «&gt; RAM AT&gt; FLASH» y exporta símbolos para que el arranque haga la copia.', { code: '.data : {\n  _sdata = .;\n  *(.data*)\n  _edata = .;\n} > RAM AT> FLASH\n_sidata = LOADADDR(.data);' }),
+      I('El script reserva un mínimo para la pila y el montón, pero solo comprueba que <b>quepan</b>. En ejecución nadie impide que la pila crezca de más y pise .bss: variables que cambian solas y HardFaults en sitios distintos.', { svg: SVG_STACK }),
+      I('Para reservar el último sector de Flash para tus datos, <b>reduce LENGTH</b>: así el programa nunca podrá ocuparlo. Los tamaños suelen ir en hexadecimal: 0x400 = 1024 B.', { code: 'FLASH (rx) : ORIGIN = 0x08000000, LENGTH = 384K\n/* los últimos 128 KB quedan para datos */\n_Min_Stack_Size = 0x400;   /* 1 KB */' }),
+      { t: 'steps', text: '_Min_Heap_Size = 0x200 y _Min_Stack_Size = 0x800. ¿Cuántos bytes reserva en total?', steps: ['0x200 = 2 × 256 = <b>512 B</b>', '0x800 = 8 × 256 = <b>2048 B</b>', 'Total: 512 + 2048 = <b>2560 B</b>', 'Es un mínimo: el enlazador comprueba que quepa, no que baste'], result: '2,5 KB reservados.' },
+      Q('¿Qué ocurre si tu programa necesita más de 512 KB de Flash con LENGTH = 512K?', ['El enlazador da un error de región FLASH desbordada', 'Se graba solo una parte', 'Se usa la RAM', 'Nada'], 'Mejor un error al compilar que un fallo en el campo.', { c: 'st_linker', h: 'El enlazador comprueba cada región.' }),
+      Nm('_Min_Stack_Size = 0x400. ¿Cuántos bytes son?', 1024, 'B', '0x400 = 4 × 256 = 1024 bytes.', { c: 'st_linker', h: '0x100 son 256.' }),
+      Q('¿Por qué .data ocupa sitio tanto en Flash como en RAM?', ['Los valores iniciales deben sobrevivir sin alimentación (Flash) y la variable debe poder cambiar (RAM)', 'Por seguridad', 'Es un error del enlazador', 'Para ir más rápido'], 'El arranque copia de un sitio al otro.', { c: 'st_sections', h: 'Valor inicial frente a variable que cambia.' }),
       G('st_memUse'),
-      I('El script reserva un mínimo para el montón (_Min_Heap_Size) y la pila (_Min_Stack_Size), pero solo comprueba que quepan. En ejecución, <b>nadie impide</b> que la pila crezca de más y pise .bss o el montón.'),
-      Q('¿Qué síntoma suele dar un desbordamiento de pila sin RTOS?', ['Variables globales que cambian solas y HardFaults aleatorios', 'Un error de compilación', 'Un mensaje claro en la consola', 'Que el LED parpadee más rápido'], 'Por eso conviene vigilar la pila (lo verás con FreeRTOS).', { c: 'st_hardfault' }),
-      Nm('_Min_Stack_Size = 0x400. ¿Cuántos bytes son?', 1024, 'B', '0x400 = 4 × 256 = 1024 bytes.', { c: 'st_linker' }),
-      Q('¿Para qué sirve el archivo .map?', ['Para ver cuánto ocupa cada función y variable y en qué dirección quedó', 'Para depurar sin cables', 'Para configurar los pines', 'Para guardar datos en Flash'], 'Es lo primero que se mira cuando la Flash o la RAM se llenan.', { c: 'st_toolchain' }),
-      Q('Una F407 tiene 64 KB de CCM RAM y la usas para un búfer con __attribute__((section(".ccmram"))). ¿Qué limitación tiene?', ['El DMA no puede acceder a la CCM', 'Es de solo lectura', 'Se borra en cada interrupción', 'Es más lenta que la Flash'], 'La CCM solo está conectada al núcleo: ideal para pila o datos de cálculo, no para búferes de DMA.', { c: 'st_dmamem' }),
-      Q('Tienes una tabla de 4 KB que nunca cambia. ¿Cómo ahorras 4 KB de RAM?', ['Declarándola const para que quede en Flash', 'Declarándola static', 'Declarándola volatile', 'Poniéndola dentro de main'], 'Sin const iría a .data: Flash y RAM.', { c: 'st_sections' })
+      Q('¿Qué síntoma suele dar un desbordamiento de pila sin RTOS?', ['Variables globales que cambian solas y HardFaults aleatorios', 'Un error de compilación', 'Un mensaje claro en la consola', 'Que el LED parpadee más rápido'], 'La pila ha invadido otras zonas de la RAM.', { c: 'st_hardfault', h: 'La pila pisa otras zonas.' }),
+      Q('¿Para qué sirve el archivo .map?', ['Para ver cuánto ocupa cada función y variable y en qué dirección quedó', 'Para depurar sin cables', 'Para configurar los pines', 'Para guardar datos en Flash'], 'Lo primero que se mira cuando la memoria se llena.', { c: 'st_toolchain', h: 'Es lo primero que miras cuando algo no cabe.' }),
+      Q('Quieres usar el último sector de 128 KB para datos. ¿Qué cambias en el .ld?', ['Reducir LENGTH de FLASH para que el programa no pueda ocuparlo', 'Nada', 'Aumentar la RAM', 'Mover .bss'], 'Si no, una actualización que crezca borraría tus datos o tu código.', { c: 'st_linker', h: 'Lo que no está en LENGTH, el programa no lo usa.' }),
+      I('<b>Resumen</b>\n· MEMORY dice dónde empieza y cuánto mide cada memoria; si no cabe, error al enlazar.\n· .data se guarda en Flash y vive en RAM.\n· El enlazador no vigila la pila en ejecución. Reserva sectores reduciendo LENGTH.')
+    ]),
+    L('st24', 'SysTick, HAL_Delay y el tiempo', 'timer', ['st_systick', 'st_tick', 'st_cycles'], [
+      Q('HAL_Delay(1) promete esperar 1 ms. ¿Cuánto crees que puede llegar a durar?', ['Casi 2 ms', 'Exactamente 1 ms', 'Menos de 1 ms', '1 µs'], 'El contador avanza a saltos de 1 ms y HAL_Delay añade uno para garantizar el mínimo. Primero, de dónde salen esos saltos.', { ...PRED, c: 'st_tick', h: 'El contador avanza a saltos de 1 ms.' }),
+      { t: 'explore', text: 'El SysTick cuenta hacia abajo desde LOAD. Elige reloj y cuántas interrupciones por segundo quieres.', viz: 'st_tick', params: P_TICK(16, 1),
+        tasks: [{ q: 'load', min: 83999, max: 83999, text: 'Consigue un tick de 1 ms a 84 MHz', done: 'LOAD = 84 000 − 1.', hint: '84 MHz y 1000 Hz.' },
+          { q: 'fits', min: 0, max: 0, text: 'Busca una combinación que no quepa en 24 bits', done: 'A 84 MHz, una interrupción por segundo pediría 84 millones de cuentas: no caben.' }] },
+      I('El <b>SysTick</b> es un temporizador de 24 bits del propio núcleo (todo Cortex-M lo tiene). Cuenta hacia abajo desde LOAD hasta 0, genera una excepción y vuelve a empezar: cada vuelta son LOAD + 1 ciclos.', { tune: { viz: 'st_tick', params: P_TICK(84, 1000) } }),
+      I('HAL_Init programa el SysTick a 1 ms. Cada interrupción suma 1 a un contador: <b>HAL_GetTick()</b> lo devuelve, como millis() en Arduino. <b>HAL_Delay(n)</b> espera a que avance n + 1 veces para garantizar al menos n ms.', { code: 'void SysTick_Handler(void) {\n  HAL_IncTick();   // suma 1 cada ms\n}\n\nuint32_t t0 = HAL_GetTick();' }),
+      I('El contador es un uint32_t: desborda a los 2³² ms ≈ <b>49,7 días</b>. Compara siempre <b>diferencias</b> (ahora − antes): la resta sin signo sigue funcionando al dar la vuelta.', { code: 'if (HAL_GetTick() - t0 >= 500) {   // bien\n  t0 += 500;\n}\nif (HAL_GetTick() >= t0 + 500) {   // mal al desbordar\n}' }),
+      I('Para microsegundos, el tick de 1 ms no sirve: usa un temporizador hardware o el contador de ciclos <b>DWT->CYCCNT</b>.', { code: 'void espera_us(uint32_t us) {\n  uint32_t c = us * (SystemCoreClock / 1000000);\n  uint32_t t0 = DWT->CYCCNT;\n  while (DWT->CYCCNT - t0 < c) { }\n}' }),
+      { t: 'steps', text: 'SysTick a 72 MHz con una interrupción cada 1 ms. ¿LOAD?', steps: ['Ciclos por interrupción = f × t', '72 000 000 × 0,001 = <b>72 000</b> ciclos', 'Cada vuelta dura LOAD + 1 ciclos', 'LOAD = 72 000 − 1 = <b>71 999</b>'], result: 'Cabe de sobra en 24 bits (máximo 16 777 215).' },
+      G('st_systick'),
+      Nm('Con 24 bits a 100 MHz, ¿cuál es el periodo máximo del SysTick en ms?', 167.77, 'ms', '2²⁴ / 100 MHz = 16 777 216 / 100 000 000 ≈ 0,168 s.', { tol: 0.2, c: 'st_systick', h: '2²⁴ ciclos entre la frecuencia.' }),
+      Q('¿Por qué HAL_Delay(1) puede durar casi 2 ms?', ['Empieza en un punto cualquiera del ms actual y añade un tick para garantizar el mínimo', 'Porque la HAL es lenta', 'Porque el SysTick va a 500 Hz', 'Por un error de la F4'], 'Para esperas cortas y precisas, un temporizador o el contador de ciclos.', { c: 'st_tick', h: 'Piensa en el tick extra de garantía.' }),
+      Q('¿Funciona esta comparación cuando HAL_GetTick() desborda y vuelve a 0?', ['Sí: la resta sin signo da el tiempo transcurrido correcto', 'No, falla en el desbordamiento', 'Solo los primeros 49 días', 'Solo con int'], 'La aritmética de uint32_t es módulo 2³².', { code: 'if (HAL_GetTick() - t0 >= 500) {\n  t0 = HAL_GetTick();\n  /* cada 500 ms */\n}', c: 'st_tick', h: 'Resta de enteros sin signo.' }),
+      Nm('Un contador de ms de 32 bits, ¿cuántos días tarda en desbordar?', 49.71, 'días', '2³² ms / 1000 / 86 400 ≈ 49,7 días.', { tol: 0.1, c: 'st_tick', h: '2³² ms entre los ms de un día (86 400 000).' }),
+      Q('¿Qué tiene de malo esta versión?', ['Al desbordar, t0 + 500 da la vuelta y la condición se cumple antes de tiempo', 'Nada', 'Es más lenta', 'No compila'], 'Compara diferencias, no instantes.', { code: 'if (HAL_GetTick() >= t0 + 500) {\n  ...\n}', c: 'st_tick', h: '¿Qué pasa cuando t0 + 500 no cabe en 32 bits?' }),
+      Q('Necesitas esperas de 5 µs. ¿Qué usas?', ['Un temporizador hardware o el contador de ciclos DWT', 'HAL_Delay con un argumento pequeño', 'El SysTick a 1 ms', 'printf'], 'El tick de la HAL tiene resolución de 1 ms.', { c: 'st_cycles', h: 'El tick de la HAL es de 1 ms.' }),
+      I('<b>Resumen</b>\n· SysTick: 24 bits, LOAD = ciclos por interrupción − 1.\n· HAL_GetTick cuenta ms; HAL_Delay(n) dura entre n y n + 1 ms.\n· Compara ahora − antes; para microsegundos, CYCCNT o un temporizador.')
     ]),
     PRJ('st-p3', 'Proyecto: parpadeo solo con registros', 'st_bare')
   ] };
 
-  const M4 = { id: 'st-m4', title: 'Relojes y GPIO', desc: 'HSI, HSE, PLL, buses y wait states; modos de pin, funciones alternativas y BSRR.', nodes: [
-    L('st16', 'Fuentes de reloj', 'timer', ['st_clksrc', 'st_32k', 'st_usbclk'], [
-      I('Un STM32F4 tiene cinco fuentes:\n<b>HSI</b>: oscilador RC interno de 16 MHz (±1 % de fábrica).\n<b>HSE</b>: cristal u oscilador externo (4–26 MHz en la F4).\n<b>LSI</b>: RC interno de unos 32 kHz para el watchdog.\n<b>LSE</b>: cristal de 32,768 kHz para el RTC.\n<b>PLL</b>: multiplica para llegar a la frecuencia máxima.'),
-      { t: 'match', q: 'Une cada fuente con su uso típico.', pairs: [['HSI', 'Arranque rápido sin componentes externos'], ['HSE', 'Reloj principal preciso'], ['LSI', 'Watchdog independiente'], ['LSE', 'Reloj de tiempo real']], c: 'st_clksrc' },
-      Q('¿Por qué el USB necesita el HSE (o un oscilador interno con corrección especial)?', ['El USB exige una precisión que el HSI de ±1 % no garantiza', 'Porque el HSI es demasiado lento', 'Porque el USB funciona a 32 kHz', 'No lo necesita'], 'El USB de velocidad completa admite un error mucho menor.', { c: 'st_usbclk' }),
-      Q('¿Por qué los cristales de reloj son de 32 768 Hz?', ['Porque 32 768 = 2¹⁵: dividiendo 15 veces entre 2 sale exactamente 1 Hz', 'Por tradición', 'Porque es la frecuencia de la red', 'Porque es el máximo'], 'Un contador binario de 15 bits da los segundos.', { c: 'st_32k' }),
-      I('<b>HSE bypass</b>: en lugar de un cristal, entra una señal de reloj ya hecha. Muchas Nucleo-64 usan por defecto el reloj de 8 MHz que sale del ST-LINK (MCO) en modo bypass.'),
-      Q('En CubeMX eliges “BYPASS Clock Source” para el HSE. ¿Qué significa?', ['Que por OSC_IN entra una señal de reloj externa, sin cristal', 'Que se desactiva el HSE', 'Que se usa el HSI', 'Que el reloj se salta el PLL'], 'El oscilador interno del HSE se apaga.', { c: 'st_clksrc' }),
-      Q('¿Qué hace el Clock Security System?', ['Si el HSE falla, conmuta al HSI y genera una interrupción NMI', 'Cifra el reloj', 'Impide que se cambie el PLL', 'Protege contra lectura de la Flash'], 'Útil en equipos que no pueden quedarse sin reloj.', { c: 'st_clksrc' }),
-      Q('¿Qué hace este bucle?', ['Espera a que el cristal HSE arranque y se estabilice', 'Apaga el HSE', 'Mide la frecuencia', 'Reinicia el chip'], 'Un cristal tarda en arrancar: hay que esperar a HSERDY.', { code: 'RCC->CR |= RCC_CR_HSEON;\nwhile (!(RCC->CR & RCC_CR_HSERDY)) { }', c: 'st_clksrc' }),
-      Q('¿Por qué el LSI no sirve para un reloj de pulsera?', ['Su frecuencia varía mucho entre chips y con la temperatura', 'Porque consume mucho', 'Porque es de 16 MHz', 'Porque no existe en la F4'], 'Para la hora, usa el LSE.', { c: 'st_clksrc' }),
-      Nm('¿Cuántas veces hay que dividir 32 768 Hz entre 2 para obtener 1 Hz?', 15, '', '2¹⁵ = 32 768.', { c: 'st_32k' })
+  const CLK_FIX = (m, n, pp, a1, a2) => ({ ...P_CLK(25, m, n, pp, a1, a2), HSE: { label: 'HSE', val: 25, fixed: true } });
+  const M4 = { id: 'st-m4', title: 'Relojes y GPIO', desc: 'HSI, HSE, PLL, buses y wait states; modos de pin, open-drain, funciones alternativas y BSRR.', nodes: [
+    L('st16', 'Fuentes de reloj', 'timer', ['st_clksrc', 'st_32k', 'st_hsi', 'st_usbclk'], [
+      Q('Usas el oscilador interno de 16 MHz (HSI, ±1 %) para llevar la hora. ¿Cuánto crees que puede desviarse en un día?', ['Hasta unos 14 minutos', 'Menos de un segundo', 'Unos segundos', 'Nada: es digital'], 'Un 1 % de 86 400 s son 864 s. Compara fuentes.', { ...PRED, c: 'st_clksrc', h: 'Calcula el 1 % de los segundos de un día.' }),
+      { t: 'explore', text: 'Elige una fuente de reloj y mira cuánto se desviaría si la usaras para dar la hora.', viz: 'st_osc', params: P_OSC(0, 1),
+        tasks: [{ q: 'sday', min: 0, max: 3, text: 'Encuentra una fuente que se desvíe menos de 3 s al día', done: 'Los cristales (HSE y LSE) son cientos de veces más precisos que los osciladores RC.', hint: 'Prueba HSE o LSE.' },
+          { q: 'sday', min: 3600, max: 1e9, text: 'Encuentra la peor: más de una hora al día', done: 'El LSI puede ir de unos 17 a 47 kHz: vale para el watchdog, nunca para la hora.' }] },
+      I('Cinco fuentes en una F4:\n<b>HSI</b>: RC interno de 16 MHz; arranca al instante.\n<b>HSE</b>: cristal externo (4–26 MHz); preciso.\n<b>LSI</b>: RC de unos 32 kHz para el watchdog.\n<b>LSE</b>: cristal de 32,768 kHz para el reloj de tiempo real (RTC).\n<b>PLL</b>: multiplica para llegar a la frecuencia máxima.', { tune: { viz: 'st_osc', params: P_OSC(1, 30) } }),
+      I('Tras el reset, una F4 funciona con el <b>HSI</b>. Es ya dentro de main donde SystemClock_Config arranca el HSE y el PLL. Hasta entonces, todo va a 16 MHz.', { svg: SVG_HSI, more: 'Lo mismo pasa al despertar del modo de bajo consumo Stop, que verás en el último módulo: el chip vuelve con el HSI.' }),
+      I('El HSE tarda en arrancar: hay que esperar a <b>HSERDY</b>. En modo <b>bypass</b> entra por OSC_IN un reloj ya hecho (muchas Nucleo usan los 8 MHz que da el ST-LINK). El <b>CSS</b> vigila el HSE: si falla, pasa al HSI y avisa con una NMI.', { code: 'RCC->CR |= RCC_CR_HSEON;\nwhile (!(RCC->CR & RCC_CR_HSERDY)) { }  // espera al cristal' }),
+      I('¿Por qué 32 768 Hz? Porque es <b>2¹⁵</b>: dividiendo 15 veces entre 2 sale 1 Hz exacto. Y el <b>USB</b> necesita 48 MHz exactos y precisos: se sacan del HSE a través del PLL.', { svg: SVG_32K }),
+      { t: 'steps', text: 'Cuánto se desvía el HSI (±1 %) en una semana.', steps: ['1 % de un segundo es 0,01 s', 'Un día son 86 400 s: 86 400 × 0,01 = <b>864 s</b>', 'En una semana: 864 × 7 = 6048 s', '≈ <b>1 h 41 min</b>'], result: 'Un cristal de ±20 ppm se desviaría unos 12 s en esa semana.' },
+      { t: 'match', q: 'Une cada fuente con su uso típico.', pairs: [['HSI', 'Arranque rápido sin componentes externos'], ['HSE', 'Reloj principal preciso'], ['LSI', 'Watchdog independiente'], ['LSE', 'Reloj de tiempo real']], c: 'st_clksrc', h: 'Las «L» son lentas (kHz); las «H», rápidas (MHz).' },
+      Q('¿Por qué el USB necesita el HSE (o un oscilador interno con corrección especial)?', ['El USB exige una precisión que el HSI de ±1 % no garantiza', 'Porque el HSI es demasiado lento', 'Porque el USB funciona a 32 kHz', 'No lo necesita'], 'El USB de velocidad completa admite un error mucho menor.', { c: 'st_usbclk', h: 'El USB pide precisión.' }),
+      Q('¿Por qué los cristales de reloj son de 32 768 Hz?', ['Porque 32 768 = 2¹⁵: dividiendo 15 veces entre 2 sale 1 Hz', 'Por tradición', 'Porque es la frecuencia de la red', 'Porque es el máximo'], 'Un contador binario de 15 bits da los segundos.', { c: 'st_32k', h: 'Busca la potencia de 2.' }),
+      Q('En CubeMX eliges «BYPASS Clock Source» para el HSE. ¿Qué significa?', ['Que por OSC_IN entra una señal de reloj externa, sin cristal', 'Que se desactiva el HSE', 'Que se usa el HSI', 'Que el reloj se salta el PLL'], 'El oscilador interno del HSE se apaga.', { c: 'st_clksrc', h: 'Sin cristal: una señal ya hecha.' }),
+      Q('¿Qué hace el Clock Security System?', ['Si el HSE falla, conmuta al HSI y genera una interrupción NMI', 'Cifra el reloj', 'Impide cambiar el PLL', 'Protege la Flash contra lectura'], 'Útil en equipos que no pueden quedarse sin reloj.', { c: 'st_clksrc', h: 'Seguridad del reloj: vigila el cristal.' }),
+      Q('¿Qué hace este bucle?', ['Espera a que el cristal HSE arranque y se estabilice', 'Apaga el HSE', 'Mide la frecuencia', 'Reinicia el chip'], 'Un cristal tarda en arrancar.', { code: 'RCC->CR |= RCC_CR_HSEON;\nwhile (!(RCC->CR & RCC_CR_HSERDY)) { }', c: 'st_clksrc', h: 'RDY viene de «ready».' }),
+      Q('En la primera línea de main de una F411, ¿a qué frecuencia va?', ['16 MHz, con el HSI', '100 MHz', '25 MHz, con el HSE', '32 kHz'], 'El PLL se configura después, en SystemClock_Config.', { c: 'st_hsi', h: 'El PLL aún no está configurado.' }),
+      Nm('¿Cuántas veces hay que dividir 32 768 Hz entre 2 para obtener 1 Hz?', 15, '', '2¹⁵ = 32 768.', { c: 'st_32k', h: '¿2 elevado a qué da 32 768?' }),
+      I('<b>Resumen</b>\n· HSI y LSI: RC internos, rápidos de arrancar pero imprecisos. HSE y LSE: cristales precisos.\n· El chip arranca con el HSI; SystemClock_Config pasa al PLL.\n· 32 768 Hz = 2¹⁵; el USB pide 48 MHz exactos.')
     ]),
     L('st17', 'El PLL a fondo', 'timer', ['st_clock', 'st_usbclk'], [
-      I('El PLL principal de la F4 tiene tres divisores y un multiplicador:\n<b>÷M</b>: deja la entrada del VCO en unos 1–2 MHz.\n<b>×N</b>: el VCO oscila entre 100 y 432 MHz.\n<b>÷P</b> (2, 4, 6 u 8): SYSCLK.\n<b>÷Q</b>: 48 MHz para el USB.\n<b>SYSCLK = fent × N / (M × P)</b>'),
-      I('Mueve los divisores y observa los límites del STM32F411.', { tune: { viz: 'st_clock', params: { HSE: { label: 'HSE', val: 25, list: [8, 12, 16, 25], unit: 'MHz', dec: 0 }, M: { label: 'M', val: 25, min: 2, max: 63, step: 1, dec: 0 }, N: { label: 'N', val: 192, min: 50, max: 432, step: 2, dec: 0 }, P: { label: 'P', val: 2, list: [2, 4, 6, 8], dec: 0 }, A1: { label: 'APB1 ÷', val: 2, list: [1, 2, 4, 8, 16], dec: 0 }, A2: { label: 'APB2 ÷', val: 1, list: [1, 2, 4, 8, 16], dec: 0 } } } }),
-      TU('Black Pill F411 (HSE 25 MHz): consigue 96 MHz con el USB a 48 MHz y todo dentro de límites.', 'st_clock', { HSE: { label: 'HSE', val: 25, fixed: true }, M: { label: 'M', val: 12, min: 2, max: 63, step: 1, dec: 0 }, N: { label: 'N', val: 100, min: 50, max: 432, step: 2, dec: 0 }, P: { label: 'P', val: 2, list: [2, 4, 6, 8], dec: 0 }, A1: { label: 'APB1 ÷', val: 1, list: [1, 2, 4, 8, 16], dec: 0 }, A2: { label: 'APB2 ÷', val: 1, list: [1, 2, 4, 8, 16], dec: 0 } }, { q: 'usbOk', min: 95.9, max: 96.1, text: 'Objetivo: SYSCLK 96 MHz, USB 48 MHz y sin rojos', hint: 'M = 25, N = 192, P = 2 y APB1 ÷2.' }, 'VCO = 192 MHz: ÷2 = 96 MHz y ÷4 = 48 MHz para el USB.', { c: 'st_clock' }),
-      G('st_sysclk'), G('st_sysclk'),
-      Q('¿Por qué la entrada del VCO se deja entre 1 y 2 MHz?', ['Es el rango en que el PLL funciona bien; 2 MHz da menos jitter', 'Para gastar menos', 'Porque M no puede ser mayor', 'No importa'], 'Fuera de rango el PLL puede no engancharse.', { c: 'st_clock' }),
-      TU('Ahora 100 MHz exactos, el máximo de la F411, sin rojos.', 'st_clock', { HSE: { label: 'HSE', val: 25, fixed: true }, M: { label: 'M', val: 25, min: 2, max: 63, step: 1, dec: 0 }, N: { label: 'N', val: 192, min: 50, max: 432, step: 2, dec: 0 }, P: { label: 'P', val: 4, list: [2, 4, 6, 8], dec: 0 }, A1: { label: 'APB1 ÷', val: 1, list: [1, 2, 4, 8, 16], dec: 0 }, A2: { label: 'APB2 ÷', val: 1, list: [1, 2, 4, 8, 16], dec: 0 } }, { q: 'sysOk', min: 99.9, max: 100.1, text: 'Objetivo: SYSCLK = 100 MHz, todo en verde', hint: 'N = 200, P = 2 y APB1 ÷2 (máximo 50 MHz).' }, 'A 100 MHz no hay Q que dé 48 MHz exactos: por eso muchos proyectos con USB eligen 96 MHz.', { c: 'st_clock' }),
-      Nm('VCO = 384 MHz. ¿Qué Q da 48 MHz para el USB?', 8, '', '384 / 48 = 8.', { c: 'st_usbclk' }),
-      Q('¿Por qué no subir la F411 a 120 MHz si “parece que funciona”?', ['Fuera de especificación no hay garantía: fallos raros con la temperatura o la tensión', 'Porque se apaga', 'Porque el PLL no lo permite matemáticamente', 'No hay ningún problema'], 'Un producto debe funcionar en todo el rango, no solo en tu mesa.', { c: 'st_clock' }),
-      Q('Blue Pill (F103): HSE de 8 MHz y multiplicador del PLL ×9. ¿SYSCLK?', ['72 MHz', '9 MHz', '64 MHz', '81 MHz'], 'La F1 tiene un PLL más sencillo: 8 × 9 = 72 MHz.', { c: 'st_clock' }),
-      G('st_sysclk')
+      Q('El PLL de la F4 divide la entrada entre M, la multiplica por N y la divide entre P. Con un cristal de 25 MHz, ¿crees que puedes sacar 96 MHz exactos?', ['Sí: 25 / 25 × 192 / 2 = 96', 'No: 96 no es múltiplo de 25', 'Solo con un cristal de 8 MHz', 'Solo con el HSI'], 'Dividir primero hasta 1 MHz lo hace fácil. Pruébalo.', { ...PRED, c: 'st_clock', h: 'Divide primero hasta 1 MHz.' }),
+      { t: 'explore', text: 'Black Pill F411 con cristal de 25 MHz. Las cajas rojas están fuera de límite.', viz: 'st_clock', params: CLK_FIX(12, 100, 2, 1, 1),
+        tasks: [{ q: 'usbOk', min: 95.9, max: 96.1, text: 'Consigue 96 MHz con el USB a 48 MHz y todo en verde', done: 'VCO = 192 MHz: ÷2 = 96 MHz y ÷4 = 48 MHz para el USB.', hint: 'M = 25, N = 192, P = 2 y APB1 ÷2.' },
+          { q: 'sysOk', min: 99.9, max: 100.1, text: 'Ahora 100 MHz, el máximo de la F411', done: 'N = 200: pero 200 no es múltiplo de 48, así que no hay USB a 100 MHz.', hint: 'N = 200, P = 2 y APB1 ÷2 (máximo 50 MHz).' }] },
+      I('Tres pasos y una fórmula:\n<b>÷M</b> deja la entrada del VCO en 1–2 MHz.\n<b>×N</b> sube el VCO a 100–432 MHz.\n<b>÷P</b> (2, 4, 6 u 8) da SYSCLK.\n<b>SYSCLK = fent × N / (M × P)</b>', { svg: chain(['HSE 25 MHz', '÷M = 25|1 MHz', '×N = 192|VCO 192 MHz', '÷P = 2|96 MHz']) }),
+      I('Del mismo VCO sale <b>÷Q</b> para el USB, que necesita 48 MHz exactos: el VCO debe ser múltiplo de 48. Por eso la Black Pill suele ir a 96 MHz y no a 100.', { svg: SVG_USBCLK }),
+      I('Respeta los límites del chip: 84 MHz en la F401, 100 MHz en la F411, 168 MHz en la F407, 180 MHz en la F446. Fuera de especificación «parece que funciona» hasta que cambian la temperatura o la tensión.', { tune: { viz: 'st_clock', params: CLK_FIX(25, 192, 2, 2, 1) } }),
+      { t: 'steps', text: 'Nucleo-F446 con HSE de 8 MHz (bypass): consigue 180 MHz.', steps: ['÷M = 4 → entrada del VCO = <b>2 MHz</b>', '×N = 180 → VCO = <b>360 MHz</b> (dentro de 100–432)', '÷P = 2 → SYSCLK = <b>180 MHz</b>', 'USB: 360 / 48 = 7,5, no es entero: sin 48 MHz desde este VCO'], result: '180 MHz, el máximo de la F446 (que tiene otro PLL para sacar los 48 MHz).' },
+      G('st_sysclk'),
+      Q('¿Por qué la entrada del VCO se deja entre 1 y 2 MHz?', ['Es el rango en que el PLL funciona bien; con 2 MHz hay menos jitter', 'Para gastar menos', 'Porque M no puede ser mayor', 'No importa'], 'Fuera de rango, el PLL puede no engancharse.', { c: 'st_clock', h: 'Es el rango de trabajo del PLL.' }),
+      Nm('VCO = 384 MHz. ¿Qué Q da 48 MHz para el USB?', 8, '', '384 / 48 = 8.', { c: 'st_usbclk', h: 'Divide el VCO entre 48.' }),
+      G('st_sysclk'),
+      Q('¿Por qué no subir la F411 a 120 MHz si «parece que funciona»?', ['Fuera de especificación no hay garantía: fallos raros con la temperatura o la tensión', 'Porque se apaga', 'Porque el PLL no lo permite matemáticamente', 'No hay ningún problema'], 'Un producto debe funcionar en todo el rango, no solo en tu mesa.', { c: 'st_clock', h: 'Especificación = garantía.' }),
+      Q('Blue Pill (F103): HSE de 8 MHz y multiplicador del PLL ×9. ¿SYSCLK?', ['72 MHz', '9 MHz', '64 MHz', '81 MHz'], 'La F1 tiene un PLL más sencillo: solo multiplica.', { c: 'st_clock', h: 'La F1 solo multiplica.' }),
+      Q('VCO = 200 MHz. ¿Puedes sacar 48 MHz exactos para el USB?', ['No: 200 / 48 no es entero', 'Sí, con Q = 4', 'Sí, con Q = 5', 'Sí, el USB acepta 50 MHz'], 'Q debe ser entero.', { c: 'st_usbclk', h: '¿Es 200 múltiplo de 48?' }),
+      G('st_sysclk'),
+      I('<b>Resumen</b>\n· SYSCLK = fent × N / (M × P), con la entrada del VCO en 1–2 MHz y el VCO en 100–432 MHz.\n· El USB necesita un VCO múltiplo de 48 MHz.\n· Respeta el máximo de cada chip.')
     ]),
-    L('st18', 'Buses, preescaladores y wait states', 'bus', ['st_apb', 'st_waitst', 'st_rccen', 'st_cubemx', 'st_brr'], [
-      I('SYSCLK alimenta el bus <b>AHB</b> (HCLK: núcleo, DMA, GPIO en la F4) y de él cuelgan dos buses de periféricos: <b>APB1</b> (lento) y <b>APB2</b> (rápido). En la F411 los máximos son 100, 50 y 100 MHz.'),
-      { t: 'match', q: 'STM32F4: une cada periférico con su bus.', pairs: [['GPIOA', 'AHB1'], ['USART2', 'APB1'], ['USART1', 'APB2'], ['TIM3', 'APB1 ']], c: 'st_apb' },
-      I('Truco del reloj de temporizadores: si el preescalador de su bus APB es 1, el temporizador recibe PCLK; si es mayor que 1, recibe <b>el doble de PCLK</b>.'),
-      Q('F411 a 100 MHz con APB1 ÷2 (50 MHz). ¿A qué frecuencia cuenta TIM2?', ['100 MHz', '50 MHz', '25 MHz', '200 MHz'], 'APB1 ÷2 ≠ 1, así que el reloj de temporizador es 2 × 50 MHz.', { c: 'st_apb' }),
-      Nm('F407 a 168 MHz con APB1 ÷4. ¿Reloj de TIM3 en MHz?', 84, 'MHz', 'PCLK1 = 42 MHz; como ÷4 ≠ 1, el temporizador recibe 84 MHz.', { c: 'st_apb' }),
-      I('La Flash es más lenta que la CPU: a frecuencias altas hay que añadir <b>wait states</b> (ciclos de espera) en FLASH->ACR. El acelerador ART de la F4 (prefetch y pequeñas cachés) esconde casi toda esa espera.'),
-      Q('Subes SYSCLK sin aumentar los wait states. ¿Qué pasa?', ['La CPU lee instrucciones mal y el programa se cuelga o da HardFault', 'Va más rápido', 'La Flash se borra', 'Nada'], 'CubeMX ajusta FLASH_LATENCY por ti; con registros debes hacerlo tú.', { c: 'st_waitst' }),
-      Q('¿En qué orden pasas de 16 MHz a 100 MHz?', ['Primero subes los wait states y después cambias SYSCLK al PLL', 'Primero el PLL y luego los wait states', 'Da igual', 'Primero bajas los wait states'], 'Al bajar la frecuencia, al revés: primero el reloj y luego los wait states.', { c: 'st_waitst' }),
-      Q('¿Dónde se genera esta línea en un proyecto de CubeMX?', ['En HAL_UART_MspInit (stm32f4xx_hal_msp.c)', 'En SystemInit', 'En el arranque en ensamblador', 'En main.h'], 'Cada periférico abre su reloj antes de configurarse.', { code: '__HAL_RCC_USART2_CLK_ENABLE();', c: 'st_cubemx' }),
-      G('st_brr'),
-      Q('¿Por qué los relojes de los periféricos están apagados tras el reset?', ['Para ahorrar energía: solo se enciende lo que usas', 'Para que el chip arranque más rápido', 'Por seguridad contra lecturas', 'Por un fallo de diseño'], 'Cada periférico activo consume aunque no hagas nada con él.', { c: 'st_rccen' })
+    L('st18', 'Buses, preescaladores y wait states', 'bus', ['st_apb', 'st_waitst', 'st_rccen', 'st_cubemx'], [
+      Q('F411 a 100 MHz con el bus APB1 dividido entre 2 (50 MHz). ¿A qué frecuencia crees que cuenta el temporizador TIM2, que cuelga de APB1?', ['100 MHz', '50 MHz', '25 MHz', '200 MHz'], 'Los temporizadores tienen una regla especial: lo verás en esta lección. Antes, la Flash.', { ...PRED, c: 'st_apb', h: 'Los temporizadores tienen una regla especial.' }),
+      { t: 'explore', text: 'La Flash es más lenta que la CPU. Elige frecuencia y ciclos de espera.', viz: 'st_ws', params: P_WS(16, 0),
+        tasks: [{ q: 'ok100', min: 1, max: 1, text: 'Pon 100 MHz sin que la CPU tropiece', done: 'A 100 MHz la Flash de la F411 pide 3 ciclos de espera.', hint: 'Sube los wait states.' },
+          { q: 'just48', min: 1, max: 1, text: 'A 48 MHz, usa los wait states justos', done: '1 WS: poner más sería perder velocidad sin motivo.' }] },
+      I('SYSCLK alimenta el bus <b>AHB</b> (núcleo, DMA y GPIO) y de él cuelgan <b>APB1</b> (lento: USART2, TIM2–5, I²C) y <b>APB2</b> (rápido: USART1, TIM1, ADC, SPI1, SYSCFG). En la F411 los máximos son 100, 50 y 100 MHz.', { tune: { viz: 'st_clock', params: CLK_FIX(25, 200, 2, 2, 1) } }),
+      I('Regla de los temporizadores: si el divisor de su APB es 1, reciben PCLK; si es mayor que 1, reciben <b>el doble de PCLK</b>. Es el error más común al calcular un PWM.', { svg: chain(['SYSCLK|100 MHz', 'APB1 ÷2|PCLK1 50 MHz', 'TIM2–5|×2 = 100 MHz']) }),
+      I('A más frecuencia, más <b>wait states</b> (LATENCY en FLASH->ACR). El acelerador ART de la F4 esconde casi toda la espera. Al subir la frecuencia, <b>primero</b> los wait states; al bajarla, <b>después</b>.', { tune: { viz: 'st_ws', params: P_WS(100, 3) } }),
+      I('Cada periférico abre su reloj antes de configurarse. CubeMX lo escribe en la función Msp; con registros, lo haces tú en RCC.', { code: '/* stm32f4xx_hal_msp.c */\nvoid HAL_UART_MspInit(UART_HandleTypeDef *h) {\n  __HAL_RCC_USART2_CLK_ENABLE();\n  __HAL_RCC_GPIOA_CLK_ENABLE();\n  /* PA2 y PA3 en función alternativa */\n}' }),
+      { t: 'steps', text: 'F407 a 168 MHz con APB1 ÷4. ¿A qué frecuencia cuenta TIM3?', steps: ['TIM3 cuelga de APB1', 'PCLK1 = 168 / 4 = <b>42 MHz</b>', 'El divisor (4) no es 1: el temporizador recibe el doble', 'TIM3 cuenta a <b>84 MHz</b>'], result: '84 MHz: con este número calcularás los temporizadores.' },
+      { t: 'match', q: 'STM32F4: une cada periférico con su bus.', pairs: [['GPIOA', 'AHB1'], ['USART2', 'APB1'], ['USART1', 'APB2'], ['TIM3', 'APB1 ']], c: 'st_apb', h: 'Los GPIO van en AHB1; USART2 y TIM3, en el bus lento.' },
+      Q('F411 a 100 MHz con APB1 ÷2 (50 MHz). ¿A qué frecuencia cuenta TIM2?', ['100 MHz', '50 MHz', '25 MHz', '200 MHz'], 'Divisor distinto de 1: el temporizador recibe 2 × 50 MHz.', { c: 'st_apb', h: 'Divisor distinto de 1: ×2.' }),
+      Nm('F407 a 168 MHz con APB1 ÷4. ¿Reloj de TIM3 en MHz?', 84, 'MHz', 'PCLK1 = 42 MHz y, como ÷4 ≠ 1, el temporizador recibe 84 MHz.', { c: 'st_apb', h: 'Primero PCLK1; luego la regla del ×2.' }),
+      Q('Subes SYSCLK sin aumentar los wait states. ¿Qué pasa?', ['La CPU lee instrucciones mal y el programa se cuelga o da HardFault', 'Va más rápido', 'La Flash se borra', 'Nada'], 'CubeMX ajusta FLASH_LATENCY por ti; con registros, tú.', { c: 'st_waitst', h: 'La Flash no llega a tiempo.' }),
+      Q('¿En qué orden pasas de 16 MHz a 100 MHz?', ['Primero subes los wait states y después cambias SYSCLK al PLL', 'Primero el PLL y luego los wait states', 'Da igual', 'Primero bajas los wait states'], 'Al bajar la frecuencia, al revés.', { c: 'st_waitst', h: 'Nunca menos esperas de las que pide la frecuencia actual.' }),
+      Q('¿Dónde genera CubeMX esta línea?', ['En HAL_UART_MspInit (stm32f4xx_hal_msp.c)', 'En el arranque en ensamblador', 'En main.h', 'En el script del enlazador'], 'Cada periférico abre su reloj antes de configurarse.', { code: '__HAL_RCC_USART2_CLK_ENABLE();', c: 'st_cubemx', h: 'Busca la función Msp.' }),
+      Q('Configuras la USART1 por registros y no responde. Abriste el reloj en APB1ENR. ¿Qué falla?', ['USART1 cuelga de APB2: su reloj se abre en APB2ENR', 'Falta volatile', 'Falta un HAL_Delay', 'La USART1 no existe en la F4'], 'Cada periférico, en el registro de su bus.', { c: 'st_rccen', h: 'Mira de qué bus cuelga la USART1.' }),
+      I('<b>Resumen</b>\n· AHB para núcleo, DMA y GPIO; APB1 lento y APB2 rápido.\n· Temporizadores: ×2 si el divisor de su APB no es 1.\n· Wait states: súbelos antes de subir la frecuencia.')
     ]),
     L('st19', 'GPIO: modos y configuración', 'chip', ['st_gpio', 'st_od', 'st_pinlim', 'st_leak', 'st_field'], [
-      I('Cada puerto (GPIOA, GPIOB…) tiene 16 pines y estos registros:\n<b>MODER</b> (modo, 2 bits por pin) · <b>OTYPER</b> (push-pull u open-drain) · <b>OSPEEDR</b> (velocidad) · <b>PUPDR</b> (pull-up/down) · <b>IDR</b> (leer) · <b>ODR</b> (escribir) · <b>BSRR</b> (escritura atómica) · <b>AFR</b> (función alternativa).'),
-      { t: 'match', q: 'Une cada valor de MODER con su modo.', pairs: [['00', 'Entrada'], ['01', 'Salida'], ['10', 'Función alternativa'], ['11', 'Analógico']], c: 'st_gpio' },
-      I('<b>Push-pull</b>: el pin empuja a 3,3 V y tira a 0 V.\n<b>Open-drain</b>: solo tira a 0 V; el nivel alto lo pone una resistencia pull-up. Varios dispositivos pueden compartir la línea sin cortocircuitos.'),
-      Q('Varias placas comparten una línea de “alarma” activa a nivel bajo. ¿Cómo configuras los pines?', ['Open-drain con una pull-up común', 'Push-pull en todas', 'Analógico', 'Entrada sin pull'], 'Cualquiera puede tirar a 0 sin pelearse con las demás.', { c: 'st_od' }),
-      I('Las pull-up y pull-down internas son de unos <b>40 kΩ</b>. Sirven para pulsadores, pero son débiles para buses rápidos.'),
-      Q('¿Bastan las pull-up internas para un I²C a 400 kHz?', ['No: son demasiado débiles; pon externas de 2,2–4,7 kΩ', 'Sí, siempre', 'Solo si el cable es largo', 'I²C no usa pull-ups'], 'Con 40 kΩ los flancos de subida serían lentísimos.', { c: 'st_od' }),
-      I('<b>OSPEEDR</b> no fija la frecuencia, sino lo rápidos que son los flancos. Flancos más rápidos generan más interferencias y rebotes en pistas largas: usa la velocidad más baja que funcione.'),
-      Q('¿Qué velocidad de pin eliges para un LED?', ['Baja', 'Muy alta', 'Alta', 'Da igual siempre'], 'Un LED no necesita flancos de nanosegundos.', { c: 'st_pinlim' }),
-      Q('¿Por qué conviene poner los pines sin usar en modo analógico?', ['Se desconecta el disparador digital y se reduce el consumo', 'Para medirlos luego', 'Para que sean tolerantes a 5 V', 'Para que hagan de pull-up'], 'Una entrada digital al aire puede oscilar y consumir.', { c: 'st_leak' }),
-      Q('Un relé de 70 mA conectado directamente a un pin. ¿Qué opinas?', ['Mal: un pin da unos 25 mA como máximo; usa un transistor con diodo', 'Bien', 'Bien si el pin es FT', 'Bien a velocidad baja'], 'Además hay un límite total para todos los pines del chip.', { c: 'st_pinlim' }),
-      G('st_moder')
+      Q('Dos placas comparten un cable de «alarma». Una pone su pin a 3,3 V (push-pull) y la otra a 0 V a la vez. ¿Qué crees que pasa?', ['Un cortocircuito entre los dos pines', 'Gana la de 3,3 V', 'Gana la de 0 V sin problemas', 'La línea queda a 1,65 V tranquilamente'], 'Dos salidas empujando en sentidos opuestos. Pruébalo y arréglalo.', { ...PRED, c: 'st_od', h: 'Dos salidas que empujan en sentidos contrarios…' }),
+      { t: 'explore', text: 'Tu pin y otra placa comparten una línea.', viz: 'st_pin', params: P_PIN(1, 0, 0, 0, 0),
+        tasks: [{ q: 'short', min: 1, max: 1, text: 'Provoca el corto: tu pin a 1 en push-pull y la otra placa tirando a 0', done: 'Dos salidas peleando: mucha corriente y pines en peligro.', hint: 'Escribe 1 y haz que la otra tire a 0.' },
+          { q: 'odok', min: 1, max: 1, text: 'Arréglalo: que la otra pueda bajar la línea sin pelea', done: 'Open-drain con pull-up: cualquiera puede tirar a 0 sin cortocircuito.', hint: 'Open-drain y pull-up.' },
+          { q: 'rel', min: 1, max: 1, text: 'Ahora que nadie tire: la línea debe subir a 3,3 V', done: 'Cuando todos sueltan, la pull-up sube la línea.' }] },
+      I('Cada puerto (GPIOA, GPIOB…) tiene 16 pines y estos registros: <b>MODER</b> (modo, 2 bits) · <b>OTYPER</b> (push-pull u open-drain) · <b>OSPEEDR</b> (velocidad de flancos) · <b>PUPDR</b> (pull-up o pull-down) · <b>IDR</b> (leer) · <b>ODR</b> y <b>BSRR</b> (escribir) · <b>AFR</b> (función alternativa).', { tune: { viz: 'st_reg', params: { pin: sl('Pin', 3, 0, 15), mode: li('Modo (0 ent · 1 sal · 2 AF · 3 anal)', 3, [0, 1, 2, 3]) } } }),
+      I('<b>Push-pull</b> empuja a 3,3 V y tira a 0 V. <b>Open-drain</b> solo tira a 0; el 1 lo pone una pull-up. Así varios dispositivos comparten una línea sin cortos, como en I²C.', { tune: { viz: 'st_pin', params: P_PIN(1, 1, 1, 0, 1) } }),
+      I('Las pull-up internas son de unos <b>40 kΩ</b>: valen para un pulsador, pero son lentas para un bus. La línea sube como un RC: con 40 kΩ y 100 pF, τ = 4 µs.', { tune: { viz: 'st_rc', params: P_RC(40, 100, 100) } }),
+      I('<b>OSPEEDR</b> no fija la frecuencia, sino lo rápidos que son los flancos: más rapidez, más interferencias. Usa la más baja que funcione. Y deja los pines sin usar en <b>modo analógico</b>: una entrada digital al aire oscila y consume.', { svg: SVG_PINLIM }),
+      { t: 'steps', text: '¿Valen las pull-up internas para un I²C a 400 kHz con 100 pF de bus?', steps: ['Subida del 30 al 70 %: t ≈ 0,85 × R × C', 'Con 40 kΩ: 0,85 × 40 000 × 100 pF ≈ <b>3,4 µs</b>', 'El I²C rápido admite como mucho <b>0,3 µs</b> de subida', 'Hace falta R ≤ 3,5 kΩ: pon externas de 2,2 kΩ'], result: 'Con 2,2 kΩ, unos 0,19 µs. Funciona.' },
+      { t: 'match', q: 'Une cada valor de MODER con su modo.', pairs: [['00', 'Entrada'], ['01', 'Salida'], ['10', 'Función alternativa'], ['11', 'Analógico']], c: 'st_gpio', h: 'En orden: entrada, salida, alternativa, analógico.' },
+      Q('Varias placas comparten una línea de «alarma» activa a nivel bajo. ¿Cómo configuras los pines?', ['Open-drain con una pull-up común', 'Push-pull en todas', 'Analógico', 'Entrada sin pull'], 'Cualquiera puede tirar a 0 sin pelearse con las demás.', { c: 'st_od', h: 'Cualquiera debe poder tirar a 0.' }),
+      TU('Bus I²C a 400 kHz con 200 pF: elige una pull-up que funcione.', 'st_rc', { R: li('Pull-up', 40, [1, 2.2, 4.7, 10, 40], 'kΩ', 1), C: { val: 200, fixed: true }, f: { val: 400, fixed: true } }, { q: 'ok400', min: 1, max: 1, text: 'Objetivo: subida de 300 ns como mucho', hint: 'Baja mucho la resistencia.' }, 'Con 1 kΩ, unos 0,17 µs. Cuanta más capacidad, menor resistencia.', { c: 'st_od', h: 'τ = R × C: con más capacidad, menos resistencia.' }),
+      Q('¿Qué velocidad de pin eliges para un LED?', ['Baja', 'Muy alta', 'Alta', 'Da igual siempre'], 'Un LED no necesita flancos de nanosegundos.', { c: 'st_pinlim', h: 'Un LED no necesita flancos rápidos.' }),
+      Q('¿Por qué conviene poner los pines sin usar en modo analógico?', ['Se desconecta el disparador digital y se reduce el consumo', 'Para medirlos luego', 'Para que sean tolerantes a 5 V', 'Para que hagan de pull-up'], 'Una entrada digital al aire puede oscilar y consumir.', { c: 'st_leak', h: 'Piensa en una entrada digital al aire.' }),
+      Q('Un relé de 70 mA conectado directamente a un pin. ¿Qué opinas?', ['Mal: un pin da unos 25 mA; usa un transistor con diodo', 'Bien', 'Bien si el pin es FT', 'Bien a velocidad baja'], 'Además hay un límite total para todo el chip.', { c: 'st_pinlim', h: 'Compara con el límite de un pin.' }),
+      G('st_moder'),
+      I('<b>Resumen</b>\n· MODER elige el modo; OTYPER, push-pull u open-drain; PUPDR, las pull.\n· Open-drain + pull-up para compartir líneas; pull-up externas para buses rápidos.\n· Velocidad de pin la mínima; pines libres en analógico.')
     ]),
     L('st20', 'Funciones alternativas y escritura atómica', 'chip', ['st_af', 'st_bsrr', 'st_gpio'], [
-      I('Cada pin puede conectarse a varios periféricos. Con el modo 10 (alternativo), el número de función <b>AF0–AF15</b> se elige en <b>AFR[0]</b> (pines 0–7) y <b>AFR[1]</b> (pines 8–15), con 4 bits por pin.'),
-      Q('¿Dónde se configura la función alternativa de PA9?', ['En AFR[1], bits 4 a 7', 'En AFR[0], bits 36 a 39', 'En MODER', 'En AFR[1], bits 9 a 12'], 'PA9 es el pin 1 dentro de AFR[1]: (9 − 8) × 4 = 4.', { c: 'st_af' }),
-      Nm('PA2 como TX de USART2 (AF7). ¿Qué valor decimal tiene el campo ya desplazado en AFR[0]?', 1792, '', '7 << (4 × 2) = 7 << 8 = 1792 (0x700).', { c: 'st_af' }),
-      Q('¿Qué hace esta línea?', ['Pone AF7 en el pin 2 (si el campo estaba a cero)', 'Pone PA7 como salida', 'Activa USART7', 'Borra AFR'], 'Cuatro bits por pin: el pin 2 empieza en el bit 8.', { code: 'GPIOA->AFR[0] |= (7U << (4 * 2));', c: 'st_af' }),
-      I('Funciones alternativas típicas en la F4: <b>AF1</b> TIM1/TIM2 · <b>AF2</b> TIM3–5 · <b>AF4</b> I²C · <b>AF5</b> SPI1/SPI2 · <b>AF7</b> USART1/USART2 · <b>AF8</b> USART6. La tabla exacta de cada pin está en la hoja de datos.'),
-      { t: 'match', q: 'STM32F4: une cada función con su AF habitual.', pairs: [['USART2_TX en PA2', 'AF7'], ['I2C1_SCL en PB6', 'AF4'], ['SPI1_SCK en PA5', 'AF5'], ['TIM3_CH1 en PA6', 'AF2']], c: 'st_af' },
-      I('<b>BSRR</b>: los bits 0–15 ponen pines a 1 y los bits 16–31 los ponen a 0, en una sola escritura y sin leer antes. Ninguna interrupción puede colarse en medio.'),
-      Q('main hace GPIOB->ODR ^= (1U << 0) y una interrupción cambia PB7 a la vez. ¿Riesgo?', ['Que el cambio de PB7 se pierda si llega entre la lectura y la escritura de ODR', 'Ninguno', 'Que se queme el pin', 'Que PB0 pase a entrada'], 'Con BSRR cada uno toca solo su bit.', { c: 'st_bsrr' }),
-      Q('¿Qué hace esta línea?', ['Pone PB3 a 1 y PB4 a 0 a la vez', 'Pone PB3 y PB4 a 1', 'Pone PB3 a 0', 'Configura PB3 y PB4 como salida'], 'Bit 3 = set de PB3; bit 20 = reset de PB4.', { code: 'GPIOB->BSRR = (1U << 3) | (1U << (4 + 16));', c: 'st_bsrr' }),
-      Q('Un pin está en modo alternativo como RX de una UART. ¿Puedes leer su nivel en IDR?', ['Sí: el buffer de entrada sigue activo en modo alternativo', 'No, siempre lee 0', 'Solo si es push-pull', 'Solo en la F1'], 'Útil para depurar o detectar actividad.', { c: 'st_gpio' }),
-      Q('¿Qué hace el registro LCKR?', ['Bloquea la configuración de un pin hasta el siguiente reset', 'Cifra el puerto', 'Bloquea la Flash', 'Desactiva el reloj del puerto'], 'Protege pines críticos de escrituras accidentales.', { c: 'st_gpio' })
+      Q('PA2 puede ser un GPIO, el TX de la USART2 o un canal de un temporizador. ¿Cómo crees que se elige?', ['Con el modo «función alternativa» y un número AF por pin', 'Soldando un puente', 'Lo decide el periférico que arranque antes', 'Cada pin solo tiene una función'], 'Hay un registro con 4 bits por pin. Pruébalo.', { ...PRED, c: 'st_af', h: 'Un registro con 4 bits por pin.' }),
+      { t: 'explore', text: 'Elige pin y número de función alternativa.', viz: 'st_afr', params: P_AFR(0, 0),
+        tasks: [{ q: 'sel', min: 39, max: 39, text: 'Configura PA2 como TX de USART2 (AF7)', done: 'PA2 está en AFR[0]: su campo empieza en el bit 8.', hint: 'Pin 2 y AF 7.' },
+          { q: 'sel', min: 167, max: 167, text: 'Ahora PA10 como RX de USART1 (también AF7)', done: 'Pines 8–15 en AFR[1]: PA10 es su pin 2.' },
+          { q: 'sel', min: 98, max: 98, text: 'Y PA6 como canal 1 de TIM3 (AF2)', done: 'Campo en los bits 27–24 de AFR[0].' }] },
+      I('Con MODER = 10, el pin lo maneja un periférico. Cuál, lo dice <b>AFR</b>: <b>AFR[0]</b> para los pines 0–7 y <b>AFR[1]</b> para los 8–15, con 4 bits por pin (AF0–AF15). El campo del pin n empieza en el bit 4 × (n mod 8).', { tune: { viz: 'st_afr', params: P_AFR(9, 7) } }),
+      I('Funciones típicas en la F4: <b>AF1</b> TIM1/TIM2 · <b>AF2</b> TIM3–5 · <b>AF4</b> I²C · <b>AF5</b> SPI1/SPI2 · <b>AF7</b> USART1/USART2 · <b>AF8</b> USART6. La tabla exacta de cada pin está en la hoja de datos.', { svg: table([['AF1', 'TIM1, TIM2'], ['AF2', 'TIM3, TIM4, TIM5'], ['AF4', 'I²C1–3'], ['AF5', 'SPI1, SPI2'], ['AF7', 'USART1, USART2']], 'STM32F4, las más usadas') }),
+      I('Con el pin en función alternativa, el buffer de entrada sigue vivo: <b>IDR</b> muestra el nivel real de un RX. Y <b>LCKR</b> puede congelar la configuración de un pin hasta el siguiente reset.', { code: 'if (GPIOA->IDR & (1U << 3)) {\n  /* RX de la USART2 en reposo: alto */\n}' }),
+      I('Y recuerda <b>BSRR</b>: una sola escritura que pone a 1 (bits 0–15) o a 0 (bits 16–31) sin leer antes. Ninguna interrupción puede colarse, y puedes subir un pin y bajar otro a la vez.', { tune: { viz: 'st_bsrr', params: P_BSRR(20) } }),
+      { t: 'steps', text: 'PA9 como TX de USART1 (AF7), por registros.', code: 'GPIOA->MODER &= ~(3U << 18);\nGPIOA->MODER |=  (2U << 18);\nGPIOA->AFR[1] &= ~(0xFU << 4);\nGPIOA->AFR[1] |=  (7U << 4);', steps: ['Modo: el campo de PA9 empieza en 2 × 9 = 18; valor 10 (= 2)', '9 ≥ 8: va en <b>AFR[1]</b>, como su pin 9 − 8 = 1', 'Su campo empieza en 4 × 1 = <b>4</b>', 'Limpia con ~(0xFU &lt;&lt; 4) y escribe 7U &lt;&lt; 4'], result: 'PA9 queda conectado a USART1_TX.' },
+      Q('¿Dónde se configura la función alternativa de PA9?', ['En AFR[1], bits 4 a 7', 'En AFR[0], bits 36 a 39', 'En MODER', 'En AFR[1], bits 9 a 12'], 'PA9 es el pin 1 dentro de AFR[1]: (9 − 8) × 4 = 4.', { c: 'st_af', h: 'Resta 8 si el pin es 8 o más.' }),
+      Nm('PA2 como TX de USART2 (AF7). ¿Qué valor decimal tiene el campo ya desplazado en AFR[0]?', 1792, '', '7 << (4 × 2) = 7 << 8 = 1792 (0x700).', { c: 'st_af', h: '7 desplazado 4 × 2 bits.' }),
+      Q('¿Qué hace esta línea?', ['Pone AF7 en el pin 2 (si el campo estaba a cero)', 'Pone PA7 como salida', 'Activa USART7', 'Borra AFR'], 'Cuatro bits por pin: el pin 2 empieza en el bit 8.', { code: 'GPIOA->AFR[0] |= (7U << (4 * 2));', c: 'st_af', h: 'Cuatro bits por pin.' }),
+      { t: 'match', q: 'STM32F4: une cada función con su AF habitual.', pairs: [['USART2_TX en PA2', 'AF7'], ['I2C1_SCL en PB6', 'AF4'], ['SPI1_SCK en PA5', 'AF5'], ['TIM3_CH1 en PA6', 'AF2']], c: 'st_af', h: 'USART1/2 son AF7; I²C, AF4; SPI1, AF5.' },
+      Q('main hace GPIOB->ODR ^= (1U << 0) y una interrupción cambia PB7 a la vez. ¿Riesgo?', ['Que el cambio de PB7 se pierda si llega entre la lectura y la escritura de ODR', 'Ninguno', 'Que se queme el pin', 'Que PB0 pase a entrada'], 'Con BSRR cada uno toca solo su bit.', { c: 'st_bsrr', h: 'Leer-modificar-escribir.' }),
+      Q('¿Qué hace esta línea?', ['Pone PB3 a 1 y PB4 a 0 a la vez', 'Pone PB3 y PB4 a 1', 'Pone PB3 a 0', 'Configura PB3 y PB4 como salida'], 'Bit 3 = poner a 1 PB3; bit 20 = poner a 0 PB4.', { code: 'GPIOB->BSRR = (1U << 3) | (1U << (4 + 16));', c: 'st_bsrr', h: 'La mitad baja sube; la alta baja.' }),
+      Q('Un pin está en modo alternativo como RX de una UART. ¿Puedes leer su nivel en IDR?', ['Sí: el buffer de entrada sigue activo en modo alternativo', 'No, siempre lee 0', 'Solo si es push-pull', 'Solo en la F1'], 'Útil para depurar o detectar actividad.', { c: 'st_gpio', h: 'El buffer de entrada no se apaga.' }),
+      Q('¿Qué hace el registro LCKR?', ['Bloquea la configuración de un pin hasta el siguiente reset', 'Cifra el puerto', 'Bloquea la Flash', 'Desactiva el reloj del puerto'], 'Protege pines críticos de escrituras accidentales.', { c: 'st_gpio', h: '«Lock».' }),
+      I('<b>Resumen</b>\n· MODER = 10 y un número AF en AFR[0] (pines 0–7) o AFR[1] (8–15), 4 bits por pin.\n· La tabla de AF de cada pin está en la hoja de datos.\n· BSRR: cambios de pin atómicos.')
     ]),
     PRJ('st-p4', 'Proyecto: laboratorio de relojes', 'st_mco'),
     PRJ('st-p5', 'Proyecto: cerradura con teclado y display', 'st_keypad')
   ] };
 
-  const NVICP = { pA: { label: 'Prioridad TIM2', val: 5, min: 0, max: 15, step: 1, dec: 0 }, pB: { label: 'Prioridad USART2', val: 8, min: 0, max: 15, step: 1, dec: 0 } };
+  const NVICP = { pA: sl('Prioridad TIM2', 5, 0, 15), pB: sl('Prioridad USART2', 8, 0, 15) };
   const PWMP = (psc, arr, ccr) => ({ F: { label: 'fTIM', val: 84, fixed: true }, PSC: { label: 'PSC', val: psc, list: [0, 1, 3, 7, 15, 41, 83, 99, 167, 839, 999], dec: 0 }, ARR: { label: 'ARR', val: arr, list: [99, 199, 255, 399, 499, 999, 1999, 4095, 9999, 65535], dec: 0 }, CCR: { label: 'CCR', val: ccr, list: [0, 25, 50, 100, 125, 250, 300, 500, 750, 1000, 1500, 2000, 2500, 5000, 7500, 10000], dec: 0 } });
-
-  const M5 = { id: 'st-m5', title: 'Interrupciones y temporizadores', desc: 'NVIC, prioridades, EXTI, SysTick y temporizadores: PWM, captura, encoder y tiempo muerto.', nodes: [
+  const SVG_ONEPULSE = SV(110, tx(4, 28, 'disparo') + `<path d="M60 40H90V20H96V40H290" fill="none" stroke="var(--ice)" stroke-width="2.2"/>` + tx(4, 78, 'salida') + `<path d="M60 90H150V66H230V90H290" fill="none" stroke="var(--led)" stroke-width="2.4"/>` + `<path d="M93 48H150" stroke="var(--muted)" stroke-dasharray="3 3"/>` + tm(122, 58, 'retardo') + tm(190, 60, 'ancho exacto') + tx(4, 106, 'Un solo pulso y el contador se para', 'vizsm', 'fill:currentColor'));
+  const SVG_CENTER = SV(120, `<path d="M20 90L80 20L140 90L200 20L260 90" fill="none" stroke="var(--ice)" stroke-width="2.2"/><path d="M20 60H270" stroke="var(--err)" stroke-dasharray="4 3"/>` + tx(272, 64, 'CCR', 'vizsm', 'fill:var(--err)') + `<path d="M20 112V104H54V112M106 112V104H174V112M226 112V104H260" fill="none" stroke="var(--led)" stroke-width="2"/>` + tx(20, 14, 'sube hasta ARR y baja hasta 0: PWM simétrico', 'vizsm'));
+  const M5 = { id: 'st-m5', title: 'Interrupciones y temporizadores', desc: 'Excepciones y NVIC, prioridades y datos compartidos, EXTI y temporizadores: PWM, captura, encoder y tiempo muerto.', nodes: [
     L('st21', 'Excepciones y el NVIC', 'timer', ['st_irq', 'st_irqsetup'], [
-      I('Una <b>excepción</b> hace que el núcleo deje lo que estaba haciendo, guarde su contexto y salte a la función indicada en la tabla de vectores. Las 15 primeras son del sistema (Reset, NMI, HardFault, SVCall, PendSV, SysTick…). A partir de la 16 son las <b>IRQ</b> de los periféricos.'),
-      I('Al entrar, el hardware guarda solo en la pila 8 registros: R0–R3, R12, LR, PC y xPSR. Por eso un manejador de interrupción en un Cortex-M es una <b>función normal de C</b>, sin palabras clave especiales. En un M3 o M4 la entrada tarda unos 12 ciclos.'),
-      Q('¿Por qué en un Cortex-M no hace falta escribir los manejadores en ensamblador?', ['El hardware guarda los registros que C puede machacar, así que vale una función normal', 'Porque el compilador lo convierte', 'Porque no hay interrupciones', 'Porque la HAL lo hace'], 'Fue una decisión de diseño de ARM para facilitar la vida.', { c: 'st_irq' }),
-      { t: 'match', q: 'Une cada excepción con su papel.', pairs: [['Reset', 'Arranque del programa'], ['HardFault', 'Error grave del núcleo'], ['SysTick', 'Temporizador del sistema'], ['PendSV', 'Cambio de contexto del RTOS']], c: 'st_irq' },
-      I('Para usar una interrupción de periférico hacen falta cuatro cosas: activarla <b>en el periférico</b> (por ejemplo RXNEIE en USART_CR1), activarla <b>en el NVIC</b>, escribir el manejador con el <b>nombre exacto</b> y, dentro, <b>borrar la bandera</b> que la provocó.'),
-      { t: 'order', q: 'Ordena los pasos para una interrupción de recepción por registros.', items: ['Configurar la USART', 'Activar RXNEIE en USART2->CR1', 'Fijar la prioridad y NVIC_EnableIRQ(USART2_IRQn)', 'Escribir USART2_IRQHandler', 'Dentro, leer DR (eso borra RXNE)'], e: 'Si no borras la bandera, la interrupción vuelve a entrar sin fin.', c: 'st_irqsetup' },
-      Q('Olvidas borrar la bandera dentro del manejador. ¿Qué pasa?', ['La interrupción vuelve a entrar sin parar y main no avanza', 'Se borra sola siempre', 'Se pierde una interrupción', 'Nada'], 'Algunas banderas se borran leyendo un registro; otras, escribiendo en él.', { c: 'st_irqsetup' }),
-      I('Dos optimizaciones del NVIC: <b>encadenamiento</b> (tail-chaining): si al terminar una interrupción hay otra pendiente, salta a ella sin restaurar y volver a guardar el contexto. <b>Llegada tardía</b>: si llega una más urgente mientras se guarda el contexto, se atiende primero esa.'),
-      Q('¿Qué ventaja da el encadenamiento de interrupciones?', ['Se ahorra restaurar y volver a guardar el contexto entre dos interrupciones seguidas', 'Permite interrupciones infinitas', 'Cambia las prioridades', 'Desactiva el SysTick'], 'Menos ciclos perdidos cuando hay ráfagas.', { c: 'st_irq' }),
-      Q('¿Qué hacen estas dos líneas de la HAL?', ['Fijan prioridad 5 (subprioridad 0) a la USART2 y la activan en el NVIC', 'Activan la USART2', 'Desactivan la interrupción', 'Configuran 5 interrupciones'], 'CubeMX las genera en MX_USART2_UART_Init o en su Msp.', { code: 'HAL_NVIC_SetPriority(USART2_IRQn, 5, 0);\nHAL_NVIC_EnableIRQ(USART2_IRQn);', c: 'st_irqsetup' })
+      Q('Escribes el manejador como void USART2_IRQhandler(void), con h minúscula. ¿Qué crees que pasa al llegar la interrupción?', ['Se ejecuta un manejador por defecto: un bucle infinito', 'Funciona igual', 'Error de compilación', 'Se ignora la interrupción'], 'La tabla de vectores busca un nombre exacto. Veamos todas las piezas.', { ...PRED, c: 'st_irqsetup', h: 'La tabla de vectores busca un nombre exacto.' }),
+      { t: 'explore', text: 'Una interrupción necesita cuatro piezas. Actívalas y mira qué pasa con cada combinación.', viz: 'st_irqcfg', params: P_IRQ(0, 0, 0, 0),
+        tasks: [{ q: 'st', min: 1, max: 3, text: 'Consigue que la petición llegue a la CPU', done: 'Hacen falta las dos activaciones: en el periférico y en el NVIC.', hint: 'Activa las dos primeras piezas.' },
+          { q: 'st', min: 2, max: 2, text: 'Haz que entre en tu manejador', done: 'Con el nombre exacto entra… pero sin borrar la bandera vuelve a entrar sin parar.' },
+          { q: 'st', min: 3, max: 3, text: 'Que funcione bien', done: 'Periférico, NVIC, nombre exacto y bandera borrada.' }] },
+      I('Una <b>excepción</b> hace que el núcleo deje lo que hacía, guarde su contexto y salte a la dirección de la tabla de vectores. Las 15 primeras son del sistema; desde la 16, las <b>IRQ</b> de los periféricos. El <b>NVIC</b> (controlador de interrupciones del núcleo) decide cuál pasa.', { svg: table([['Reset', 'Arranque del programa'], ['HardFault', 'Error grave del núcleo'], ['SVCall · PendSV', 'Las usa un RTOS'], ['SysTick', 'Temporizador del núcleo'], ['IRQ 0, 1, 2…', 'Periféricos: USART, TIM, EXTI…']], 'La tabla de vectores') }),
+      I('Al entrar, el hardware guarda solo 8 registros: los que una función de C puede machacar. Por eso un manejador es una <b>función normal de C</b>. En un M3 o un M4 la entrada tarda unos 12 ciclos.', { svg: SVG_IRQSTACK }),
+      I('Las cuatro piezas, por registros:', { code: 'USART2->CR1 |= USART_CR1_RXNEIE;   // 1. en el periférico\nNVIC_SetPriority(USART2_IRQn, 5);\nNVIC_EnableIRQ(USART2_IRQn);       // 2. en el NVIC\n\nvoid USART2_IRQHandler(void) {     // 3. nombre exacto\n  uint8_t c = USART2->DR;          // 4. leer DR borra RXNE\n  guardar(c);\n}' }),
+      I('Dos trucos del NVIC: el <b>encadenamiento</b> (tail-chaining) salta de una interrupción a la siguiente pendiente sin desapilar y volver a apilar; la <b>llegada tardía</b> atiende antes a una más urgente que llega mientras se apila.', { svg: chain(['Apilar', 'ISR A', 'ISR B|(encadenada)', 'Desapilar']) }),
+      { t: 'steps', text: 'Activa la interrupción de recepción de la USART2 con la HAL.', code: 'HAL_NVIC_SetPriority(USART2_IRQn, 5, 0);\nHAL_NVIC_EnableIRQ(USART2_IRQn);\nHAL_UART_Receive_IT(&huart2, &rx, 1);', steps: ['SetPriority: prioridad 5, subprioridad 0', 'EnableIRQ: el NVIC deja pasar la línea de la USART2', 'Receive_IT activa RXNEIE en el periférico', 'USART2_IRQHandler (lo genera CubeMX) llama a HAL_UART_IRQHandler, que borra la bandera y te avisa con HAL_UART_RxCpltCallback'], result: 'Las cuatro piezas, repartidas entre CubeMX y la HAL.' },
+      Q('¿Por qué en un Cortex-M no hace falta escribir los manejadores en ensamblador?', ['El hardware guarda los registros que C puede machacar, así que vale una función normal', 'Porque el compilador lo convierte', 'Porque no hay interrupciones anidadas', 'Porque la HAL lo hace'], 'Fue una decisión de diseño de ARM.', { c: 'st_irq', h: 'El hardware guarda lo que C puede machacar.' }),
+      { t: 'match', q: 'Une cada excepción con su papel.', pairs: [['Reset', 'Arranque del programa'], ['HardFault', 'Error grave del núcleo'], ['SysTick', 'Temporizador del sistema'], ['PendSV', 'Cambio de contexto del RTOS']], c: 'st_irq', h: 'PendSV la usa el sistema operativo.' },
+      { t: 'order', q: 'Ordena los pasos para una interrupción de recepción por registros.', items: ['Configurar la USART', 'Activar RXNEIE en USART2->CR1', 'Fijar la prioridad y NVIC_EnableIRQ(USART2_IRQn)', 'Escribir USART2_IRQHandler', 'Dentro, leer DR (eso borra RXNE)'], e: 'Si no borras la bandera, la interrupción vuelve a entrar sin fin.', c: 'st_irqsetup', h: 'Del periférico al manejador.' },
+      Q('Olvidas borrar la bandera dentro del manejador. ¿Qué pasa?', ['La interrupción vuelve a entrar sin parar y main no avanza', 'Se borra sola siempre', 'Se pierde una interrupción', 'Nada'], 'Unas banderas se borran leyendo un registro; otras, escribiendo en él.', { c: 'st_irqsetup', h: 'Bandera pendiente = vuelve a entrar.' }),
+      Q('¿Qué ventaja da el encadenamiento de interrupciones?', ['Se ahorra desapilar y volver a apilar entre dos interrupciones seguidas', 'Permite interrupciones infinitas', 'Cambia las prioridades', 'Desactiva el SysTick'], 'Menos ciclos perdidos en ráfagas.', { c: 'st_irq', h: 'Se ahorra un paso entre dos ISR.' }),
+      Q('¿Qué hacen estas dos líneas de la HAL?', ['Fijan prioridad 5 (subprioridad 0) a la USART2 y la activan en el NVIC', 'Activan la USART2', 'Desactivan la interrupción', 'Configuran 5 interrupciones'], 'CubeMX las genera en la inicialización de la UART.', { code: 'HAL_NVIC_SetPriority(USART2_IRQn, 5, 0);\nHAL_NVIC_EnableIRQ(USART2_IRQn);', c: 'st_irqsetup', h: 'Prioridad y activación en el NVIC.' }),
+      Q('¿Cómo se borra la bandera RXNE de la USART2 en una F4?', ['Leyendo USART2->DR', 'Escribiendo un 0 en todo SR', 'Se borra sola al salir del manejador', 'Desactivando el NVIC'], 'Leer el dato recibido basta.', { c: 'st_irqsetup', h: 'Leer el dato es suficiente.' }),
+      I('<b>Resumen</b>\n· El hardware apila 8 registros: el manejador es una función de C.\n· Cuatro piezas: periférico, NVIC, nombre exacto y borrar la bandera.\n· Encadenamiento y llegada tardía ahorran ciclos.')
     ]),
     L('st22', 'Prioridades y datos compartidos', 'timer', ['st_nvic', 'st_shared', 'st_isrrules'], [
-      I('Los STM32 con M3, M4, M7 o M33 usan <b>4 bits</b> de prioridad: 16 niveles, de 0 (más urgente) a 15. Los M0 y M0+ solo tienen 2 bits: 4 niveles.', { tune: { viz: 'st_nvic', params: NVICP } }),
-      TU('Haz que USART2 no tenga que esperar a que acabe TIM2.', 'st_nvic', NVICP, { q: 'latB', min: 0, max: 0.05, text: 'Objetivo: USART2 sin espera', hint: 'USART2 necesita un número de prioridad MENOR que TIM2.' }, 'Con un número menor, USART2 expropia a TIM2.', { c: 'st_nvic' }),
-      Q('TIM2 y USART2 tienen ambas prioridad 6. Llega USART2 mientras se atiende TIM2…', ['Espera a que TIM2 termine', 'Interrumpe a TIM2', 'Se pierde', 'Se atiende en paralelo'], 'Con la misma prioridad de expropiación no hay anidamiento.', { c: 'st_nvic' }),
-      I('Los 4 bits se reparten entre <b>expropiación</b> y <b>subprioridad</b> según el grupo. La HAL usa por defecto NVIC_PRIORITYGROUP_4: 16 niveles de expropiación y ninguna subprioridad. Con el grupo 2 serían 4 y 4.'),
-      Q('Dos interrupciones con expropiación 3 y subprioridades 0 y 1 están pendientes a la vez. ¿Qué pasa?', ['Se atiende primero la de subprioridad 0, y la otra después sin interrumpirla', 'La de subprioridad 0 interrumpe a la otra', 'Se atienden a la vez', 'Se pierde una'], 'La subprioridad solo desempata.', { c: 'st_nvic' }),
-      Q('Llamas a HAL_Delay(10) en una interrupción con prioridad 0 y el SysTick tiene prioridad 15. ¿Qué pasa?', ['Se queda colgado: el SysTick nunca puede interrumpir para avanzar el tiempo', 'Espera 10 ms', 'Espera 0 ms', 'Se reinicia'], 'Regla: nada de esperas dentro de interrupciones.', { c: 'st_isrrules' }),
-      I('Datos compartidos entre interrupción y main: declara la variable <b>volatile</b> y recuerda que solo son atómicas las lecturas y escrituras de hasta 32 bits alineadas. Un contador++ es leer-sumar-escribir: tres pasos interrumpibles. La solución es una <b>sección crítica</b> corta.'),
-      Q('main hace contador++ y una interrupción también. ¿Qué puede pasar?', ['Perder incrementos si la interrupción llega entre la lectura y la escritura de main', 'Nada, ++ es atómico', 'Que contador se vuelva negativo siempre', 'Un error de compilación'], 'Protege el ++ de main con una sección crítica.', { c: 'st_shared' }),
-      Q('Una interrupción incrementa un uint64_t y main lo lee. ¿Qué riesgo hay?', ['Leer una mitad antigua y otra nueva: 64 bits son dos accesos', 'Ninguno', 'Que se desborde enseguida', 'Que no compile'], 'Lee con las interrupciones desactivadas o lee dos veces hasta que coincida.', { c: 'st_shared' }),
-      Q('¿Por qué guardar PRIMASK en vez de llamar sin más a __enable_irq() al final?', ['Para no activar las interrupciones si ya estaban desactivadas al entrar', 'Porque es más rápido', 'Porque __enable_irq no existe', 'Para cambiar la prioridad'], 'Así la función se puede llamar desde cualquier sitio.', { code: 'uint32_t p = __get_PRIMASK();\n__disable_irq();\n/* sección crítica muy corta */\n__set_PRIMASK(p);', c: 'st_shared' }),
-      Q('¿Cuánto debe durar una sección crítica?', ['Lo mínimo posible: mientras dura, ninguna interrupción se atiende', 'Lo que haga falta', 'Al menos 1 ms', 'Toda la función main'], 'Una sección crítica larga añade retardo a todas las interrupciones.', { c: 'st_shared' })
+      Q('main hace contador++ y una interrupción también hace contador++. Empieza en 0 y cada uno suma una vez. ¿Puede acabar valiendo 1?', ['Sí, si la interrupción llega en mitad del ++ de main', 'No, siempre 2', 'No, siempre 0', 'Solo si contador no es volatile'], 'contador++ son tres pasos. Míralo.', { ...PRED, c: 'st_shared', h: 'contador++ son tres pasos.' }),
+      { t: 'explore', text: 'Elige cuándo llega la interrupción durante el contador++ de main.', viz: 'st_race', params: P_RACE(0, 0),
+        tasks: [{ q: 'lost', min: 1, max: 1, text: 'Haz que se pierda un incremento', done: 'La ISR llegó entre leer y escribir: main escribió un valor viejo.', hint: 'Que llegue en medio.' },
+          { q: 'safe', min: 1, max: 1, text: 'Protégelo aunque la interrupción llegue en el peor momento', done: 'Con una sección crítica, la ISR espera a que main termine.' }] },
+      I('Los M3, M4, M7 y M33 de ST usan <b>4 bits</b> de prioridad: de 0 (más urgente) a 15. Una interrupción solo interrumpe a otra si su número es <b>menor</b>. Con el mismo número, espera su turno.', { tune: { viz: 'st_nvic', params: NVICP } }),
+      I('Los 4 bits se reparten entre <b>expropiación</b> (quién interrumpe a quién) y <b>subprioridad</b> (quién va primero si dos esperan a la vez). La HAL usa por defecto el grupo 4: 16 niveles de expropiación y ninguna subprioridad.', { svg: table([['Expropiación', 'Decide quién interrumpe a quién'], ['Subprioridad', 'Solo desempata entre pendientes'], ['Grupo 4 (HAL)', '16 niveles de expropiación, 0 de sub'], ['Grupo 2', '4 y 4']]) }),
+      I('HAL_Delay espera a que avance el contador del SysTick. Si la llamas dentro de una interrupción igual o más urgente que el SysTick, este nunca entra y el programa se cuelga.', { code: 'void USART2_IRQHandler(void) {   // prioridad 0\n  HAL_Delay(10);   // SysTick en 15: nunca llega\n}' }),
+      I('Una <b>sección crítica</b> corta protege los datos compartidos: guarda PRIMASK, desactiva las interrupciones, toca el dato y restaura. Solo los accesos alineados de hasta 32 bits son atómicos: un uint64_t son dos.', { code: 'uint32_t p = __get_PRIMASK();\n__disable_irq();\ncontador++;          // nadie puede colarse\n__set_PRIMASK(p);' }),
+      { t: 'steps', text: 'TIM2 tiene prioridad 5 y USART2 prioridad 2. Llega USART2 mientras se atiende TIM2.', steps: ['Compara números: 2 &lt; 5', 'USART2 es <b>más urgente</b>', 'El NVIC apila el contexto de TIM2 y entra en USART2', 'Al acabar USART2, TIM2 sigue donde estaba'], result: 'Anidamiento: la más urgente pasa delante.' },
+      TU('Haz que USART2 no tenga que esperar a que acabe TIM2.', 'st_nvic', NVICP, { q: 'latB', min: 0, max: 0.05, text: 'Objetivo: USART2 sin espera', hint: 'USART2 necesita un número de prioridad MENOR que TIM2.' }, 'Con un número menor, USART2 expropia a TIM2.', { c: 'st_nvic', h: 'Número menor = más urgente.' }),
+      Q('TIM2 y USART2 tienen ambas prioridad 6. Llega USART2 mientras se atiende TIM2…', ['Espera a que TIM2 termine', 'Interrumpe a TIM2', 'Se pierde', 'Se atiende en paralelo'], 'Con la misma prioridad de expropiación no hay anidamiento.', { c: 'st_nvic', h: 'Igual no basta para interrumpir.' }),
+      Q('Dos interrupciones con expropiación 3 y subprioridades 0 y 1 están pendientes a la vez. ¿Qué pasa?', ['Se atiende primero la de subprioridad 0 y la otra después, sin interrumpirla', 'La de subprioridad 0 interrumpe a la otra', 'Se atienden a la vez', 'Se pierde una'], 'La subprioridad solo desempata.', { c: 'st_nvic', h: 'La subprioridad solo ordena la cola.' }),
+      Q('Llamas a HAL_Delay(10) en una interrupción con prioridad 0 y el SysTick tiene prioridad 15. ¿Qué pasa?', ['Se cuelga: el SysTick nunca puede interrumpir para avanzar el tiempo', 'Espera 10 ms', 'Espera 0 ms', 'Se reinicia'], 'Nada de esperas dentro de interrupciones.', { c: 'st_isrrules', h: '¿Puede entrar el SysTick?' }),
+      Q('Una interrupción incrementa un uint64_t y main lo lee. ¿Qué riesgo hay?', ['Leer una mitad antigua y otra nueva: 64 bits son dos accesos', 'Ninguno', 'Que se desborde enseguida', 'Que no compile'], 'Léelo con las interrupciones desactivadas.', { c: 'st_shared', h: '¿Cuántos accesos son 64 bits en un micro de 32?' }),
+      Q('¿Por qué guardar PRIMASK en vez de llamar sin más a __enable_irq() al final?', ['Para no activar las interrupciones si ya estaban desactivadas al entrar', 'Porque es más rápido', 'Porque __enable_irq no existe', 'Para cambiar la prioridad'], 'Así la función se puede llamar desde cualquier sitio.', { code: 'uint32_t p = __get_PRIMASK();\n__disable_irq();\n/* sección crítica muy corta */\n__set_PRIMASK(p);', c: 'st_shared', h: '¿Y si ya estaban desactivadas al entrar?' }),
+      Q('¿Cuánto debe durar una sección crítica?', ['Lo mínimo posible: mientras dura, ninguna interrupción se atiende', 'Lo que haga falta', 'Al menos 1 ms', 'Toda la función main'], 'Cada microsegundo se suma al retardo de todas.', { c: 'st_shared', h: 'Mientras dura, nadie más entra.' }),
+      I('<b>Resumen</b>\n· NVIC: número menor = más urgente; solo una expropiación menor interrumpe.\n· Nada de HAL_Delay ni printf en interrupciones.\n· Datos compartidos: volatile y una sección crítica muy corta.')
     ]),
-    L('st23', 'EXTI: interrupciones por pin', 'chip', ['st_exti', 'st_irqsetup', 'st_halcb', 'st_rccen', 'st_debounce', 'st_power'], [
-      I('El <b>EXTI</b> genera interrupciones por flancos en los pines. Tiene 16 líneas para GPIO, una por <b>número</b> de pin: PA0, PB0 y PC0 comparten la línea 0. En la F4 eliges qué puerto va a cada línea con <b>SYSCFG->EXTICR</b> (en la F1, con AFIO).'),
-      Q('¿Puedes tener interrupciones independientes en PA3 y PB3 a la vez?', ['No: ambos usan la línea EXTI3 y solo uno puede estar conectado', 'Sí, sin problema', 'Solo con la HAL', 'Solo si uno es de subida y otro de bajada'], 'Al asignar pines, reparte los números.', { c: 'st_exti' }),
-      I('Las líneas 0 a 4 tienen cada una su manejador. Las 5–9 comparten <b>EXTI9_5_IRQHandler</b> y las 10–15 comparten <b>EXTI15_10_IRQHandler</b>: dentro hay que mirar qué línea saltó.'),
-      { t: 'match', q: 'Une cada pin con su manejador.', pairs: [['PA0', 'EXTI0_IRQHandler'], ['PB4', 'EXTI4_IRQHandler'], ['PC7', 'EXTI9_5_IRQHandler'], ['PC13', 'EXTI15_10_IRQHandler']], c: 'st_exti' },
-      I('Con la HAL, configuras el pin como “GPIO_EXTI” con el flanco deseado, activas la línea en la pestaña NVIC y escribes el callback. La HAL borra la bandera por ti.', { code: 'void HAL_GPIO_EXTI_Callback(uint16_t pin) {\n  if (pin == GPIO_PIN_13) {\n    pulsado = 1;   // volatile\n  }\n}' }),
-      Q('¿Por qué el callback comprueba qué pin es?', ['Porque es el mismo callback para todas las líneas EXTI', 'Por estilo', 'Porque la HAL lo exige al compilar', 'Para borrar la bandera'], 'Una sola función recibe todos los avisos.', { c: 'st_halcb' }),
-      Q('Configuras EXTICR por registros y no funciona. ¿Qué reloj olvidaste?', ['El de SYSCFG, en RCC->APB2ENR', 'El de GPIOA', 'El del EXTI', 'El del SysTick'], 'Sin reloj, la escritura en SYSCFG->EXTICR no tiene efecto. La HAL lo activa en HAL_MspInit.', { c: 'st_rccen' }),
-      Q('Un pulsador con EXTI dispara 5 interrupciones por pulsación. ¿Solución?', ['Ignorar nuevas interrupciones durante unos 20 ms tras la primera, o filtrar con RC', 'Subir la prioridad', 'Usar flanco de bajada', 'Quitar la pull-up'], 'Son los rebotes del contacto.', { c: 'st_debounce' }),
-      Q('¿Cómo se borra la bandera pendiente de la línea 13 en la F4 por registros?', ['Escribiendo un 1 en el bit 13 de EXTI->PR', 'Escribiendo un 0 en el bit 13 de EXTI->PR', 'Leyendo GPIOC->IDR', 'Se borra sola'], 'Bandera de tipo “escribe 1 para borrar”.', { c: 'st_irqsetup' }),
-      Q('¿Puede una línea EXTI despertar al chip del modo Stop?', ['Sí: es una de las formas típicas de despertarlo', 'No, nunca', 'Solo en Standby', 'Solo la línea 0'], 'Un pulsador puede sacar al chip de Stop.', { c: 'st_power' })
-    ]),
-    L('st24', 'SysTick, HAL_Delay y el tiempo', 'timer', ['st_tick', 'st_systick', 'st_cycles'], [
-      I('El <b>SysTick</b> es un temporizador de 24 bits del propio núcleo que cuenta hacia abajo desde LOAD y genera una excepción al llegar a cero. SysTick_Config(n) lo programa para interrumpir cada n ciclos.'),
-      G('st_systick'),
-      Nm('Con 24 bits a 100 MHz, ¿cuál es el periodo máximo del SysTick en ms?', 167.77, 'ms', '2²⁴ / 100 MHz = 16 777 216 / 100 000 000 ≈ 0,168 s.', { tol: 0.2, c: 'st_systick' }),
-      I('HAL_Init programa el SysTick a 1 ms. Cada interrupción llama a HAL_IncTick, que suma 1 a un contador; <b>HAL_GetTick()</b> lo devuelve. <b>HAL_Delay(n)</b> espera al menos n ms: añade un tick extra para garantizar el mínimo.'),
-      Q('¿Por qué HAL_Delay(1) puede durar casi 2 ms?', ['Empieza en un punto cualquiera del ms actual y añade un tick para garantizar el mínimo', 'Porque la HAL es lenta', 'Porque el SysTick va a 500 Hz', 'Por un error de la F4'], 'Para esperas cortas y precisas, usa un temporizador o el contador de ciclos.', { c: 'st_tick' }),
-      Q('¿Funciona esta comparación cuando HAL_GetTick() desborda y vuelve a 0?', ['Sí: la resta sin signo da el tiempo transcurrido correcto', 'No, falla en el desbordamiento', 'Solo los primeros 49 días', 'Solo con int'], 'La aritmética de uint32_t es módulo 2³².', { code: 'if (HAL_GetTick() - t0 >= 500) {\n  t0 = HAL_GetTick();\n  /* cada 500 ms */\n}', c: 'st_tick' }),
-      Nm('Un contador de ms de 32 bits, ¿cuántos días tarda en desbordar?', 49.71, 'días', '2³² ms / 1000 / 86 400 ≈ 49,7 días.', { tol: 0.1, c: 'st_tick' }),
-      Q('¿Qué tiene de malo esta versión?', ['Al desbordar, t0 + 500 da la vuelta y la condición se cumple antes de tiempo o se rompe', 'Nada', 'Es más lenta', 'No compila'], 'Compara siempre diferencias, no instantes.', { code: 'if (HAL_GetTick() >= t0 + 500) {\n  ...\n}', c: 'st_tick' }),
-      Q('Necesitas esperas de 5 µs. ¿Qué usas?', ['Un temporizador hardware o el contador de ciclos DWT', 'HAL_Delay(0,005)', 'SysTick a 1 ms', 'printf'], 'El SysTick de la HAL tiene resolución de 1 ms.', { c: 'st_cycles' })
+    L('st23', 'EXTI: interrupciones por pin', 'chip', ['st_exti', 'st_halcb', 'st_rccen', 'st_debounce', 'st_irqsetup'], [
+      Q('Pones un botón en PA3 y otro en PB3, cada uno con su interrupción. ¿Crees que funcionarán los dos a la vez?', ['No: comparten la misma línea EXTI', 'Sí, sin problema', 'Solo si usan flancos distintos', 'Solo con la HAL'], 'Las líneas EXTI van por número de pin. Compruébalo.', { ...PRED, c: 'st_exti', h: 'Las líneas EXTI van por número de pin.' }),
+      { t: 'explore', text: 'Botón A en el puerto A y botón B en el puerto B. Elige sus números de pin.', viz: 'st_exti', params: P_EXTI(0, 0),
+        tasks: [{ q: 'ok', min: 1, max: 1, text: 'Haz que cada botón tenga su propia línea', done: 'Con números distintos, cada uno su línea.', hint: 'Cambia el número de uno de los pines.' },
+          { q: 'sh', min: 1, max: 1, text: 'Que los dos entren por el mismo manejador sin chocar', done: 'Las líneas 5–9 (o 10–15) comparten manejador: dentro miras cuál saltó.' }] },
+      I('El <b>EXTI</b> genera interrupciones por flancos en los pines. Tiene 16 líneas para GPIO, una por <b>número</b> de pin: PA0, PB0 y PC0 comparten la línea 0. SYSCFG->EXTICR elige qué puerto va a cada línea.', { tune: { viz: 'st_exti', params: P_EXTI(13, 4) } }),
+      I('Manejadores: las líneas 0 a 4 tienen uno cada una; las 5–9 comparten <b>EXTI9_5_IRQHandler</b> y las 10–15, <b>EXTI15_10_IRQHandler</b>. Por registros, la bandera se borra escribiendo un 1 en EXTI->PR.', { code: 'void EXTI15_10_IRQHandler(void) {\n  if (EXTI->PR & (1U << 13)) {\n    EXTI->PR = (1U << 13);   // escribir 1 borra\n    pulsado = 1;             // volatile\n  }\n}' }),
+      I('Con la HAL, el pin se configura como GPIO_EXTI en CubeMX y escribes un solo callback para todas las líneas. Por registros, abre antes el reloj de <b>SYSCFG</b> (APB2ENR): ahí está EXTICR.', { code: 'void HAL_GPIO_EXTI_Callback(uint16_t pin) {\n  if (pin == GPIO_PIN_13) pulsado = 1;\n}' }),
+      I('Los rebotes del curso base siguen aquí: cada rebote es un flanco y cada flanco, una interrupción. Ignora lo que llegue en los 20 ms siguientes a la primera.', { svg: SVG_BOUNCE, code: 'if (HAL_GetTick() - ultimo > 20) {\n  ultimo = HAL_GetTick();\n  pulsado = 1;\n}' }),
+      { t: 'steps', text: 'El botón de la Nucleo (PC13) con interrupción, por registros.', steps: ['Abre los relojes de GPIOC y de SYSCFG', 'En EXTICR[3], el campo de la línea 13: elige el puerto C', 'En el EXTI, activa la línea 13 en IMR y el flanco de bajada en FTSR', 'En el NVIC, activa EXTI15_10_IRQn y escribe su manejador'], result: 'Dentro del manejador, comprueba y borra el bit 13 de EXTI->PR.' },
+      { t: 'match', q: 'Une cada pin con su manejador.', pairs: [['PA0', 'EXTI0_IRQHandler'], ['PB4', 'EXTI4_IRQHandler'], ['PC7', 'EXTI9_5_IRQHandler'], ['PC13', 'EXTI15_10_IRQHandler']], c: 'st_exti', h: 'Del 5 al 9 y del 10 al 15 se comparten.' },
+      Q('¿Por qué el callback comprueba qué pin es?', ['Porque es el mismo callback para todas las líneas EXTI', 'Por estilo', 'Porque la HAL lo exige al compilar', 'Para borrar la bandera'], 'Una sola función recibe todos los avisos.', { c: 'st_halcb', h: 'Un solo callback para todas.' }),
+      Q('Configuras EXTICR por registros y no funciona. ¿Qué reloj olvidaste?', ['El de SYSCFG, en RCC->APB2ENR', 'El de GPIOA', 'El del EXTI', 'El del SysTick'], 'Sin reloj, la escritura en SYSCFG->EXTICR no tiene efecto.', { c: 'st_rccen', h: 'EXTICR vive en SYSCFG.' }),
+      Q('Un pulsador con EXTI dispara 5 interrupciones por pulsación. ¿Solución?', ['Ignorar nuevas interrupciones durante unos 20 ms tras la primera, o filtrar con RC', 'Subir la prioridad', 'Usar flanco de bajada', 'Quitar la pull-up'], 'Son los rebotes del contacto.', { c: 'st_debounce', h: 'Son rebotes.' }),
+      Q('¿Cómo se borra la bandera pendiente de la línea 13 en la F4 por registros?', ['Escribiendo un 1 en el bit 13 de EXTI->PR', 'Escribiendo un 0 en el bit 13 de EXTI->PR', 'Leyendo GPIOC->IDR', 'Se borra sola'], 'Bandera de tipo «escribe 1 para borrar».', { c: 'st_irqsetup', h: 'Aquí se escribe un 1 para borrar.' }),
+      Q('¿Puedes tener interrupciones independientes en PA5 y PC5 a la vez?', ['No: los dos usan la línea EXTI5', 'Sí, sin problema', 'Solo con la HAL', 'Solo si uno es de subida y otro de bajada'], 'Solo un puerto puede estar conectado a cada línea.', { c: 'st_exti', h: 'Mismo número, misma línea.' }),
+      Q('¿Qué manejador atiende una interrupción en PB12?', ['EXTI15_10_IRQHandler', 'EXTI12_IRQHandler', 'EXTI9_5_IRQHandler', 'EXTI2_IRQHandler'], 'Las líneas 10–15 comparten manejador.', { c: 'st_exti', h: 'El 12 está entre el 10 y el 15.' }),
+      I('<b>Resumen</b>\n· Una línea EXTI por número de pin; EXTICR elige el puerto (abre SYSCFG).\n· 5–9 y 10–15 comparten manejador: mira qué línea saltó y borra su bit de PR.\n· Antirrebote: ignora 20 ms tras la primera interrupción.')
     ]),
     L('st25', 'Temporizadores: PSC y ARR', 'timer', ['st_timer', 'st_halcb'], [
-      I('Tipos de temporizador en la F4: <b>avanzados</b> (TIM1, y TIM8 en los modelos que lo tienen), <b>de uso general</b> (TIM2–TIM5; TIM2 y TIM5 son de 32 bits), TIM9–TIM11 más sencillos y, en algunos modelos, <b>básicos</b> (TIM6 y TIM7, para disparar el DAC).'),
-      I('El preescalador divide entre <b>PSC + 1</b> y el contador va de 0 a ARR (<b>ARR + 1</b> pasos):\n<b>f = fTIM / ((PSC + 1) · (ARR + 1))</b>', { tune: { viz: 'st_pwm', params: PWMP(83, 999, 500) } }),
-      TU('Con fTIM = 84 MHz, consigue una frecuencia de exactamente 1 kHz.', 'st_pwm', PWMP(0, 99, 50), { q: 'f', min: 999, max: 1001, text: 'Objetivo: 1 kHz', hint: '84 MHz ÷ 84 = 1 MHz; luego 1000 pasos.' }, 'PSC = 83 y ARR = 999, o PSC = 41 y ARR = 1999.', { c: 'st_timer' }),
-      G('st_pwmFreq'), G('st_pwmFreq'), G('st_pscArr'),
-      Q('¿Qué hace esta pareja de llamadas y callback?', ['Arranca TIM6 con interrupción y ejecuta el callback en cada desbordamiento', 'Genera PWM', 'Mide una frecuencia', 'Hace un retardo bloqueante'], 'La interrupción de actualización.', { code: 'HAL_TIM_Base_Start_IT(&htim6);\n\nvoid HAL_TIM_PeriodElapsedCallback(\n    TIM_HandleTypeDef *htim) {\n  if (htim->Instance == TIM6) tarea();\n}', c: 'st_halcb' }),
-      Q('¿Por qué se comprueba htim->Instance en el callback?', ['El mismo callback lo llaman todos los temporizadores', 'Para borrar la bandera', 'Para cambiar ARR', 'No hace falta'], 'Con FreeRTOS, la base de tiempo de la HAL también lo usa.', { c: 'st_halcb' }),
-      I('Con <b>ARPE</b> (precarga de ARR) activado, un ARR nuevo se aplica en el siguiente evento de actualización, no a mitad de periodo: así no hay periodos raros al cambiar la frecuencia en marcha.'),
-      Nm('TIM2 (32 bits) a 100 MHz con PSC = 0 y ARR = 0xFFFFFFFF. ¿Segundos hasta desbordar?', 42.95, 's', '2³² / 100 MHz ≈ 42,9 s. Ideal para medir tiempos largos con resolución de 10 ns.', { tol: 0.1, c: 'st_timer' })
+      Q('Un temporizador cuenta a 84 MHz y quieres una interrupción cada 1 ms. ¿Crees que puede hacerlo?', ['Sí: hay que dividir 84 000 entre un preescalador y un contador', 'No: 84 MHz es demasiado rápido', 'Solo con el SysTick', 'Hay que bajar el reloj del chip'], 'Dos divisores en cadena. Juega con ellos.', { ...PRED, c: 'st_timer', h: 'Dos divisores en cadena.' }),
+      { t: 'explore', text: 'fTIM = 84 MHz. PSC divide el reloj; ARR marca dónde vuelve a 0 el contador.', viz: 'st_pwm', params: PWMP(0, 99, 50),
+        tasks: [{ q: 'f', min: 999, max: 1001, text: 'Consigue exactamente 1 kHz', done: 'PSC = 83 da ticks de 1 µs y ARR = 999 cuenta 1000.', hint: '84 MHz ÷ 84 = 1 MHz; luego 1000 pasos.' },
+          { q: 'f', min: 9.99, max: 10.01, text: 'Ahora 10 Hz', done: 'PSC = 839 y ARR = 9999: 84 MHz / 840 / 10 000.' }] },
+      I('Tipos en la F4: <b>avanzados</b> (TIM1, y TIM8 en algunos modelos), <b>de uso general</b> (TIM2–TIM5; TIM2 y TIM5 de 32 bits), TIM9–TIM11 más sencillos y, en algunos modelos, <b>básicos</b> (TIM6 y TIM7). Cuentan con el reloj de su APB (×2 si el divisor no es 1).', { svg: table([['TIM1 (TIM8)', 'Avanzados: potencia y motores'], ['TIM2 · TIM5', 'Uso general, 32 bits'], ['TIM3 · TIM4', 'Uso general, 16 bits'], ['TIM9–TIM11', 'Sencillos'], ['TIM6 · TIM7', 'Básicos (no en la F411)']], 'Temporizadores de la F4') }),
+      I('El preescalador divide entre <b>PSC + 1</b> y el contador va de 0 a ARR: <b>ARR + 1</b> pasos.\n<b>f = fTIM / ((PSC + 1) · (ARR + 1))</b>', { tune: { viz: 'st_pwm', params: PWMP(83, 999, 500) } }),
+      I('Al llegar a ARR, el contador vuelve a 0 y genera un <b>evento de actualización</b>. Con la HAL, su interrupción llega a un callback común para todos los temporizadores.', { code: 'HAL_TIM_Base_Start_IT(&htim3);\n\nvoid HAL_TIM_PeriodElapsedCallback(\n    TIM_HandleTypeDef *htim) {\n  if (htim->Instance == TIM3) tarea_1ms();\n}' }),
+      I('Con <b>ARPE</b> (precarga de ARR), un ARR nuevo se aplica en la siguiente actualización, no a mitad de periodo: sin periodos raros al cambiar la frecuencia en marcha.', { code: '__HAL_TIM_SET_AUTORELOAD(&htim3, 499);\n/* con ARPE: se aplica al acabar el periodo */' }),
+      { t: 'steps', text: 'TIM3 a 84 MHz: diseña una interrupción a 50 Hz.', steps: ['Elige un tick cómodo: 84 MHz ÷ 840 = 100 kHz → <b>PSC = 839</b>', 'Ticks por periodo: 100 000 / 50 = 2000 → <b>ARR = 1999</b>', 'Comprueba: 84 MHz / (840 × 2000) = 50 Hz', 'ARR = 1999 cabe en 16 bits (máximo 65 535)'], result: 'PSC = 839 y ARR = 1999.' },
+      G('st_pwmFreq'),
+      G('st_pscArr'),
+      Q('¿Qué hace esta pareja de llamada y callback?', ['Arranca TIM6 con interrupción y ejecuta el callback en cada desbordamiento', 'Genera PWM', 'Mide una frecuencia', 'Hace un retardo bloqueante'], 'Es la interrupción de actualización.', { code: 'HAL_TIM_Base_Start_IT(&htim6);\n\nvoid HAL_TIM_PeriodElapsedCallback(\n    TIM_HandleTypeDef *htim) {\n  if (htim->Instance == TIM6) tarea();\n}', c: 'st_halcb', h: 'Base_Start_IT y PeriodElapsed: arranque y desbordamiento.' }),
+      Q('¿Por qué se comprueba htim->Instance en el callback?', ['El mismo callback lo llaman todos los temporizadores', 'Para borrar la bandera', 'Para cambiar ARR', 'No hace falta'], 'Una sola función recibe todos los avisos.', { c: 'st_halcb', h: 'Un solo callback para todos.' }),
+      Nm('TIM2 (32 bits) a 100 MHz con PSC = 0 y ARR = 0xFFFFFFFF. ¿Segundos hasta desbordar?', 42.95, 's', '2³² / 100 MHz ≈ 42,9 s, con resolución de 10 ns.', { tol: 0.1, c: 'st_timer', h: '2³² cuentas entre la frecuencia.' }),
+      G('st_pwmFreq'),
+      Q('A 84 MHz, alguien pone PSC = 84 y ARR = 1000 para tener 1 kHz. ¿Qué sale?', ['≈ 987 Hz: sobra un +1 en cada registro', '1 kHz exacto', '1,01 kHz', '84 kHz'], '84 MHz / (85 × 1001) ≈ 987 Hz. Los registros guardan «divisor − 1».', { c: 'st_timer', h: 'Los registros guardan divisor − 1.' }),
+      I('<b>Resumen</b>\n· f = fTIM / ((PSC + 1)(ARR + 1)): primero un tick cómodo, luego cuántos ticks.\n· El evento de actualización llega a un callback común: mira htim->Instance.\n· ARPE aplica el ARR nuevo al final del periodo.')
     ]),
     L('st26', 'PWM, captura y encoder', 'wave', ['st_duty', 'st_capture'], [
-      I('Cada temporizador tiene hasta 4 canales. En PWM modo 1 la salida está activa mientras CNT &lt; CCR. Arrancas con HAL_TIM_PWM_Start y cambias el ciclo de trabajo con __HAL_TIM_SET_COMPARE.'),
-      TU('Con ARR = 999, pon el ciclo de trabajo al 25 %.', 'st_pwm', PWMP(83, 999, 750), { q: 'duty', min: 24.9, max: 25.1, text: 'Objetivo: 25 %', hint: '25 % de 1000 pasos.' }, 'CCR = 250.', { c: 'st_duty' }),
-      G('st_duty'), G('st_duty'),
-      Q('ARR = 999. ¿Qué ciclo de trabajo da esta línea?', ['30 %', '0,3 %', '3 %', '33 %'], '300 / (999 + 1).', { code: '__HAL_TIM_SET_COMPARE(&htim3,\n  TIM_CHANNEL_1, 300);', c: 'st_duty' }),
-      I('<b>Captura de entrada</b>: en el flanco elegido, el temporizador copia CNT en CCR. Restando dos capturas tienes el periodo en ticks. El modo <b>PWM input</b> usa dos canales para medir a la vez periodo y tiempo en alto.'),
-      Nm('Con ticks de 1 MHz, dos capturas seguidas difieren en 25 000. ¿Frecuencia en Hz?', 40, 'Hz', 'Periodo = 25 000 µs = 25 ms → 40 Hz.', { c: 'st_capture' }),
-      I('<b>Modo encoder</b>: los canales 1 y 2 reciben las señales A y B en cuadratura; el contador sube o baja según el sentido. Contando todos los flancos de ambas señales tienes 4 cuentas por pulso.'),
-      Nm('Encoder de 11 pulsos por vuelta del motor, reductora 30:1, modo ×4. ¿Cuentas por vuelta del eje de salida?', 1320, '', '11 × 4 × 30 = 1320.', { c: 'st_capture' }),
-      Q('¿Para qué sirve el modo de un solo pulso (one-pulse)?', ['Para generar un único pulso de duración precisa tras un disparo', 'Para contar pulsos', 'Para bajar el consumo', 'Para medir frecuencia'], 'El contador se detiene solo tras un periodo.', { c: 'st_capture' }),
-      Nm('Servo a 50 Hz con ticks de 1 µs (ARR = 19 999). ¿Qué CCR da un pulso de 1,5 ms?', 1500, '', '1,5 ms = 1500 ticks de 1 µs: posición central.', { c: 'st_duty' })
+      Q('PWM con ARR = 999. Si pones CCR = 250, ¿qué ciclo de trabajo crees que sale?', ['25 %', '250 %', '2,5 %', '75 %'], 'Hay ARR + 1 = 1000 pasos por periodo. Pruébalo.', { ...PRED, c: 'st_duty', h: 'Hay ARR + 1 pasos por periodo.' }),
+      { t: 'explore', text: 'La salida está alta mientras el contador está por debajo de CCR.', viz: 'st_pwm', params: PWMP(83, 999, 750),
+        tasks: [{ q: 'duty', min: 24.9, max: 25.1, text: 'Pon el ciclo de trabajo al 25 %', done: 'CCR = 250 de 1000 pasos.', hint: 'El 25 % de 1000 pasos.' },
+          { q: 'duty', min: 49.9, max: 50.1, text: 'Ahora un 50 %', done: 'CCR = (ARR + 1) / 2: con ARR = 999, CCR = 500.' }] },
+      I('Cada temporizador tiene hasta 4 canales. En <b>PWM modo 1</b> la salida está alta mientras CNT &lt; CCR: <b>duty = CCR / (ARR + 1)</b>. Lo cambias en marcha con __HAL_TIM_SET_COMPARE.', { tune: { viz: 'st_pwm', params: PWMP(83, 999, 250) }, code: 'HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1);\n__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, 250);' }),
+      I('<b>Captura de entrada</b>: en el flanco elegido, el temporizador copia CNT en CCR. Restando dos capturas tienes el periodo en ticks. El modo <b>PWM input</b> usa dos canales para medir a la vez periodo y tiempo en alto.', { code: 'void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *h) {\n  uint32_t c = HAL_TIM_ReadCapturedValue(h, TIM_CHANNEL_1);\n  periodo = c - anterior;   // en ticks\n  anterior = c;\n}' }),
+      I('<b>Modo encoder</b>: las señales A y B en cuadratura mueven el contador arriba o abajo. Contando los flancos de las dos tienes 4 cuentas por pulso (×4).', { tune: { viz: 'st_enc', params: P_ENC(12, 4, 1) } }),
+      I('<b>Un solo pulso</b> (one-pulse): tras un disparo, el temporizador da un único pulso de duración exacta y se para. Útil para disparar algo con un retardo preciso.', { svg: SVG_ONEPULSE }),
+      { t: 'steps', text: 'Servo a 50 Hz con ticks de 1 µs: centra el servo.', steps: ['Ticks de 1 µs con fTIM = 84 MHz: PSC = 83', '50 Hz = 20 ms = 20 000 ticks → <b>ARR = 19 999</b>', 'El centro de un servo es un pulso de 1,5 ms', '1,5 ms = 1500 ticks → <b>CCR = 1500</b>'], result: 'Con ticks de 1 µs, CCR es el ancho del pulso en µs.' },
+      G('st_duty'),
+      Q('ARR = 999. ¿Qué ciclo de trabajo da esta línea?', ['30 %', '0,3 %', '3 %', '33 %'], '300 / (999 + 1).', { code: '__HAL_TIM_SET_COMPARE(&htim3,\n  TIM_CHANNEL_1, 300);', c: 'st_duty', h: '300 de cada 1000 pasos.' }),
+      Nm('Con ticks de 1 MHz, dos capturas seguidas difieren en 25 000. ¿Frecuencia en Hz?', 40, 'Hz', 'Periodo = 25 000 µs = 25 ms → 40 Hz.', { c: 'st_capture', h: 'Periodo = diferencia × tick; f = 1 / periodo.' }),
+      TU('Consigue exactamente 1320 cuentas por vuelta del eje de salida.', 'st_enc', P_ENC(7, 1, 1), { q: 'cpr', min: 1320, max: 1320, text: 'Objetivo: 1320 cuentas por vuelta', hint: '11 pulsos, ×4 y reductora 30.' }, '11 × 4 × 30 = 1320.', { c: 'st_capture', h: 'Pulsos × modo × reductora.' }),
+      Q('¿Para qué sirve el modo de un solo pulso (one-pulse)?', ['Para generar un único pulso de duración precisa tras un disparo', 'Para contar pulsos', 'Para bajar el consumo', 'Para medir frecuencia'], 'El contador se detiene solo tras un periodo.', { c: 'st_capture', h: 'Lo dice su nombre.' }),
+      Nm('Servo a 50 Hz con ticks de 1 µs (ARR = 19 999). ¿Qué CCR da un pulso de 1,2 ms?', 1200, '', '1,2 ms = 1200 ticks de 1 µs.', { c: 'st_duty', h: 'Pasa los ms a µs.' }),
+      G('st_duty'),
+      I('<b>Resumen</b>\n· PWM modo 1: duty = CCR / (ARR + 1).\n· Captura: diferencia entre dos capturas × tick = periodo.\n· Encoder ×4: 4 cuentas por pulso, por la reductora.')
     ]),
     L('st27', 'Temporizadores avanzados y tiempo muerto', 'timer', ['st_deadtime', 'st_advtim', 'st_timer'], [
-      I('TIM1 (y TIM8) añaden <b>salidas complementarias</b> (CH1 y CH1N), <b>tiempo muerto</b> programable, entrada de <b>freno</b> (break) y contador de repetición. Están pensados para puentes de potencia: motores, inversores, convertidores.'),
-      Q('¿Por qué un medio puente necesita salidas complementarias?', ['Un transistor conduce cuando el otro está apagado, y viceversa', 'Para duplicar la frecuencia', 'Para medir corriente', 'Para ahorrar pines'], 'Arriba y abajo nunca deben conducir a la vez.', { c: 'st_deadtime' }),
-      I('Los transistores tardan en apagarse. Si uno se enciende antes de que el otro se haya apagado, la alimentación queda en cortocircuito a través de ambos (<b>shoot-through</b>). El <b>tiempo muerto</b> mantiene los dos apagados un instante en cada cambio.'),
-      Q('¿Qué provoca el shoot-through?', ['Picos de corriente enormes que calientan y pueden destruir los transistores', 'Que el motor gire al revés', 'Ruido en el audio', 'Nada grave'], 'Se evita con tiempo muerto y con drivers con protección.', { c: 'st_deadtime' }),
-      I('En BDTR, si el bit 7 de DTG es 0, el tiempo muerto es <b>DTG × tDTS</b>. Con el reloj del temporizador a 100 MHz (y CKD = 1), cada paso son 10 ns, hasta 127 pasos.'),
-      Nm('Reloj de temporizador a 100 MHz, CKD = 1. ¿Qué DTG da 500 ns de tiempo muerto?', 50, '', '500 ns / 10 ns = 50.', { c: 'st_deadtime' }),
-      Q('Configuras TIM1 en PWM por registros y no sale nada por el pin. ¿Qué bit falta casi seguro?', ['MOE en TIM1->BDTR', 'ARPE', 'UIF', 'CEN de TIM2'], 'Las salidas de los temporizadores avanzados están desactivadas hasta activar MOE. HAL_TIM_PWM_Start lo hace por ti.', { c: 'st_advtim' }),
-      Q('¿Para qué sirve la entrada de freno (BKIN)?', ['Para llevar las salidas a un estado seguro por hardware, sin esperar a la CPU', 'Para frenar el motor con software', 'Para medir la velocidad', 'Para ahorrar energía'], 'Un comparador de sobrecorriente puede cortar en nanosegundos.', { c: 'st_advtim' }),
-      I('En <b>modo centrado</b>, el contador sube hasta ARR y baja hasta 0. La frecuencia es la mitad que en modo normal y el PWM queda simétrico, lo que facilita medir la corriente del motor justo en el centro del pulso.'),
-      Nm('Modo centrado a 100 MHz, PSC = 0, ARR = 1000. ¿Frecuencia en kHz?', 50, 'kHz', 'Una subida y una bajada: 100 MHz / (2 × 1000) = 50 kHz.', { c: 'st_timer' }),
-      Q('Vas a probar tu primer puente de potencia. ¿Cómo lo alimentas?', ['Con una fuente de laboratorio con límite de corriente bajo y a tensión reducida', 'Directo a una batería de coche', 'A la red con un transformador', 'Sin carga a máxima tensión'], 'Si algo está mal, el límite de corriente salva los transistores (y a ti).', { c: 'st_deadtime' })
+      Q('En un medio puente, el transistor de arriba se apaga y el de abajo se enciende en el mismo instante. ¿Qué crees que pasa?', ['Un instante conducen los dos: cortocircuito de la alimentación', 'Nada: es instantáneo', 'El motor gira al revés', 'El PWM se para'], 'Un transistor tarda en apagarse. Míralo en el tiempo.', { ...PRED, c: 'st_deadtime', h: 'Un transistor tarda en apagarse.' }),
+      { t: 'explore', text: 'CH1 maneja el transistor de arriba y CH1N el de abajo. Ajusta el tiempo muerto.', viz: 'st_dead', params: P_DEAD(0, 200),
+        tasks: [{ q: 'safe200', min: 1, max: 1, text: 'Evita el cortocircuito con un transistor que tarda 200 ns en apagarse', done: 'DTG = 20: 200 ns de tiempo muerto.', hint: 'Sube DTG.' },
+          { q: 'safe400', min: 1, max: 1, text: 'Ahora uno más lento, de 400 ns', done: 'Hace falta DTG de 40 o más.' }] },
+      I('TIM1 (y TIM8) añaden <b>salidas complementarias</b> (CH1 y CH1N), <b>tiempo muerto</b> programable, entrada de <b>freno</b> y contador de repetición. Están pensados para puentes de potencia: motores, inversores, convertidores.', { svg: table([['CH1 / CH1N', 'Una conduce cuando la otra no'], ['Tiempo muerto', 'Las dos apagadas un instante'], ['Freno (BKIN)', 'Corta por hardware'], ['MOE', 'Interruptor general de salidas']], 'TIM1 y TIM8') }),
+      I('El <b>tiempo muerto</b> deja los dos transistores apagados un instante en cada cambio. En BDTR, con el bit 7 de DTG a 0: <b>tiempo = DTG × tDTS</b>; con el reloj a 100 MHz, 10 ns por paso (hasta 127).', { tune: { viz: 'st_dead', params: P_DEAD(20, 200) } }),
+      I('Las salidas de TIM1 están desactivadas hasta poner <b>MOE</b> en BDTR (HAL_TIM_PWM_Start lo hace). La entrada de <b>freno</b> (BKIN) borra MOE por hardware y lleva las salidas a un estado seguro sin esperar a la CPU.', { svg: SVG_ADVTIM }),
+      I('En <b>modo centrado</b> el contador sube hasta ARR y baja hasta 0: la frecuencia es la mitad y el PWM queda simétrico, cómodo para medir la corriente del motor en el centro del pulso.', { svg: SVG_CENTER }),
+      { t: 'steps', text: 'Puente con MOSFET que tardan 150 ns en apagarse; reloj del temporizador a 100 MHz.', steps: ['Tiempo muerto mayor que el apagado, con margen: por ejemplo <b>250 ns</b>', 'Cada paso de DTG vale 10 ns', 'DTG = 250 / 10 = <b>25</b>', 'Primera prueba con fuente limitada en corriente y tensión baja'], result: 'DTG = 25 (250 ns).' },
+      Q('¿Por qué un medio puente necesita salidas complementarias?', ['Un transistor conduce cuando el otro está apagado, y viceversa', 'Para duplicar la frecuencia', 'Para medir corriente', 'Para ahorrar pines'], 'Arriba y abajo nunca deben conducir a la vez.', { c: 'st_deadtime', h: 'Arriba y abajo se turnan.' }),
+      Q('¿Qué provoca el shoot-through?', ['Picos de corriente enormes que calientan y pueden destruir los transistores', 'Que el motor gire al revés', 'Ruido en el audio', 'Nada grave'], 'Se evita con tiempo muerto y drivers con protección.', { c: 'st_deadtime', h: 'Es un cortocircuito de la alimentación.' }),
+      Nm('Reloj de temporizador a 100 MHz. ¿Qué DTG da 500 ns de tiempo muerto?', 50, '', '500 ns / 10 ns = 50.', { c: 'st_deadtime', h: 'Divide entre 10 ns.' }),
+      Q('Configuras TIM1 en PWM por registros y no sale nada por el pin. ¿Qué falta casi seguro?', ['MOE en TIM1->BDTR', 'ARPE', 'UIF', 'CEN de TIM2'], 'Las salidas de los avanzados necesitan MOE.', { c: 'st_advtim', h: 'El interruptor general de salidas.' }),
+      Q('¿Para qué sirve la entrada de freno (BKIN)?', ['Para llevar las salidas a un estado seguro por hardware, sin esperar a la CPU', 'Para frenar el motor con software', 'Para medir la velocidad', 'Para ahorrar energía'], 'Un comparador de sobrecorriente puede cortar en nanosegundos.', { c: 'st_advtim', h: 'Protección que no depende del software.' }),
+      Nm('Modo centrado a 100 MHz, PSC = 0, ARR = 1000. ¿Frecuencia en kHz?', 50, 'kHz', 'Sube y baja: 100 MHz / (2 × 1000) = 50 kHz.', { c: 'st_timer', h: 'Dos recorridos por periodo: subida y bajada.' }),
+      Q('Vas a probar tu primer puente de potencia. ¿Cómo lo alimentas?', ['Con una fuente de laboratorio con límite de corriente bajo y a tensión reducida', 'Directo a una batería de coche', 'A la red con un transformador', 'Sin carga a máxima tensión'], 'Si algo está mal, el límite de corriente salva los transistores (y a ti).', { c: 'st_deadtime', h: 'Si algo falla, que no se queme nada.' }),
+      I('<b>Resumen</b>\n· TIM1/TIM8: complementarias, tiempo muerto, freno y MOE.\n· Tiempo muerto = DTG × 10 ns a 100 MHz, mayor que el apagado del transistor.\n· Modo centrado: mitad de frecuencia y PWM simétrico.')
     ]),
     PRJ('st-p6', 'Proyecto: motor con encoder y PID', 'st_motor'),
     PRJ('st-p7', 'Proyecto: frecuencímetro de banco', 'st_freq')
@@ -1572,231 +2619,366 @@ void imu_paso(float gyro_dps, float ax, float az) {
 
   const DMAP = (fs, n, t) => ({ fs: { label: 'Muestreo', val: fs, list: [8, 16, 44.1, 48], unit: 'kHz', dec: 1 }, N: { label: 'Búfer', val: n, list: [64, 128, 256, 512, 1024, 2048], unit: 'muestras', dec: 0 }, T: { label: 'Proceso por mitad', val: t, min: 0.5, max: 20, step: 0.5, unit: 'ms', dec: 1 } });
   const ADCP = (pre, smp, r, fixR) => ({ pre: { label: 'Preescalador ADC ÷', val: pre, list: [2, 4, 6, 8], dec: 0 }, smp: { label: 'Ciclos de muestreo', val: smp, list: [3, 15, 28, 56, 84, 112, 144, 480], dec: 0 }, R: fixR ? { label: 'R fuente', val: r, fixed: true } : { label: 'R de la fuente', val: r, list: [0.1, 1, 4.7, 10, 22, 47, 100], unit: 'kΩ', dec: 1 } });
-
-  const M6 = { id: 'st-m6', title: 'DMA y periféricos de datos', desc: 'DMA, ADC con escaneo, DAC, UART con IDLE, I²C, SPI, CAN y USB.', nodes: [
-    L('st28', 'DMA: mover datos sin la CPU', 'bus', ['st_dma', 'st_dmacfg'], [
-      I('El <b>DMA</b> copia datos entre periféricos y memoria mientras la CPU hace otra cosa. Le das origen, destino, número de datos y su tamaño, y te avisa con una interrupción a mitad (<b>HT</b>), al terminar (<b>TC</b>) o si hay error (<b>TE</b>).'),
-      I('En la F4 hay dos controladores (DMA1 y DMA2) con 8 <b>flujos</b> (streams) cada uno, y cada flujo elige entre 8 <b>canales</b> de petición según una tabla fija del manual. Solo el DMA2 hace copias de memoria a memoria. En G0, G4 y H7 hay un <b>DMAMUX</b> que conecta cualquier petición a cualquier canal.'),
-      Q('En una F4 quieres copiar un búfer de RAM a otro con DMA. ¿Qué controlador usas?', ['DMA2', 'DMA1', 'Cualquiera', 'Ninguno: no se puede'], 'El DMA1 de la F4 no admite memoria a memoria.', { c: 'st_dmacfg' }),
-      I('Parámetros clave: <b>dirección</b> (periférico→memoria, memoria→periférico, memoria→memoria), <b>tamaño</b> (byte, media palabra, palabra), <b>incremento</b> de cada lado y <b>modo</b> normal o circular.'),
-      Q('ADC de 12 bits a un búfer uint16_t. ¿Configuración típica?', ['Media palabra en ambos lados, incrementar memoria sí, periférico no', 'Byte en ambos lados', 'Incrementar el periférico', 'Palabra y sin incrementos'], 'El registro de datos del ADC es siempre el mismo; el búfer avanza.', { c: 'st_dmacfg' }),
-      I('Juega con el búfer circular: la CPU procesa una mitad mientras el DMA llena la otra.', { tune: { viz: 'st_dma', params: DMAP(16, 512, 4) } }),
-      TU('A 48 kHz, tardas 3 ms en procesar cada mitad. Elige un búfer para que la CPU no pase del 80 % de carga.', 'st_dma', DMAP(48, 64, 3), { q: 'load', min: 0, max: 80, text: 'Objetivo: carga de CPU ≤ 80 %', hint: 'Media vuelta debe durar más de 3,75 ms: al menos 360 muestras por mitad.' }, 'Con 512 muestras cada mitad dura 5,3 ms (56 % de carga); con 1024, 10,7 ms (28 %).', { c: 'st_dma' }),
-      G('st_dmaHalf'), G('st_dmaHalf'),
-      Q('¿Qué pasa si procesas la mitad que el DMA está escribiendo en ese momento?', ['Mezclas datos nuevos y viejos: resultados corruptos', 'Nada', 'El DMA se detiene', 'HardFault seguro'], 'Procesa la mitad HT tras HT y la otra tras TC.', { c: 'st_dma' }),
-      Q('¿Qué calcula esta línea con un DMA circular de N datos?', ['La posición actual de escritura del DMA en el búfer', 'Los datos que faltan por procesar en total', 'El tamaño del búfer', 'El número de interrupciones'], 'NDTR cuenta hacia atrás lo que falta en esta vuelta.', { code: 'uint16_t pos = N -\n  __HAL_DMA_GET_COUNTER(&hdma_usart2_rx);', c: 'st_dma' })
+  const M6 = { id: 'st-m6', title: 'DMA y periféricos de datos', desc: 'DMA circular, ADC con escaneo, DAC, UART con IDLE, I²C, SPI, CAN y USB.', nodes: [
+    L('st28', 'DMA: mover datos sin la CPU', 'bus', ['st_dma', 'st_dmacfg', 'st_dmamem'], [
+      Q('El ADC da 48 000 muestras por segundo. Si la CPU recogiera cada una con una interrupción, ¿qué crees que pasaría?', ['48 000 interrupciones por segundo: mucha CPU perdida en entrar y salir', 'Nada, es poco', 'El ADC se pararía', 'Es imposible pasar de 1000 interrupciones'], 'Para eso existe el DMA: un ayudante que copia datos sin la CPU. Míralo trabajar.', { ...PRED, c: 'st_dmacfg', h: 'Cuenta entradas y salidas de interrupción por segundo.' }),
+      { t: 'explore', text: 'El DMA llena un búfer circular a 48 kHz; tú tardas 3 ms en procesar cada mitad.', viz: 'st_dma', params: DMAP(48, 64, 3),
+        tasks: [{ q: 'load', min: 0, max: 80, text: 'Elige un búfer para que la CPU no pase del 80 % de carga', done: 'Con 512 muestras, cada mitad dura 5,3 ms: un 56 % de carga.', hint: 'Media vuelta debe durar más de 3,75 ms.' },
+          { q: 'load', min: 0, max: 30, text: 'Baja la carga por debajo del 30 %', done: 'Con 1024 muestras, 10,7 ms por mitad: un 28 %.' }] },
+      I('El <b>DMA</b> copia datos entre periféricos y memoria mientras la CPU hace otra cosa. Le das origen, destino y cantidad, y avisa a mitad (<b>HT</b>), al terminar (<b>TC</b>) o si hay error (<b>TE</b>).', { svg: SVG_DMACFG }),
+      I('En la F4 hay dos controladores (DMA1 y DMA2) con 8 <b>flujos</b> (streams) cada uno; cada flujo elige entre 8 <b>canales</b> de petición según una tabla fija del manual. Solo el <b>DMA2</b> copia de memoria a memoria. En G0, G4 o H7, un DMAMUX conecta cualquier petición a cualquier canal.', { svg: table([['DMA1', '8 flujos · periféricos de APB1'], ['DMA2', '8 flujos · APB2 y memoria a memoria'], ['Canal', 'Qué petición atiende el flujo'], ['DMAMUX', 'G0, G4, H7: cualquier petición']], 'DMA en la F4') }),
+      I('Parámetros: <b>dirección</b>, <b>tamaño</b> de dato (byte, media palabra, palabra), <b>incremento</b> de cada lado y <b>modo</b> normal o circular. En <b>circular</b> el DMA da vueltas al búfer: procesas una mitad mientras llena la otra.', { tune: { viz: 'st_dma', params: DMAP(16, 512, 4) } }),
+      I('No toda la memoria está en el camino del DMA: la <b>CCM</b> de la F407 o la F303 solo la ve el núcleo. Y en chips con caché (F7, H7) la CPU puede leer una copia vieja: invalida la caché de ese búfer o usa una zona no cacheable.', { svg: SVG_CCM }),
+      { t: 'steps', text: 'Audio a 48 kHz con un búfer circular de 1024 muestras. ¿Cuánto tiempo tienes para cada mitad?', steps: ['Media vuelta = 1024 / 2 = 512 muestras', 'Llegan 48 000 muestras por segundo', '512 / 48 000 = <b>10,7 ms</b>', 'Si procesar una mitad te lleva 3 ms, la CPU está al 28 %'], result: 'Tu plazo es 10,7 ms por mitad.' },
+      Q('En una F4 quieres copiar un búfer de RAM a otro con DMA. ¿Qué controlador usas?', ['DMA2', 'DMA1', 'Cualquiera', 'Ninguno: no se puede'], 'El DMA1 de la F4 no admite memoria a memoria.', { c: 'st_dmacfg', h: 'Solo uno de los dos lo admite en la F4.' }),
+      Q('ADC de 12 bits a un búfer uint16_t. ¿Configuración típica?', ['Media palabra en ambos lados, incrementar memoria sí y periférico no', 'Byte en ambos lados', 'Incrementar el periférico', 'Palabra y sin incrementos'], 'El registro de datos del ADC es siempre el mismo; el búfer avanza.', { c: 'st_dmacfg', h: 'El registro del ADC no se mueve.' }),
+      G('st_dmaHalf'),
+      Q('¿Qué pasa si procesas la mitad que el DMA está escribiendo en ese momento?', ['Mezclas datos nuevos y viejos: resultados corruptos', 'Nada', 'El DMA se detiene', 'HardFault seguro'], 'Procesa la mitad A tras HT y la B tras TC.', { c: 'st_dma', h: 'Una mitad cada vez.' }),
+      Q('¿Qué calcula esta línea con un DMA circular de N datos?', ['La posición actual de escritura del DMA en el búfer', 'Los datos que faltan por procesar en total', 'El tamaño del búfer', 'El número de interrupciones'], 'El contador del DMA cuenta hacia atrás lo que falta en esta vuelta.', { code: 'uint16_t pos = N -\n  __HAL_DMA_GET_COUNTER(&hdma_adc1);', c: 'st_dma', h: 'El contador cuenta lo que falta.' }),
+      Q('Pones un búfer de DMA en la CCM de una F407. ¿Qué pasa?', ['El DMA no puede acceder a la CCM', 'Funciona más rápido', 'Se borra en cada interrupción', 'Nada especial'], 'La CCM solo está conectada al núcleo.', { c: 'st_dmamem', h: 'No todas las memorias están conectadas al DMA.' }),
+      Q('En un H7 con caché, la CPU lee un búfer que acaba de llenar el DMA y ve datos viejos. ¿Por qué?', ['La caché guarda una copia antigua: hay que invalidarla o usar memoria no cacheable', 'El DMA está roto', 'Falta volatile', 'La Flash es lenta'], 'El DMA escribe en la RAM sin pasar por la caché.', { c: 'st_dmamem', h: 'La CPU puede estar leyendo de una copia.' }),
+      G('st_dmaHalf'),
+      I('<b>Resumen</b>\n· El DMA mueve datos sin la CPU; avisa con HT, TC y TE.\n· Circular: procesa una mitad mientras se llena la otra; tu plazo es N / 2 / fs.\n· Búferes de DMA en la SRAM normal (no CCM); con caché, invalida.')
     ]),
     L('st29', 'ADC multicanal con escaneo y DMA', 'gauge', ['st_adc', 'st_adcscan', 'st_adcacc', 'st_wavegen'], [
-      I('El ADC de la F4 es de aproximaciones sucesivas, 12 bits, con hasta 16 canales externos y canales internos (sensor de temperatura, VREFINT y VBAT). Su reloj es PCLK2 ÷ 2, 4, 6 u 8 y no debe pasar de <b>36 MHz</b>.'),
-      I('<b>tconv = (ciclos de muestreo + 12) / fADC</b> a 12 bits. El tiempo de muestreo debe bastar para cargar el condensador interno a través de la resistencia de tu fuente.', { tune: { viz: 'st_adc', params: ADCP(4, 3, 10) } }),
-      G('st_adcTime'), G('st_adcTime'),
-      TU('Fuente de 47 kΩ, PCLK2 = 84 MHz: consigue la máxima velocidad con error de carga menor de 0,5 LSB.', 'st_adc', ADCP(4, 3, 47, true), { q: 'fsOk', min: 0.34, max: 2, text: 'Objetivo: más de 340 kS/s sin error de carga', hint: 'Prueba preescaladores mayores con tiempos de muestreo intermedios.' }, 'Con ÷6 (14 MHz) y 28 ciclos: 2 µs de muestreo y unos 350 kS/s.', { c: 'st_adc' }),
-      I('<b>Modo escaneo</b>: el ADC convierte una lista de canales (rangos) en orden. Con modo continuo y <b>DMA circular</b>, el búfer se llena intercalado: canal 1, canal 2, canal 3, canal 1, canal 2…'),
-      Q('Escaneas 3 canales con DMA circular. ¿En qué posición está la muestra k del segundo canal?', ['buf[3·k + 1]', 'buf[k + 1]', 'buf[2·k]', 'buf[3·k + 2]'], 'Cada vuelta ocupa 3 posiciones; el segundo canal es el índice 1.', { c: 'st_adcscan' }),
-      Nm('4 canales y 100 muestras de cada uno. ¿Longitud del búfer?', 400, 'muestras', '4 × 100 intercaladas.', { c: 'st_adcscan' }),
-      I('Para muestrear a un ritmo exacto (audio, FFT, control) no uses el modo continuo: dispara cada conversión con el evento <b>TRGO</b> de un temporizador.'),
-      Q('¿Por qué disparar el ADC con un temporizador para una FFT?', ['La FFT supone muestras equiespaciadas; el temporizador da un ritmo exacto', 'Para gastar menos', 'Porque el ADC no tiene modo continuo', 'Para tener más bits'], 'Un muestreo irregular ensucia el espectro.', { c: 'st_wavegen' }),
-      Q('¿Qué familia necesita llamar a HAL_ADCEx_Calibration_Start antes de medir?', ['L4 y G4, entre otras; la F4 no tiene autocalibración', 'Solo la F4', 'Ninguna', 'Todas por igual'], 'Depende de la familia: mira el manual.', { c: 'st_adcacc' }),
-      Q('Tu equipo va con batería y VDDA baja con el tiempo. ¿Cómo mides tensiones absolutas?', ['Midiendo también VREFINT para calcular el VDDA real', 'Suponiendo siempre 3,3 V', 'Con más bits', 'Con un tiempo de muestreo mayor'], 'VREFINT es una referencia interna estable; su valor de fábrica está calibrado en el chip.', { c: 'st_adcacc' })
+      Q('Lees un divisor de 100 kΩ con el tiempo de muestreo más corto. ¿Qué crees que pasa?', ['La lectura sale baja: el condensador interno no llega a cargarse', 'Lee perfecto', 'Lee más alto', 'El ADC se bloquea'], 'El ADC carga un condensador a través de tu resistencia. Mira la curva.', { ...PRED, c: 'st_adc', h: 'El ADC carga un condensador a través de tu resistencia.' }),
+      { t: 'explore', text: 'La curva es la carga del condensador de muestreo. Juega con el reloj, los ciclos y la resistencia de la fuente.', viz: 'st_adc', params: ADCP(4, 3, 47),
+        tasks: [{ q: 'e47', min: 1, max: 1, text: 'Con la fuente de 47 kΩ, consigue un error de carga menor de 0,5 LSB', done: 'Más ciclos de muestreo: más tiempo para cargar.', hint: 'Sube los ciclos de muestreo.' },
+          { q: 'fast', min: 1, max: 1, text: 'Ahora más de 700 000 muestras por segundo sin error', done: 'Solo con una fuente de baja resistencia (o un seguidor con operacional) y pocos ciclos.' }] },
+      I('El ADC de la F4: aproximaciones sucesivas (como el del curso base), 12 bits, hasta 16 canales externos y canales internos (temperatura, VREFINT, VBAT). Su reloj es PCLK2 ÷ 2, 4, 6 u 8, sin pasar de <b>36 MHz</b>.', { svg: chain(['PCLK2|84 MHz', '÷4', 'fADC|21 MHz']) }),
+      I('Durante el <b>tiempo de muestreo</b> un condensador interno de pocos pF se carga a través de tu fuente. Después, 12 ciclos de conversión:\n<b>tconv = (ciclos de muestreo + 12) / fADC</b>', { tune: { viz: 'st_adc', params: ADCP(4, 15, 10) } }),
+      I('<b>Escaneo</b>: el ADC convierte una lista de canales en orden. Con modo continuo y DMA circular, el búfer se llena <b>intercalado</b>: con n canales, la muestra k del canal i está en <b>buf[n·k + i]</b>.', { tune: { viz: 'st_scan', params: P_SCAN(3, 2, 1) } }),
+      I('Para muestrear a ritmo exacto (audio, FFT, control), dispara cada conversión con el evento <b>TRGO</b> de un temporizador en vez del modo continuo. Y si tu equipo va con batería, mide <b>VREFINT</b> para conocer el VDDA real.', { svg: SVG_ADCACC, more: 'VDDA = 3,3 V × VREFINT_CAL / VREFINT leído, donde VREFINT_CAL es el valor medido en fábrica a 3,3 V y guardado en el chip. Algunas familias (L4, G4…) piden además una autocalibración con HAL_ADCEx_Calibration_Start antes de medir; la F4 no la tiene.' }),
+      { t: 'steps', text: 'Escaneas 4 canales con fADC = 21 MHz y 56 ciclos de muestreo. ¿Cada cuánto se repite cada canal?', steps: ['Una conversión: (56 + 12) / 21 MHz', '= 68 / 21 ≈ <b>3,24 µs</b>', '4 canales en fila: 4 × 3,24', '≈ <b>12,95 µs</b> por vuelta: unas 77 000 muestras por segundo y canal'], result: 'Cada canal se mide cada 12,95 µs.' },
+      G('st_adcTime'),
+      Q('Escaneas 3 canales con DMA circular. ¿En qué posición está la muestra k del segundo canal?', ['buf[3·k + 1]', 'buf[k + 1]', 'buf[2·k]', 'buf[3·k + 2]'], 'Cada vuelta ocupa 3 posiciones; el segundo canal es el índice 1.', { c: 'st_adcscan', h: 'Cada vuelta ocupa n posiciones.' }),
+      Nm('4 canales y 100 muestras de cada uno. ¿Longitud del búfer?', 400, 'muestras', '4 × 100, intercaladas.', { c: 'st_adcscan', h: 'Canales × muestras.' }),
+      Q('¿Por qué disparar el ADC con un temporizador para una FFT?', ['La FFT supone muestras equiespaciadas; el temporizador da un ritmo exacto', 'Para gastar menos', 'Porque el ADC no tiene modo continuo', 'Para tener más bits'], 'Un muestreo irregular ensucia el espectro.', { c: 'st_wavegen', h: 'La FFT supone muestras equiespaciadas.' }),
+      Q('¿Qué familia necesita llamar a HAL_ADCEx_Calibration_Start antes de medir?', ['L4 y G4, entre otras; la F4 no tiene autocalibración', 'Solo la F4', 'Ninguna', 'Todas por igual'], 'Depende de la familia: mira su manual.', { c: 'st_adcacc', h: 'Depende de la familia.' }),
+      Q('Tu equipo va con batería y VDDA baja con el tiempo. ¿Cómo mides tensiones absolutas?', ['Midiendo también VREFINT para calcular el VDDA real', 'Suponiendo siempre 3,3 V', 'Con más bits', 'Con un tiempo de muestreo mayor'], 'VREFINT es estable y su valor de fábrica está guardado en el chip.', { c: 'st_adcacc', h: 'Hay una referencia interna estable.' }),
+      G('st_adcTime'),
+      I('<b>Resumen</b>\n· tconv = (ciclos de muestreo + 12) / fADC; fuentes de mucha resistencia piden más ciclos.\n· Escaneo + DMA: buf[n·k + i].\n· Ritmo exacto con TRGO; VREFINT para conocer VDDA.')
     ]),
     PRJ('st-p8', 'Proyecto: analizador de espectro de audio', 'st_spectrum'),
     L('st30', 'DAC y generación de señales', 'wave', ['st_dac', 'st_wavegen', 'st_family'], [
-      I('El <b>DAC</b> convierte un número en tensión: 12 bits, 0–4095 entre 0 y VREF+. La F446 y la F407 tienen dos canales (PA4 y PA5); la G4 tiene varios. <b>La F401 y la F411 no tienen DAC.</b>'),
-      Q('Quieres generar audio analógico con una Black Pill F411. ¿Qué haces?', ['Usar PWM filtrado o un DAC externo (por ejemplo I²S), porque no tiene DAC', 'Usar su DAC en PA4', 'Usar el ADC al revés', 'No se puede de ninguna forma'], 'Lee siempre la lista de periféricos del chip concreto.', { c: 'st_family' }),
-      Nm('DAC de 12 bits con VREF+ = 3,3 V. ¿Tensión con el valor 2048?', 1.65, 'V', '2048 / 4095 × 3,3 ≈ 1,65 V.', { tol: 0.01, c: 'st_dac' }),
-      I('El <b>buffer de salida</b> interno reduce la impedancia de salida para poder cargar algo, pero no llega exactamente a 0 V ni a VREF+. Sin buffer la salida llega a los extremos, pero solo puede alimentar entradas de alta impedancia.'),
-      Q('Sin buffer interno, ¿qué necesitas para cargar la salida del DAC con unos auriculares?', ['Un operacional como seguidor o amplificador', 'Nada', 'Una resistencia en serie', 'Un condensador a masa'], 'La salida sin buffer tiene una impedancia alta.', { c: 'st_dac' }),
-      I('Para generar una forma de onda: una tabla de N muestras, un temporizador que dispara el DAC con TRGO y el DMA en modo circular. <b>f_salida = f_disparo / N</b>.'),
-      Nm('TIM6 dispara a 1 MHz y la tabla tiene 100 muestras. ¿Frecuencia de salida en kHz?', 10, 'kHz', '1 MHz / 100 = 10 kHz.', { c: 'st_wavegen' }),
-      Q('¿Cómo duplicas la frecuencia sin cambiar el temporizador?', ['Usando una tabla con la mitad de muestras', 'Duplicando la amplitud', 'Cambiando a 8 bits', 'Activando el buffer'], 'Mismo ritmo de muestras, menos muestras por ciclo.', { c: 'st_wavegen' }),
-      Q('¿Por qué la tabla suma 2048?', ['El DAC solo da tensiones positivas: el seno se centra a mitad de escala', 'Por la resolución', 'Para que suene más fuerte', 'Por el buffer'], 'El seno oscila entre 1 y 4095 alrededor de 2048.', { code: 'tabla[i] = 2048 + 2047 *\n  sinf(6.2831853f * i / N);', c: 'st_dac' }),
-      Q('¿Qué ventaja tiene la síntesis DDS (acumulador de fase) frente a cambiar el temporizador?', ['Resolución de frecuencia muy fina y cambios sin cortes', 'Más bits de resolución', 'Menos memoria siempre', 'No necesita DAC'], 'La frecuencia depende del incremento de fase, que puede ser cualquiera.', { c: 'st_wavegen' })
+      Q('Quieres sacar un seno con el DAC usando tabla[i] = 2047·sin(…). ¿Qué crees que pasa?', ['La mitad negativa sale recortada a 0 V', 'Sale perfecto', 'Sale al doble de amplitud', 'El DAC se estropea'], 'El DAC solo da tensiones entre 0 y VREF+. Pruébalo.', { ...PRED, c: 'st_dac', h: 'El DAC solo da tensiones entre 0 y VREF+.' }),
+      { t: 'explore', text: 'Un temporizador dispara el DAC y cada disparo saca una muestra de la tabla.', viz: 'st_dac', params: P_DAC(100, 100, 0),
+        tasks: [{ q: 'clip', min: 0, max: 0, text: 'Centra la onda para que no se recorte', done: 'Sumando 2048, el seno oscila alrededor de la mitad de escala.', hint: 'Suma 2048.' },
+          { q: 'f10', min: 1, max: 1, text: 'Consigue 10 kHz', done: '1 MHz / 100, 500 kHz / 50… f = disparo / muestras.' },
+          { q: 'f50', min: 1, max: 1, text: 'Ahora 50 kHz', done: 'Menos muestras por periodo: más frecuencia y escalones más gruesos.' }] },
+      I('El <b>DAC</b> convierte un número en tensión: 12 bits, de 0 a 4095 entre 0 y VREF+.\n<b>V = código / 4095 × VREF+</b>.\nLa F446 y la F407 tienen dos canales (PA4 y PA5). <b>La F401 y la F411 no tienen DAC.</b>', { tune: { viz: 'st_dac', params: P_DAC(20, 100, 1) } }),
+      I('El <b>buffer de salida</b> interno deja cargar la salida, pero no llega del todo a 0 V ni a VREF+. Sin él la salida llega a los extremos, pero solo puede alimentar entradas de alta impedancia: para unos auriculares, un operacional como seguidor.', { svg: chain(['DAC|sin buffer', 'Operacional|seguidor', 'Auriculares']) }),
+      I('Para generar una onda: una tabla de N muestras, un temporizador que dispara el DAC con <b>TRGO</b> y el DMA en circular, de memoria a periférico. <b>f_salida = f_disparo / N</b>. La CPU no hace nada.', { code: 'for (int i = 0; i < N; i++)\n  tabla[i] = 2048 + 2047 * sinf(6.2831853f * i / N);\nHAL_TIM_Base_Start(&htim6);        // TRGO a 1 MHz\nHAL_DAC_Start_DMA(&hdac, DAC_CHANNEL_1,\n  (uint32_t *)tabla, N, DAC_ALIGN_12B_R);' }),
+      I('Con <b>DDS</b> (acumulador de fase) sumas en cada disparo un incremento a un acumulador y usas sus bits altos como índice: la frecuencia es proporcional al incremento, con resolución muy fina y sin cortes.', { code: 'fase += incremento;           // uint32_t\nsalida = tabla[fase >> 24];   // tabla de 256' }),
+      { t: 'steps', text: 'TIM6 dispara a 1 MHz y quieres 2 kHz. ¿Cuántas muestras por periodo?', steps: ['f_salida = f_disparo / N', 'Despeja: N = f_disparo / f_salida', 'N = 1 000 000 / 2000 = <b>500</b>', 'La tabla de 500 valores uint16_t ocupa 1000 B'], result: 'Tabla de 500 muestras.' },
+      Q('Quieres generar audio analógico con una Black Pill F411. ¿Qué haces?', ['Usar PWM filtrado o un DAC externo (por ejemplo I²S), porque no tiene DAC', 'Usar su DAC en PA4', 'Usar el ADC al revés', 'No se puede de ninguna forma'], 'Lee siempre la lista de periféricos del chip concreto.', { c: 'st_family', h: 'Mira si esa línea tiene DAC.' }),
+      Nm('DAC de 12 bits con VREF+ = 3,3 V. ¿Tensión con el código 2048?', 1.65, 'V', '2048 / 4095 × 3,3 ≈ 1,65 V.', { tol: 0.01, c: 'st_dac', h: 'Es la mitad de escala.' }),
+      Q('Sin buffer interno, ¿qué necesitas para cargar la salida del DAC con unos auriculares?', ['Un operacional como seguidor o amplificador', 'Nada', 'Una resistencia en serie', 'Un condensador a masa'], 'La salida sin buffer tiene una impedancia alta.', { c: 'st_dac', h: 'La salida sin buffer no puede dar corriente.' }),
+      Nm('TIM6 dispara a 1 MHz y la tabla tiene 100 muestras. ¿Frecuencia de salida en kHz?', 10, 'kHz', '1 MHz / 100 = 10 kHz.', { c: 'st_wavegen', h: 'Disparos por segundo entre muestras por periodo.' }),
+      Q('¿Cómo duplicas la frecuencia sin cambiar el temporizador?', ['Usando una tabla con la mitad de muestras', 'Duplicando la amplitud', 'Cambiando a 8 bits', 'Activando el buffer'], 'Mismo ritmo, menos muestras por ciclo.', { c: 'st_wavegen', h: 'Mismo ritmo, menos muestras.' }),
+      Q('¿Por qué la tabla suma 2048?', ['El DAC solo da tensiones positivas: el seno se centra a mitad de escala', 'Por la resolución', 'Para que suene más fuerte', 'Por el buffer'], 'El seno oscila entre 1 y 4095 alrededor de 2048.', { code: 'tabla[i] = 2048 + 2047 *\n  sinf(6.2831853f * i / N);', c: 'st_dac', h: 'El DAC no da negativos.' }),
+      Q('¿Qué ventaja tiene la síntesis DDS frente a cambiar el temporizador?', ['Resolución de frecuencia muy fina y cambios sin cortes', 'Más bits de resolución', 'Menos memoria siempre', 'No necesita DAC'], 'La frecuencia depende del incremento de fase.', { c: 'st_wavegen', h: 'El incremento de fase manda.' }),
+      I('<b>Resumen</b>\n· V = código / 4095 × VREF+; centra las ondas en 2048.\n· Tabla + temporizador (TRGO) + DMA circular: f = f_disparo / N.\n· DDS para frecuencias finas. La F401 y la F411 no tienen DAC.')
     ]),
     PRJ('st-p9', 'Proyecto: generador de funciones', 'st_funcgen'),
     PRJ('st-p10', 'Proyecto: tira LED con PWM y DMA', 'st_ws2812'),
-    L('st31', 'UART a fondo: BRR, DMA e IDLE', 'bus', ['st_uartrx', 'st_brr', 'st_uarttime', 'st_dma', 'st_rs485'], [
-      I('Una trama 8N1 tiene 10 bits: inicio, 8 de datos y parada. La velocidad sale de <b>BRR = fPCLK / baudios</b> (sobremuestreo ×16), y el redondeo produce un pequeño error que debe quedar por debajo de un 2 %.'),
-      G('st_brr'), G('st_baudErr'),
-      Nm('A 115 200 baudios en 8N1, ¿cuántos bytes por segundo como máximo?', 11520, 'B/s', '115 200 / 10 bits por byte.', { c: 'st_uarttime' }),
-      I('El problema de recibir: no sabes cuántos bytes llegarán. Opciones:\n· Una interrupción por byte (muchas interrupciones).\n· DMA de longitud fija (espera para siempre si llegan menos).\n· <b>DMA + línea ociosa (IDLE)</b>: avisa cuando la línea lleva un carácter de tiempo en silencio.'),
-      Q('Un GPS envía frases NMEA de longitud variable. ¿Qué método eliges?', ['DMA con detección de línea ociosa', 'DMA de longitud fija', 'HAL_UART_Receive bloqueante', 'Sondeo en el bucle'], 'Una interrupción por frase, sin tocar cada byte.', { c: 'st_uartrx' }),
-      I('Con la HAL moderna: HAL_UARTEx_ReceiveToIdle_DMA arranca la recepción y HAL_UARTEx_RxEventCallback te dice cuántos bytes hay cuando la línea queda ociosa (o el búfer se llena).', { code: 'HAL_UARTEx_ReceiveToIdle_DMA(&huart2,\n  rx, sizeof rx);\n\nvoid HAL_UARTEx_RxEventCallback(\n    UART_HandleTypeDef *h, uint16_t n) {\n  procesar(rx, n);\n  HAL_UARTEx_ReceiveToIdle_DMA(h,\n    rx, sizeof rx);\n}' }),
-      Q('En HAL_UARTEx_RxEventCallback, ¿qué es el parámetro de tamaño en modo normal?', ['Cuántos bytes se han recibido en el búfer', 'El tamaño máximo del búfer', 'La velocidad en baudios', 'El número de errores'], 'En modo circular es la posición dentro del búfer.', { c: 'st_uartrx' }),
-      Q('El callback salta también a mitad de búfer y no lo quieres. ¿Qué haces?', ['Desactivar la interrupción de media transferencia del DMA', 'Cambiar la velocidad', 'Usar un búfer más pequeño', 'Desactivar el DMA'], '__HAL_DMA_DISABLE_IT(h->hdmarx, DMA_IT_HT) tras arrancar la recepción.', { c: 'st_dma' }),
-      Q('Aparece un error de desbordamiento (ORE) y la recepción se detiene. ¿Qué significa?', ['Llegó un byte antes de leer el anterior: hay que gestionar el error y relanzar la recepción', 'El cable está roto', 'La velocidad es demasiado baja', 'El búfer es demasiado grande'], 'Implementa HAL_UART_ErrorCallback.', { c: 'st_uartrx' }),
-      Q('RS-485 necesita activar el transmisor solo al enviar (pin DE). ¿Cómo lo haces en una F4?', ['Con un GPIO que pones a 1 antes de enviar y a 0 al terminar el último byte', 'La USART de la F4 lo hace sola', 'No se puede', 'Con el pin RX'], 'Algunas familias (G0, G4, L4…) tienen control DE por hardware; la F4 no.', { c: 'st_rs485' })
+    L('st31', 'UART a fondo: BRR, DMA e IDLE', 'bus', ['st_brr', 'st_uartrx', 'st_uarttime', 'st_dma', 'st_rs485'], [
+      Q('Configuras la USART con PCLK = 16 MHz a 921 600 baudios. ¿Crees que funcionará fiable?', ['Justo en el límite: el redondeo deja un error de un 2 %', 'Perfecto', 'Imposible configurarlo', 'Va al doble de velocidad'], '16 MHz / 921 600 = 17,4, y BRR solo admite 17. Míralo.', { ...PRED, c: 'st_brr', h: 'Divide 16 MHz entre 921 600 y redondea.' }),
+      { t: 'explore', text: 'BRR divide el reloj del bus. Mira cómo se desplazan los instantes de lectura con el error.', viz: 'st_baud', params: P_BAUD(84, 115200),
+        tasks: [{ q: 'err', min: 2, max: 100, text: 'Busca una combinación con más de un 2 % de error', done: 'Poco reloj y mucha velocidad: el divisor es pequeño y el redondeo pesa.', hint: 'Baja PCLK y sube los baudios.' },
+          { q: 'e921', min: 1, max: 1, text: 'Ahora 921 600 baudios con menos de un 1 % de error', done: 'Con más reloj, el divisor crece y el redondeo pesa menos.' }] },
+      I('Con sobremuestreo ×16: <b>BRR = fPCLK / baudios</b>, redondeado. Usa el PCLK del bus de esa USART. El redondeo deja un error: velocidad real = fPCLK / BRR; por encima de un 2 % empiezan los fallos.', { tune: { viz: 'st_baud', params: P_BAUD(16, 921600) }, more: 'Los 4 bits bajos de BRR son la fracción en dieciseisavos y el resto, la parte entera (mantisa). Pero el número que escribes es justo esa división redondeada.' }),
+      I('Recibir: no sabes cuántos bytes llegarán. Una interrupción por byte son muchas; un DMA de longitud fija espera para siempre si llegan menos. La solución: <b>DMA + línea ociosa (IDLE)</b>, que avisa cuando la línea lleva un carácter de tiempo en silencio.', { svg: SVG_IDLE }),
+      I('Con la HAL: HAL_UARTEx_ReceiveToIdle_DMA arranca la recepción y HAL_UARTEx_RxEventCallback te dice cuántos bytes hay.', { code: 'HAL_UARTEx_ReceiveToIdle_DMA(&huart2, rx, sizeof rx);\n\nvoid HAL_UARTEx_RxEventCallback(\n    UART_HandleTypeDef *h, uint16_t n) {\n  procesar(rx, n);\n  HAL_UARTEx_ReceiveToIdle_DMA(h, rx, sizeof rx);\n}' }),
+      I('<b>RS-485</b> es semidúplex: todos comparten un par de hilos. El pin <b>DE</b> del transceptor activa su transmisor: a 1 antes de enviar y a 0 cuando sale el último bit (bandera <b>TC</b>). En la F4 lo haces con un GPIO; G0, G4 o L4 pueden hacerlo por hardware.', { svg: SVG_DE }),
+      { t: 'steps', text: 'PCLK = 16 MHz y 115 200 baudios: calcula BRR y el error.', steps: ['BRR = 16 000 000 / 115 200 = 138,9', 'Redondeado: <b>BRR = 139</b> (0x008B)', 'Velocidad real = 16 000 000 / 139 ≈ 115 108 baudios', 'Error = 92 / 115 200 ≈ <b>0,08 %</b>'], result: 'Muy por debajo del 2 %.' },
+      G('st_brr'),
+      G('st_baudErr'),
+      Nm('A 115 200 baudios en 8N1, ¿cuántos bytes por segundo como máximo?', 11520, 'B/s', '115 200 / 10 bits por byte.', { c: 'st_uarttime', h: 'Divide entre 10, no entre 8.' }),
+      Q('Un GPS envía frases NMEA de longitud variable. ¿Qué método eliges?', ['DMA con detección de línea ociosa', 'DMA de longitud fija', 'HAL_UART_Receive bloqueante', 'Sondeo en el bucle'], 'Una interrupción por frase, sin tocar cada byte.', { c: 'st_uartrx', h: 'Longitud variable: ¿cómo sabes que la frase acabó?' }),
+      Q('En HAL_UARTEx_RxEventCallback, ¿qué es el parámetro de tamaño (modo normal)?', ['Cuántos bytes se han recibido en el búfer', 'El tamaño máximo del búfer', 'La velocidad en baudios', 'El número de errores'], 'En modo circular es la posición dentro del búfer.', { c: 'st_uartrx', h: 'Te dice cuánto ha llegado.' }),
+      Q('El callback salta también a mitad de búfer y no lo quieres. ¿Qué haces?', ['Desactivar la interrupción de media transferencia (HT) del DMA', 'Cambiar la velocidad', 'Usar un búfer más pequeño', 'Desactivar el DMA'], '__HAL_DMA_DISABLE_IT(h->hdmarx, DMA_IT_HT) tras arrancar la recepción.', { c: 'st_dma', h: 'El aviso de mitad viene del DMA.' }),
+      Q('Aparece un error de desbordamiento (ORE) y la recepción se detiene. ¿Qué significa?', ['Llegó un byte antes de leer el anterior: gestiona el error y relanza la recepción', 'El cable está roto', 'La velocidad es demasiado baja', 'El búfer es demasiado grande'], 'Implementa HAL_UART_ErrorCallback.', { c: 'st_uartrx', h: 'Overrun: llegó otro antes de leer el anterior.' }),
+      Q('RS-485 necesita activar el transmisor solo al enviar (pin DE). ¿Cómo lo haces en una F4?', ['Con un GPIO a 1 antes de enviar y a 0 cuando sale el último byte (TC)', 'La USART de la F4 lo hace sola', 'No se puede', 'Con el pin RX'], 'G0, G4, L4… tienen control DE por hardware; la F4 no.', { c: 'st_rs485', h: 'La USART de la F4 no lo maneja sola.' }),
+      I('<b>Resumen</b>\n· BRR = fPCLK / baudios (×16); error por debajo del 2 %.\n· Mensajes de longitud variable: DMA + IDLE con ReceiveToIdle.\n· RS-485: DE a 1 al enviar y a 0 tras TC.')
     ]),
     L('st32', 'I²C y SPI con la HAL', 'bus', ['st_i2c', 'st_spi', 'st_dmacfg', 'st_bus'], [
-      I('<b>I²C</b>: dos hilos (SDA y SCL) en open-drain con pull-ups y direcciones de 7 bits. Las funciones de la HAL esperan la dirección <b>desplazada un bit a la izquierda</b>. HAL_I2C_Mem_Read lee registros de un sensor en una sola llamada.'),
-      Q('Tu sensor está en la dirección 0x68. ¿Qué pasas a la HAL?', ['0x68 << 1 (0xD0)', '0x68', '0x34', '0x69'], 'La HAL coloca el bit de lectura o escritura.', { c: 'st_i2c' }),
-      Q('¿Qué hace esta llamada?', ['Lee 1 byte del registro 0x75 del dispositivo 0x68', 'Escribe 0x75 en el dispositivo', 'Lee 0x75 bytes', 'Cambia la dirección del sensor'], 'En una MPU-6050, el registro 0x75 (WHO_AM_I) devuelve 0x68.', { code: 'uint8_t id;\nHAL_I2C_Mem_Read(&hi2c1, 0x68 << 1,\n  0x75, I2C_MEMADD_SIZE_8BIT,\n  &id, 1, 100);', c: 'st_i2c' }),
-      I('Diagnóstico I²C: un escáner con HAL_I2C_IsDeviceReady recorre las 127 direcciones. Si un esclavo se queda bloqueado con SDA a 0 (por un reset a mitad de transferencia), se recupera enviando 9 pulsos de SCL a mano.'),
-      Q('¿Qué hace este bucle?', ['Busca qué direcciones I²C contestan', 'Envía datos a todos los dispositivos', 'Configura las direcciones', 'Resetea el bus'], 'El primer paso al conectar algo nuevo.', { code: 'for (uint8_t a = 1; a < 128; a++)\n  if (HAL_I2C_IsDeviceReady(&hi2c1,\n      a << 1, 2, 5) == HAL_OK)\n    printf("0x%02X\\n", a);', c: 'st_i2c' }),
-      I('<b>SPI</b>: el maestro genera SCK y transmite y recibe a la vez por MOSI y MISO. Hay 4 modos según CPOL y CPHA. El CS se suele manejar con un GPIO. La velocidad es PCLK ÷ 2, 4… 256.'),
-      Nm('SPI1 (en APB2 a 100 MHz) con preescalador ÷4. ¿SCK en MHz?', 25, 'MHz', '100 / 4 = 25 MHz.', { c: 'st_spi' }),
-      Q('Lees un chip SPI y los datos salen desplazados un bit. ¿Primera sospecha?', ['Modo SPI (CPOL/CPHA) distinto del que pide el chip', 'Dirección I²C', 'Falta pull-up', 'Velocidad del ADC'], 'Mira el diagrama de tiempos de su hoja de datos.', { c: 'st_spi' }),
-      Q('Para leer 2 bytes de un SPI esclavo, ¿qué hace el maestro?', ['Enviar 2 bytes (aunque sean de relleno) mientras recibe', 'Solo escuchar', 'Enviar un pulso de reset', 'Bajar SCK'], 'Cada bit recibido necesita un pulso de reloj que genera el maestro.', { c: 'st_spi' }),
-      Q('¿Cuándo merece la pena SPI con DMA?', ['Con bloques grandes, como píxeles de una pantalla o sectores de una SD', 'Para enviar un byte suelto', 'Nunca', 'Solo con I²C'], 'Con un byte suelto, configurar el DMA cuesta más que enviarlo.', { c: 'st_dmacfg' }),
-      { t: 'match', q: 'Une cada bus con su rasgo.', pairs: [['I²C', 'Direcciones y open-drain'], ['SPI', 'Full-duplex con chip select'], ['UART', 'Asíncrono, sin reloj'], ['CAN', 'Diferencial con arbitraje por ID']], c: 'st_bus' }
+      Q('Tu sensor I²C tiene la dirección 0x68 y llamas a HAL_I2C_Mem_Read con 0x68. Nadie contesta. ¿Qué crees que falla?', ['La HAL espera la dirección desplazada un bit: 0xD0', 'El sensor está roto', 'Faltan las pull-ups seguro', 'I²C no funciona a 3,3 V'], 'La HAL deja un hueco para el bit de lectura o escritura. Antes, el reloj de SPI.', { ...PRED, c: 'st_i2c', h: 'La HAL reserva un hueco para el bit de lectura o escritura.' }),
+      { t: 'explore', text: 'SPI: CPOL fija el nivel de reposo del reloj y CPHA el flanco en que se lee.', viz: 'st_spi', params: P_SPI(3, 0, 0),
+        tasks: [{ q: 'm3ok', min: 1, max: 1, text: 'El chip pide modo 3: ajusta CPOL y CPHA', done: 'Modo 3: reloj en reposo alto (CPOL 1) y lectura en el segundo flanco (CPHA 1).', hint: 'Modo = 2·CPOL + CPHA.' },
+          { q: 'm1ok', min: 1, max: 1, text: 'Cambia a un chip que pide modo 1 y ajústalo', done: 'Modo 1: CPOL 0 y CPHA 1.' }] },
+      I('<b>I²C</b>: dos hilos (SDA, SCL) en open-drain con pull-ups y direcciones de 7 bits. La HAL quiere la dirección <b>desplazada un bit a la izquierda</b>. HAL_I2C_Mem_Read lee registros de un sensor en una llamada.', { svg: SVG_I2CADDR }),
+      I('Diagnóstico I²C: un escáner con HAL_I2C_IsDeviceReady recorre las direcciones y dice cuáles contestan. Y en buses rápidos, pull-ups externas de 2,2–4,7 kΩ.', { tune: { viz: 'st_rc', params: P_RC(4.7, 200, 400) }, code: 'for (uint8_t a = 1; a < 128; a++)\n  if (HAL_I2C_IsDeviceReady(&hi2c1, a << 1, 2, 5) == HAL_OK)\n    printf("0x%02X\\n", a);' }),
+      I('<b>SPI</b>: el maestro genera SCK y, por cada bit que envía por MOSI, recibe uno por MISO: para leer n bytes hay que enviar n. Cuatro modos según <b>CPOL</b> y <b>CPHA</b>. El CS se suele manejar con un GPIO.', { tune: { viz: 'st_spi', params: P_SPI(0, 0, 0) } }),
+      I('Velocidad: SCK = PCLK de su bus ÷ 2, 4… 256 (SPI1 en APB2; SPI2 y SPI3 en APB1). Para bloques grandes, como una pantalla o una SD, SPI con <b>DMA</b>; con un byte suelto no compensa.', { code: 'HAL_GPIO_WritePin(CS_GPIO_Port, CS_Pin, GPIO_PIN_RESET);\nHAL_SPI_Transmit_DMA(&hspi1, pixeles, n);\n/* CS a 1 en HAL_SPI_TxCpltCallback */' }),
+      { t: 'steps', text: 'Lee el registro WHO_AM_I (0x75) de una MPU-6050 en la dirección 0x68.', code: 'uint8_t id;\nHAL_I2C_Mem_Read(&hi2c1, 0x68 << 1, 0x75,\n  I2C_MEMADD_SIZE_8BIT, &id, 1, 100);', steps: ['Dirección para la HAL: 0x68 &lt;&lt; 1 = <b>0xD0</b>', 'Registro 0x75, de 8 bits (I2C_MEMADD_SIZE_8BIT)', 'Un byte a la variable id, con 100 ms de tiempo máximo', 'Si todo va bien, id vale <b>0x68</b>'], result: 'El primer paso con cualquier sensor nuevo.' },
+      Q('Tu sensor está en la dirección 0x68. ¿Qué pasas a la HAL?', ['0x68 << 1 (0xD0)', '0x68', '0x34', '0x69'], 'La HAL coloca el bit de lectura o escritura.', { c: 'st_i2c', h: 'Desplaza un bit a la izquierda.' }),
+      Q('¿Qué hace esta llamada?', ['Lee 1 byte del registro 0x75 del dispositivo 0x68', 'Escribe 0x75 en el dispositivo', 'Lee 0x75 bytes', 'Cambia la dirección del sensor'], 'Dispositivo, registro, tamaño del registro, búfer, cantidad y tiempo.', { code: 'uint8_t id;\nHAL_I2C_Mem_Read(&hi2c1, 0x68 << 1,\n  0x75, I2C_MEMADD_SIZE_8BIT,\n  &id, 1, 100);', c: 'st_i2c', h: 'Lee los argumentos en orden: dispositivo, registro, tamaño…' }),
+      Q('¿Qué hace este bucle?', ['Busca qué direcciones I²C contestan', 'Envía datos a todos los dispositivos', 'Configura las direcciones', 'Resetea el bus'], 'Un escáner: el primer paso al conectar algo nuevo.', { code: 'for (uint8_t a = 1; a < 128; a++)\n  if (HAL_I2C_IsDeviceReady(&hi2c1,\n      a << 1, 2, 5) == HAL_OK)\n    printf("0x%02X\\n", a);', c: 'st_i2c', h: '¿Qué pregunta IsDeviceReady?' }),
+      Nm('SPI1 (en APB2 a 100 MHz) con preescalador ÷4. ¿SCK en MHz?', 25, 'MHz', '100 / 4 = 25 MHz.', { c: 'st_spi', h: 'Reloj del bus entre el preescalador.' }),
+      Q('Lees un chip SPI y los datos salen desplazados un bit. ¿Primera sospecha?', ['Modo SPI (CPOL/CPHA) distinto del que pide el chip', 'La dirección I²C', 'Falta una pull-up', 'La velocidad del ADC'], 'Mira el diagrama de tiempos de su hoja de datos.', { c: 'st_spi', h: 'Reposo y flanco de lectura.' }),
+      Q('Para leer 2 bytes de un SPI esclavo, ¿qué hace el maestro?', ['Enviar 2 bytes (aunque sean de relleno) mientras recibe', 'Solo escuchar', 'Enviar un pulso de reset', 'Bajar SCK'], 'Cada bit recibido necesita un pulso de reloj del maestro.', { c: 'st_spi', h: 'El maestro genera el reloj.' }),
+      Q('¿Cuándo merece la pena SPI con DMA?', ['Con bloques grandes, como píxeles de una pantalla o sectores de una SD', 'Para enviar un byte suelto', 'Nunca', 'Solo con I²C'], 'Con un byte, configurar el DMA cuesta más que enviarlo.', { c: 'st_dmacfg', h: 'Bloques grandes.' }),
+      { t: 'match', q: 'Une cada bus con su rasgo.', pairs: [['I²C', 'Direcciones y open-drain'], ['SPI', 'Full-duplex con chip select'], ['UART', 'Asíncrono, sin reloj'], ['CAN', 'Diferencial con arbitraje por ID']], c: 'st_bus', h: 'Busca lo que hace único a cada uno.' },
+      I('<b>Resumen</b>\n· I²C: dirección &lt;&lt; 1 para la HAL; escáner con IsDeviceReady; pull-ups externas.\n· SPI: modo = 2·CPOL + CPHA; para leer hay que enviar; SCK = PCLK ÷ preescalador.\n· DMA para bloques grandes.')
     ]),
     PRJ('st-p11', 'Proyecto: registrador de datos en microSD', 'st_logger'),
     L('st33', 'CAN y USB', 'bus', ['st_can', 'st_canbit', 'st_usbcdc', 'st_usbclk', 'st_family'], [
-      I('<b>CAN</b> es un bus diferencial (CANH y CANL) multimaestro y muy robusto. Necesita un <b>transceptor</b> externo y una resistencia de <b>120 Ω en cada extremo</b>. Los STM32 tienen bxCAN (F1, F4) o FDCAN (G4, H7 y algunos G0).'),
-      Q('Dos nodos empiezan a transmitir a la vez. ¿Quién gana?', ['El de identificador más bajo, sin que se pierda nada', 'El que tenga más datos', 'Ninguno: se repiten los dos', 'El más cercano'], 'Un 0 (dominante) gana sobre un 1 en el bus: arbitraje bit a bit.', { c: 'st_can' }),
-      Q('Con el bus apagado mides 60 Ω entre CANH y CANL. ¿Qué indica?', ['Que hay dos terminaciones de 120 Ω, como debe ser', 'Que falta una terminación', 'Un cortocircuito', 'Que el bus está roto'], '120 Ω ∥ 120 Ω = 60 Ω.', { c: 'st_can' }),
-      G('st_canBit'), G('st_canBit'),
-      Q('¿Para qué sirven los filtros de CAN por hardware?', ['Para que el controlador descarte las tramas que no te interesan sin usar la CPU', 'Para quitar ruido eléctrico', 'Para cifrar', 'Para cambiar la velocidad'], 'En un coche hay miles de tramas por segundo.', { c: 'st_can' }),
-      Q('En la F103 (Blue Pill), ¿puedes usar CAN y USB a la vez?', ['No: comparten una memoria interna y son excluyentes', 'Sí, sin problema', 'Solo a 125 kbit/s', 'Solo con DMA'], 'Una limitación conocida de esa familia.', { c: 'st_family' }),
-      I('<b>USB dispositivo</b> de velocidad completa (12 Mbit/s) en PA11/PA12. Con el middleware USB_DEVICE y la clase <b>CDC</b>, el STM32 aparece como un puerto serie virtual: CDC_Transmit_FS envía y CDC_Receive_FS (en usbd_cdc_if.c) recibe.'),
-      Q('¿Qué exige el USB al árbol de relojes?', ['Exactamente 48 MHz y precisos para el periférico USB', 'Nada', 'Que SYSCLK sea 48 MHz', 'El LSE'], 'Por eso se busca un VCO múltiplo de 48.', { c: 'st_usbclk' }),
-      Q('CDC_Transmit_FS devuelve USBD_BUSY. ¿Qué significa?', ['La transferencia anterior aún no ha terminado: espera y reintenta', 'El cable está roto', 'El PC no tiene drivers', 'Error de la Flash'], 'No llames a CDC_Transmit_FS desde una interrupción en bucle.', { c: 'st_usbcdc' }),
-      Q('En un puerto serie virtual USB CDC, ¿importa la velocidad en baudios que elijas en el PC?', ['No: los datos van a la velocidad del USB', 'Sí, debe ser 115 200', 'Sí, debe coincidir con la UART', 'Solo en Linux'], 'El valor llega al STM32, pero no afecta a la transferencia.', { c: 'st_usbcdc' }),
-      Q('Quieres conectar tu nodo CAN al conector OBD-II del coche. ¿Precaución principal?', ['Escuchar en modo silencioso y no enviar tramas al bus del vehículo sin saber exactamente qué hacen', 'Ninguna', 'Hacerlo en marcha para ver más datos', 'Quitar la terminación del coche'], 'Una trama errónea puede afectar a centralitas de seguridad.', { c: 'st_can' })
+      Q('Dos nodos CAN empiezan a transmitir exactamente a la vez. ¿Qué crees que pasa?', ['Gana el de identificador más bajo y su trama sigue intacta', 'Chocan y se pierden las dos', 'Gana el que esté más cerca', 'Se reparten el bus'], 'En el bus, el 0 se impone al 1. Míralo bit a bit.', { ...PRED, c: 'st_can', h: 'En el bus, el 0 se impone al 1.' }),
+      { t: 'explore', text: 'Dos nodos envían su identificador a la vez. El bus queda a 0 si alguno envía 0.', viz: 'st_arb', params: P_ARB(0, 1),
+        tasks: [{ q: 'win', min: 1, max: 1, text: 'Haz que gane B', done: 'Gana quien tiene el identificador más bajo.', hint: 'Dale a B un ID menor que el de A.' },
+          { q: 'bit', min: 10, max: 10, text: 'Busca dos IDs que no se separen hasta el último bit', done: '0x100 y 0x101: compiten hasta el final y gana 0x100.' }] },
+      I('<b>CAN</b> es un bus diferencial (CANH y CANL), multimaestro y muy robusto. Necesita un <b>transceptor</b> externo y <b>120 Ω en cada extremo</b>. Los STM32 tienen bxCAN (F1, F4) o FDCAN (G4, H7 y algunos G0).', { svg: table([['CANH / CANL', 'Par diferencial: inmune al ruido'], ['Transceptor', 'Entre el STM32 y el bus'], ['120 Ω × 2', 'Una en cada extremo: 60 Ω medidos'], ['bxCAN · FDCAN', 'Según la familia']], 'Bus CAN') }),
+      I('Arbitraje: el 0 es <b>dominante</b>. Mientras envían el identificador, cada nodo escucha; quien ve un 0 cuando puso un 1 se retira. Gana el identificador <b>más bajo</b> sin perder nada. Los <b>filtros</b> por hardware descartan las tramas que no te interesan.', { tune: { viz: 'st_arb', params: P_ARB(2, 3) } }),
+      I('Un bit de CAN se divide en cuantos (tq): 1 de sincronismo + BS1 + BS2.\n<b>Velocidad = fPCLK / (BRP × (1 + BS1 + BS2))</b>\n<b>Muestreo = (1 + BS1) / (1 + BS1 + BS2)</b>, cerca del 87,5 %.', { tune: { viz: 'st_canbit', params: P_CANB(4, 13, 2) } }),
+      I('<b>USB dispositivo</b> de velocidad completa (12 Mbit/s) en PA11/PA12, con 48 MHz exactos. Con la clase <b>CDC</b>, el STM32 aparece como puerto serie virtual: CDC_Transmit_FS envía y CDC_Receive_FS recibe. Ojo: en la F103 el USB y el CAN no se pueden usar a la vez.', { svg: SVG_CDC }),
+      { t: 'steps', text: 'bxCAN con PCLK1 = 42 MHz: configura 500 kbit/s con buen punto de muestreo.', steps: ['Prueba 16 cuantos (BS1 = 13, BS2 = 2: 87,5 %): BRP = 42 MHz / (500 kHz × 16) = 5,25: no es entero', 'Prueba 14 cuantos: BRP = 42 / (0,5 × 14) = <b>6</b>, entero', 'Con 14 cuantos: BS1 = 11, BS2 = 2 → muestreo (1 + 11) / 14 = <b>85,7 %</b>', 'Comprueba: 42 MHz / (6 × 14) = 500 kbit/s'], result: 'BRP = 6, BS1 = 11, BS2 = 2.' },
+      Q('Con el bus apagado mides 60 Ω entre CANH y CANL. ¿Qué indica?', ['Que hay dos terminaciones de 120 Ω, como debe ser', 'Que falta una terminación', 'Un cortocircuito', 'Que el bus está roto'], '120 Ω en paralelo con 120 Ω = 60 Ω.', { c: 'st_can', h: 'Dos de 120 Ω en paralelo.' }),
+      G('st_canBit'),
+      G('st_canBit'),
+      Q('¿Para qué sirven los filtros de CAN por hardware?', ['Para que el controlador descarte las tramas que no te interesan sin usar la CPU', 'Para quitar ruido eléctrico', 'Para cifrar', 'Para cambiar la velocidad'], 'En un coche hay miles de tramas por segundo.', { c: 'st_can', h: 'Miles de tramas por segundo.' }),
+      Q('En la F103 (Blue Pill), ¿puedes usar CAN y USB a la vez?', ['No: comparten una memoria interna y son excluyentes', 'Sí, sin problema', 'Solo a 125 kbit/s', 'Solo con DMA'], 'Una limitación conocida de esa familia.', { c: 'st_family', h: 'Comparten algo por dentro.' }),
+      Q('¿Qué exige el USB al árbol de relojes?', ['48 MHz exactos y precisos para el periférico USB', 'Nada', 'Que SYSCLK sea 48 MHz', 'El LSE'], 'Por eso se busca un VCO múltiplo de 48.', { c: 'st_usbclk', h: 'Recuerda el divisor Q del PLL.' }),
+      Q('CDC_Transmit_FS devuelve USBD_BUSY. ¿Qué significa?', ['La transferencia anterior aún no ha terminado: espera y reintenta', 'El cable está roto', 'El PC no tiene drivers', 'Error de la Flash'], 'Guarda los datos en un FIFO y envía al terminar la anterior.', { c: 'st_usbcdc', h: 'Hay una transferencia en curso.' }),
+      Q('En un puerto serie virtual USB CDC, ¿importa la velocidad en baudios que elijas en el PC?', ['No: los datos van a la velocidad del USB', 'Sí, debe ser 115 200', 'Sí, debe coincidir con una UART', 'Solo en Linux'], 'El valor llega al STM32, pero no limita nada.', { c: 'st_usbcdc', h: 'Los datos viajan por USB.' }),
+      Q('Quieres conectar tu nodo CAN al conector OBD-II del coche. ¿Precaución principal?', ['Escuchar en modo silencioso y no enviar tramas sin saber exactamente qué hacen', 'Ninguna', 'Hacerlo en marcha para ver más datos', 'Quitar la terminación del coche'], 'Una trama errónea puede afectar a centralitas de seguridad.', { c: 'st_can', h: 'Escuchar sin molestar.' }),
+      I('<b>Resumen</b>\n· CAN: diferencial, 120 Ω en cada extremo, gana el ID más bajo, filtros por hardware.\n· Bit = 1 + BS1 + BS2 cuantos; muestreo cerca del 87,5 %.\n· USB CDC: puerto serie virtual a velocidad USB, con 48 MHz exactos.')
     ]),
     PRJ('st-p12', 'Proyecto: bus CAN de banco y puente SLCAN', 'st_can')
   ] };
 
-  const M7 = { id: 'st-m7', title: 'FreeRTOS en STM32', desc: 'Tareas, pilas, colas, semáforos, mutex, temporizadores software y la base de tiempo de la HAL.', nodes: [
+  const M7 = { id: 'st-m7', title: 'FreeRTOS en STM32', desc: 'El planificador, tareas y pilas, colas y semáforos, mutex, temporizadores software y la base de tiempo de la HAL.', nodes: [
     L('st34', 'Por qué un sistema operativo de tiempo real', 'cloud', ['st_rtos', 'st_nvic'], [
-      I('Un “superbucle” (while(1) que lo hace todo) funciona hasta que tienes muchas cosas con plazos distintos: leer un sensor cada 2 ms, refrescar una pantalla, atender la UART… Cada función lenta retrasa a todas las demás.'),
-      I('Con <b>FreeRTOS</b> cada trabajo es una <b>tarea</b> con su bucle y su pila. El <b>planificador</b> ejecuta siempre la tarea lista de mayor prioridad y, con cada tick (normalmente 1 ms), decide si hay que cambiar. En CubeMX se activa en Middleware › FREERTOS con la interfaz <b>CMSIS-RTOS v2</b>.'),
-      { t: 'match', q: 'Une cada estado de tarea con su significado.', pairs: [['Running', 'Se está ejecutando ahora'], ['Ready', 'Podría ejecutarse, espera su turno'], ['Blocked', 'Espera un tiempo o un evento'], ['Suspended', 'Apartada hasta que alguien la reanude']], c: 'st_rtos' },
-      Q('Una tarea tiene prioridad 3 en FreeRTOS y otra prioridad 1. ¿Cuál es más importante?', ['La de prioridad 3: en FreeRTOS, número mayor es más prioritario', 'La de prioridad 1, como en el NVIC', 'Iguales', 'Depende del tick'], 'Justo al revés que en el NVIC. Fuente clásica de errores.', { c: 'st_rtos' }),
-      Q('¿Qué ocurre cuando una tarea llama a osDelay(100)?', ['Pasa a Blocked 100 ticks y la CPU queda para las demás', 'La CPU espera 100 ms sin hacer nada', 'Se borra la tarea', 'Se reinicia el planificador'], 'Esperar sin gastar CPU es la gracia de un RTOS.', { c: 'st_rtos' }),
-      Q('Dos tareas listas con la misma prioridad. ¿Cómo se reparten la CPU?', ['Por turnos en cada tick (time slicing)', 'Solo se ejecuta la primera creada', 'Se ejecutan a la vez', 'Ninguna se ejecuta'], 'configUSE_TIME_SLICING viene activado por defecto.', { c: 'st_rtos' }),
-      I('El cambio de contexto se hace en la excepción <b>PendSV</b>, con la prioridad más baja de todas: así nunca interrumpe a una interrupción de periférico; espera a que todas terminen.'),
-      Q('¿Por qué PendSV tiene la prioridad más baja?', ['Para cambiar de tarea solo cuando no queda ninguna interrupción pendiente', 'Para que vaya más rápido', 'Porque es la menos importante', 'Por un fallo de diseño'], 'Las interrupciones nunca quedan a medias por un cambio de tarea.', { c: 'st_nvic' }),
-      Q('¿Qué hace la tarea Idle?', ['Se ejecuta cuando no hay nada listo; puede dormir la CPU para ahorrar', 'Gestiona la UART', 'Comprueba la Flash', 'Es la de mayor prioridad'], 'Con el modo tickless, el chip puede dormir entre eventos.', { c: 'st_rtos' }),
-      Q('¿Cuándo NO merece la pena un RTOS?', ['En un programa sencillo con una o dos tareas sin plazos exigentes', 'Nunca merece la pena', 'Siempre que haya interrupciones', 'Cuando hay más de 32 KB de RAM'], 'Un RTOS añade memoria, complejidad y nuevos tipos de errores.', { c: 'st_rtos' })
+      Q('Una tarea de FreeRTOS espera con HAL_Delay(100) en lugar de osDelay(100). ¿Qué crees que les pasa a las tareas de menor prioridad?', ['No se ejecutan: la CPU se gasta esperando', 'Nada, se ejecutan igual', 'Se ejecutan más rápido', 'Se reinicia el chip'], 'HAL_Delay espera dando vueltas: la tarea nunca suelta la CPU. Míralo en el planificador.', { ...PRED, c: 'st_rtos', h: 'HAL_Delay espera dando vueltas.' }),
+      { t: 'explore', text: 'Tres tareas durante 20 ms. A y B trabajan y esperan; C (prioridad 1) siempre tiene algo que hacer.', viz: 'st_rtos', params: P_RTOS(3, 2, 0),
+        tasks: [{ q: 'cpuB', min: 10, max: 100, text: 'Haz que la tarea B llegue a trabajar', done: 'O le das más prioridad, o haces que A espere sin gastar CPU.', hint: 'Cambia la forma de esperar.' },
+          { q: 'good', min: 1, max: 1, text: 'Consigue que trabajen las tres sin desperdiciar CPU', done: 'Con osDelay, quien espera queda bloqueada y la CPU va a quien la necesita.' },
+          { q: 'tie', min: 1, max: 1, text: 'Da a A y B la misma prioridad (con osDelay) y mira cómo se turnan', done: 'Con igual prioridad se reparten la CPU por turnos en cada tick.' }] },
+      I('Un «superbucle» (un while(1) que lo hace todo) funciona hasta que hay muchas cosas con plazos distintos: cada función lenta retrasa a todas las demás. Con <b>FreeRTOS</b> cada trabajo es una <b>tarea</b>, con su propio bucle y su propia pila.', { code: 'void TareaSensor(void *arg) {\n  for (;;) {\n    leer_sensor();\n    osDelay(2);       // cada 2 ms\n  }\n}\nvoid TareaPantalla(void *arg) {\n  for (;;) {\n    dibujar();\n    osDelay(50);\n  }\n}' }),
+      I('El <b>planificador</b> ejecuta siempre la tarea <b>lista</b> de mayor prioridad y en cada tick (normalmente 1 ms) decide si cambia. En FreeRTOS, <b>número mayor = más importante</b>, al revés que en el NVIC. Con igual prioridad, se turnan.', { tune: { viz: 'st_rtos', params: P_RTOS(2, 2, 1) }, more: 'En CubeMX se activa en Middleware › FREERTOS con la interfaz CMSIS-RTOS v2, que da funciones como osThreadNew u osDelay.' }),
+      I('Estados de una tarea: <b>Running</b> (ejecutándose), <b>Ready</b> (lista, espera turno), <b>Blocked</b> (espera tiempo o un evento, sin gastar CPU) y <b>Suspended</b> (apartada). Si nadie está listo corre la tarea <b>Idle</b>, que puede dormir el chip.', { svg: table([['Running', 'Se está ejecutando'], ['Ready', 'Podría ejecutarse: espera turno'], ['Blocked', 'Espera tiempo o evento: no gasta'], ['Suspended', 'Apartada hasta que la reanuden']], 'Estados de una tarea') }),
+      I('El cambio de tarea se hace en la excepción <b>PendSV</b>, con la prioridad más baja del NVIC: nunca deja a medias una interrupción de periférico; espera a que todas terminen.', { svg: chain(['Tick|(SysTick)', 'El planificador|decide', 'PendSV|cambia de tarea']) }),
+      { t: 'steps', text: 'A (prioridad 3) trabaja 1 ms cada 5 ms con osDelay; B (prioridad 2), 3 ms cada 10 ms. ¿Cuánta CPU queda para una tarea de prioridad 1?', steps: ['A usa 1 de cada 5 ms: <b>20 %</b>', 'B usa 3 de cada 10 ms: <b>30 %</b>', 'Mientras esperan están Blocked: no gastan nada', 'Queda 100 − 20 − 30 = <b>50 %</b> para la de prioridad 1'], result: 'La mitad de la CPU, sin tocar los plazos de A y B.' },
+      { t: 'match', q: 'Une cada estado de tarea con su significado.', pairs: [['Running', 'Se está ejecutando ahora'], ['Ready', 'Podría ejecutarse, espera su turno'], ['Blocked', 'Espera un tiempo o un evento'], ['Suspended', 'Apartada hasta que alguien la reanude']], c: 'st_rtos', h: 'Blocked espera algo; Ready solo espera turno.' },
+      Q('Una tarea tiene prioridad 3 en FreeRTOS y otra prioridad 1. ¿Cuál es más importante?', ['La de prioridad 3: en FreeRTOS, número mayor es más prioritario', 'La de prioridad 1, como en el NVIC', 'Iguales', 'Depende del tick'], 'Justo al revés que en el NVIC: fuente clásica de errores.', { c: 'st_rtos', h: 'Al revés que en el NVIC.' }),
+      Q('¿Qué ocurre cuando una tarea llama a osDelay(100)?', ['Pasa a Blocked 100 ticks y la CPU queda para las demás', 'La CPU espera 100 ms sin hacer nada', 'Se borra la tarea', 'Se reinicia el planificador'], 'Esperar sin gastar CPU es la gracia de un RTOS.', { c: 'st_rtos', h: 'Piensa en el estado Blocked.' }),
+      Q('Dos tareas listas con la misma prioridad. ¿Cómo se reparten la CPU?', ['Por turnos en cada tick', 'Solo se ejecuta la primera creada', 'Se ejecutan a la vez', 'Ninguna se ejecuta'], 'El reparto por turnos viene activado por defecto.', { c: 'st_rtos', h: 'Por turnos.' }),
+      Q('¿Por qué PendSV tiene la prioridad más baja?', ['Para cambiar de tarea solo cuando no queda ninguna interrupción pendiente', 'Para que vaya más rápido', 'Porque es la menos importante', 'Por un fallo de diseño'], 'Las interrupciones nunca quedan a medias por un cambio de tarea.', { c: 'st_nvic', h: 'No debe interrumpir a los periféricos.' }),
+      Q('¿Qué hace la tarea Idle?', ['Se ejecuta cuando no hay nada listo; puede dormir la CPU para ahorrar', 'Gestiona la UART', 'Comprueba la Flash', 'Es la de mayor prioridad'], 'Con el modo tickless, el chip duerme entre eventos.', { c: 'st_rtos', h: 'Corre cuando nadie más puede.' }),
+      Q('Una tarea con la prioridad más alta hace while (1) { } sin esperar nunca. ¿Qué pasa?', ['Las de menor prioridad no se ejecutan nunca', 'Se reparten la CPU a partes iguales', 'El RTOS la mata', 'Nada'], 'Hay que bloquearse para ceder la CPU.', { c: 'st_rtos', h: 'Nunca cede la CPU.' }),
+      Q('¿Cuándo NO merece la pena un RTOS?', ['En un programa sencillo con una o dos tareas sin plazos exigentes', 'Nunca merece la pena', 'Siempre que haya interrupciones', 'Cuando hay más de 32 KB de RAM'], 'Un RTOS añade memoria, complejidad y nuevos tipos de errores.', { c: 'st_rtos', h: 'Todo tiene un coste.' }),
+      I('<b>Resumen</b>\n· Cada trabajo, una tarea con su bucle y su pila; corre la lista de mayor prioridad.\n· En FreeRTOS número mayor = más importante; esperar con osDelay deja la CPU libre.\n· El cambio de tarea va en PendSV, la excepción menos urgente.')
     ]),
     L('st35', 'Tareas y su pila', 'memory', ['st_stack', 'st_task'], [
-      I('Crear una tarea con CMSIS-RTOS v2: una función que nunca termina, unos atributos y osThreadNew.', { code: 'const osThreadAttr_t attr = {\n  .name = "sensor",\n  .stack_size = 256 * 4,   // bytes\n  .priority = osPriorityNormal,\n};\nosThreadNew(TareaSensor, NULL, &attr);' }),
-      Q('En CMSIS-RTOS v2, ¿en qué unidad va .stack_size?', ['En bytes', 'En palabras de 32 bits', 'En KB', 'En ticks'], 'CubeMX pide palabras y genera “tamaño × 4”. En xTaskCreate nativo, el tamaño va en palabras.', { c: 'st_stack' }),
-      G('st_stack'), G('st_stack'),
-      I('Las pilas de las tareas salen del <b>montón de FreeRTOS</b> (heap_4.c con configTOTAL_HEAP_SIZE). Si no cabe una tarea nueva, osThreadNew devuelve NULL.'),
-      Q('osThreadNew devuelve NULL. ¿Causa más probable?', ['No queda memoria en el montón de FreeRTOS', 'La función de la tarea tiene un error', 'La prioridad es demasiado alta', 'El tick está parado'], 'Sube configTOTAL_HEAP_SIZE o reduce pilas.', { c: 'st_stack' }),
-      I('Detectar desbordes: configCHECK_FOR_STACK_OVERFLOW = 2 llama a <b>vApplicationStackOverflowHook</b> en cada cambio de contexto si la pila se ha pasado. Y uxTaskGetStackHighWaterMark dice cuántas palabras <b>nunca</b> se han usado.'),
-      Q('¿Qué gasta mucha pila en una tarea?', ['Arrays locales grandes, printf y la recursión', 'Las variables globales', 'Las constantes', 'Los #define'], 'printf con formatos puede necesitar cientos de bytes.', { c: 'st_stack' }),
-      Q('¿Qué le pasará a esta tarea con 128 palabras de pila?', ['Desborda: 1024 bytes de array no caben en 512 bytes de pila', 'Nada', 'Va más lenta', 'No compila'], 'Haz el búfer static o dale mucha más pila.', { code: 'void Tarea(void *a) {\n  char buf[1024];\n  for (;;) { leer(buf); }\n}', c: 'st_stack' }),
-      Q('¿Qué pasa si la función de una tarea llega al final y retorna?', ['Error: una tarea nunca debe retornar; usa un bucle infinito u osThreadExit()', 'La tarea se repite', 'Se reinicia el chip limpiamente', 'Nada'], 'FreeRTOS no sabe a dónde volver.', { c: 'st_task' }),
-      Q('Tarea que debe ejecutarse exactamente cada 10 ms aunque su trabajo tarde un poco. ¿Qué usas?', ['osDelayUntil con un tiempo de referencia', 'osDelay(10) al final', 'HAL_Delay(10)', 'Un while vacío'], 'osDelay cuenta desde que la llamas; osDelayUntil, desde una referencia fija, sin acumular deriva.', { c: 'st_task' })
+      Q('Una tarea con 128 palabras de pila declara un array local char buf[1024]. ¿Qué crees que pasa?', ['Desborda: 1024 bytes no caben en 512', 'Nada', 'El array va a la Flash', 'Va más lenta'], 'Una palabra son 4 bytes: 128 palabras = 512 B. Llénala tú.', { ...PRED, c: 'st_stack', h: 'Una palabra son 4 bytes.' }),
+      { t: 'explore', text: 'La pila de una tarea guarda su contexto, sus variables locales y lo que usen sus llamadas.', viz: 'st_stk', params: P_STK(128, 0, 0),
+        tasks: [{ q: 'over', min: 1, max: 1, text: 'Provoca un desbordamiento', done: 'Los arrays locales viven en la pila de la tarea.', hint: 'Añade un array local grande.' },
+          { q: 'fit', min: 1, max: 1, text: 'Con el array de 1024 B y printf, elige una pila que no desborde', done: 'Hacen falta al menos 384 palabras (1536 B); con margen, 512.' }] },
+      I('Crear una tarea con CMSIS-RTOS v2: una función que nunca termina, unos atributos y osThreadNew. Ojo: <b>.stack_size</b> va en <b>bytes</b>; CubeMX pide palabras y multiplica por 4.', { code: 'const osThreadAttr_t attr = {\n  .name = "sensor",\n  .stack_size = 256 * 4,     // bytes\n  .priority = osPriorityNormal,\n};\nosThreadNew(TareaSensor, NULL, &attr);' }),
+      I('Las pilas salen del <b>montón de FreeRTOS</b> (configTOTAL_HEAP_SIZE). Si no cabe una tarea nueva, osThreadNew devuelve NULL. Gastan mucha pila los arrays locales, printf y la recursión.', { tune: { viz: 'st_stk', params: P_STK(256, 256, 1) } }),
+      I('Para vigilarla: <b>uxTaskGetStackHighWaterMark</b> dice cuántas palabras no se han usado nunca, y con configCHECK_FOR_STACK_OVERFLOW = 2 se llama a vApplicationStackOverflowHook si se pasa.', { code: 'UBaseType_t libres = uxTaskGetStackHighWaterMark(NULL);\nprintf("libres: %lu palabras\\n", (unsigned long)libres);' }),
+      I('Una tarea es un <b>bucle infinito</b>: si su función retorna, falla. Para un periodo exacto, <b>osDelayUntil</b>: osDelay cuenta desde que lo llamas y suma el tiempo de trabajo.', { tune: { viz: 'st_drift', params: P_DRIFT(3, 0) }, code: 'uint32_t t = osKernelGetTickCount();\nfor (;;) {\n  trabajo();\n  t += 10;\n  osDelayUntil(t);   // cada 10 ms exactos\n}' }),
+      { t: 'steps', text: 'Una tarea tiene 256 palabras de pila y la marca de agua es 40. ¿Cuánto ha usado como máximo?', steps: ['Pila total: 256 × 4 = <b>1024 B</b>', 'Marca de agua: 40 palabras sin usar nunca = 160 B', 'Usado como máximo: 1024 − 160 = <b>864 B</b>', 'Margen: un 16 %. Conviene algo más'], result: '864 B usados.' },
+      Q('En CMSIS-RTOS v2, ¿en qué unidad va .stack_size?', ['En bytes', 'En palabras de 32 bits', 'En KB', 'En ticks'], 'CubeMX pide palabras y genera «tamaño × 4». En xTaskCreate nativo, palabras.', { c: 'st_stack', h: 'Mira la multiplicación por 4.' }),
+      G('st_stack'),
+      Q('osThreadNew devuelve NULL. ¿Causa más probable?', ['No queda memoria en el montón de FreeRTOS', 'La función de la tarea tiene un error', 'La prioridad es demasiado alta', 'El tick está parado'], 'Sube configTOTAL_HEAP_SIZE o reduce pilas.', { c: 'st_stack', h: 'Las pilas salen del montón.' }),
+      Q('¿Qué gasta mucha pila en una tarea?', ['Arrays locales grandes, printf y la recursión', 'Las variables globales', 'Las constantes', 'Los #define'], 'printf con formatos puede necesitar cientos de bytes.', { c: 'st_stack', h: 'Lo que vive dentro de las funciones.' }),
+      Q('¿Qué le pasará a esta tarea con 128 palabras de pila?', ['Desborda: 1024 bytes de array no caben en 512 bytes de pila', 'Nada', 'Va más lenta', 'No compila'], 'Haz el búfer static o dale mucha más pila.', { code: 'void Tarea(void *a) {\n  char buf[1024];\n  for (;;) { leer(buf); }\n}', c: 'st_stack', h: '128 palabras son 512 bytes.' }),
+      Q('¿Qué pasa si la función de una tarea llega al final y retorna?', ['Error: una tarea nunca debe retornar; usa un bucle infinito u osThreadExit()', 'La tarea se repite', 'Se reinicia el chip limpiamente', 'Nada'], 'FreeRTOS no sabe a dónde volver.', { c: 'st_task', h: 'FreeRTOS no sabe a dónde volver.' }),
+      TU('Con 3 ms de trabajo por vuelta, consigue un periodo de 10 ms exactos.', 'st_drift', { work: { val: 3, fixed: true }, mode: sl('Espera (osDelay, osDelayUntil)', 0, 0, 1) }, { q: 'per', min: 10, max: 10, text: 'Objetivo: periodo de 10 ms', hint: 'Cambia la forma de esperar.' }, 'osDelayUntil espera hasta la marca, no 10 ms desde ahora.', { c: 'st_task', h: 'Una espera cuenta desde ahora; la otra, hasta una marca.' }),
+      Q('Tarea que debe ejecutarse exactamente cada 10 ms aunque su trabajo tarde un poco. ¿Qué usas?', ['osDelayUntil con un tiempo de referencia', 'osDelay(10) al final', 'HAL_Delay(10)', 'Un while vacío'], 'osDelayUntil no acumula deriva.', { c: 'st_task', h: 'Busca la que no acumula deriva.' }),
+      G('st_stack'),
+      I('<b>Resumen</b>\n· Pila en palabras de 4 bytes (CMSIS v2 la pide en bytes); sale del montón del RTOS.\n· Arrays locales, printf y recursión la llenan: vigila la marca de agua.\n· Tarea = bucle infinito; periodo exacto con osDelayUntil.')
     ]),
     L('st36', 'Colas y semáforos', 'bus', ['st_queue', 'st_rtosisr', 'st_rtos'], [
-      I('Una <b>cola</b> es una FIFO de mensajes de tamaño fijo que se <b>copian</b> dentro. Una tarea puede bloquearse esperando a que llegue algo. Es la forma limpia de pasar datos de una interrupción a una tarea.'),
-      Q('¿Por qué el tiempo de espera es 0 en esta llamada?', ['Porque se llama desde una interrupción, que nunca puede bloquearse', 'Para que sea más rápido', 'Porque la cola está vacía', 'Por error'], 'Desde una ISR solo vale 0: si la cola está llena, se descarta.', { code: 'void HAL_UART_RxCpltCallback(\n    UART_HandleTypeDef *h) {\n  osMessageQueuePut(cola, &byte,\n    0, 0);\n}', c: 'st_rtosisr' }),
-      Q('Envías a una cola un puntero a un array local de la tarea emisora. ¿Riesgo?', ['Cuando el receptor lo lea, el array puede haber cambiado o no existir', 'Ninguno', 'Que la cola se llene', 'Que el puntero se copie mal'], 'La cola copia el puntero, no los datos a los que apunta.', { c: 'st_queue' }),
-      I('<b>Semáforo binario</b>: una señal (“ya ha pasado”). <b>Semáforo contador</b>: cuenta eventos o recursos disponibles. Una tarea hace osSemaphoreAcquire y se bloquea hasta que alguien hace osSemaphoreRelease.'),
-      Q('Una interrupción debe despertar a una tarea cuando hay datos. ¿Qué usas?', ['Un semáforo binario o una notificación de tarea (thread flags)', 'Un mutex', 'Una variable global y un while', 'HAL_Delay'], 'La tarea duerme sin gastar CPU hasta la señal.', { c: 'st_queue' }),
-      Q('Una interrupción con prioridad NVIC 3 llama a osSemaphoreRelease. CubeMX tiene el límite en 5. ¿Qué pasa?', ['Puede corromper el núcleo del RTOS: esa interrupción debe tener prioridad 5 o mayor', 'Funciona', 'No compila', 'Se ignora la llamada'], 'Solo las interrupciones “menos urgentes” que el límite pueden usar la API.', { c: 'st_rtosisr' }),
-      Q('Con la API nativa, ¿para qué sirve portYIELD_FROM_ISR(xHigherPriorityTaskWoken)?', ['Para cambiar a la tarea despertada nada más salir de la interrupción', 'Para desactivar interrupciones', 'Para borrar la bandera', 'Para dormir la CPU'], 'Si no, la tarea esperaría al siguiente tick.', { c: 'st_rtosisr' }),
-      { t: 'match', q: 'Une cada herramienta con su uso.', pairs: [['Cola', 'Pasar datos copiándolos'], ['Semáforo binario', 'Avisar de que algo ha ocurrido'], ['Semáforo contador', 'Contar eventos o recursos'], ['Mutex', 'Proteger un recurso compartido']], c: 'st_queue' },
-      Q('El productor usa osWaitForever y la cola está llena. ¿Qué le pasa?', ['Se bloquea hasta que el consumidor saque algo', 'Pierde el dato', 'Sobrescribe el más viejo', 'Se reinicia'], 'Las colas también regulan el ritmo entre tareas.', { c: 'st_queue' }),
-      Q('¿Cuánta CPU gasta esta tarea mientras no llegan mensajes?', ['Ninguna: está bloqueada', 'Toda', 'La mitad', 'Un tick de cada dos'], 'Por eso se diseña con tareas que esperan eventos.', { code: 'for (;;) {\n  osMessageQueueGet(cola, &m, NULL,\n                    osWaitForever);\n  procesar(&m);\n}', c: 'st_rtos' })
+      Q('Una interrupción mete datos en una cola que está llena. ¿Qué crees que debe hacer?', ['Descartar el dato: una interrupción no puede esperar', 'Esperar a que haya sitio', 'Borrar la cola', 'Reiniciar'], 'Una ISR nunca se bloquea. Juega con una cola.', { ...PRED, c: 'st_rtosisr', h: 'Una ISR nunca se bloquea.' }),
+      { t: 'explore', text: 'Un productor mete mensajes en una cola y un consumidor los saca.', viz: 'st_queue', params: P_QUEUE(50, 100, 8, 0),
+        tasks: [{ q: 'lost', min: 1, max: 1e6, text: 'Haz que se pierdan mensajes', done: 'Productor más rápido que el consumidor: la cola se llena y lo que sobra se descarta.', hint: 'Productor más rápido que el consumidor.' },
+          { q: 'okWait', min: 1, max: 1, text: 'Si el productor es una tarea, que espere en vez de descartar', done: 'La cola marca el ritmo: el productor se bloquea hasta que haya sitio.' }] },
+      I('Una <b>cola</b> es una FIFO de mensajes de tamaño fijo que se <b>copian</b> dentro. Quien lee puede bloquearse esperando: es la forma limpia de pasar datos de una interrupción a una tarea.', { code: 'osMessageQueueId_t cola =\n  osMessageQueueNew(16, sizeof(muestra_t), NULL);\n\n/* en la tarea */\nosMessageQueueGet(cola, &m, NULL, osWaitForever);' }),
+      I('<b>Semáforo binario</b>: una señal («ya ha pasado»). <b>Semáforo contador</b>: cuenta eventos o recursos. osSemaphoreAcquire bloquea hasta que alguien hace osSemaphoreRelease. Para avisar a una sola tarea hay también <b>notificaciones</b> (thread flags), más ligeras.', { svg: table([['Cola', 'Pasa datos copiándolos'], ['Semáforo binario', 'Avisa de que algo ha ocurrido'], ['Semáforo contador', 'Cuenta eventos o recursos'], ['Notificación', 'Aviso ligero a una tarea']], 'Herramientas para comunicar') }),
+      I('Desde una interrupción: <b>nunca bloquear</b> (tiempo de espera 0) y prioridad NVIC <b>igual o mayor</b> (en número) que configMAX_SYSCALL_INTERRUPT_PRIORITY, que es 5 en CubeMX. Las de 0–4 no pueden llamar al RTOS.', { svg: SVG_RTOSPRIO }),
+      I('Con la API nativa, la versión FromISR avisa si ha despertado a una tarea más importante: <b>portYIELD_FROM_ISR</b> cambia a ella al salir, sin esperar al siguiente tick.', { code: 'BaseType_t woken = pdFALSE;\nxQueueSendFromISR(cola, &dato, &woken);\nportYIELD_FROM_ISR(woken);' }),
+      { t: 'steps', text: 'Un sensor manda bytes por la UART y una tarea los procesa.', steps: ['En el callback de recepción (ISR): osMessageQueuePut(cola, &byte, 0, <b>0</b>)', 'Prioridad NVIC de la UART: 5 o más (en número)', 'La tarea espera con osMessageQueueGet(…, osWaitForever): Blocked, sin gastar CPU', 'Al llegar un byte, el RTOS la despierta y lo procesa'], result: 'ISR corta y tarea dormida hasta que hay trabajo.' },
+      Q('¿Por qué el tiempo de espera es 0 en esta llamada?', ['Porque se llama desde una interrupción, que nunca puede bloquearse', 'Para que sea más rápido', 'Porque la cola está vacía', 'Por error'], 'Desde una ISR solo vale 0: si la cola está llena, se descarta.', { code: 'void HAL_UART_RxCpltCallback(\n    UART_HandleTypeDef *h) {\n  osMessageQueuePut(cola, &byte,\n    0, 0);\n}', c: 'st_rtosisr', h: 'Ese callback corre dentro de una interrupción.' }),
+      Q('Envías a una cola un puntero a un array local de la tarea emisora. ¿Riesgo?', ['Cuando el receptor lo lea, el array puede haber cambiado o no existir', 'Ninguno', 'Que la cola se llene', 'Que el puntero se copie mal'], 'La cola copia el puntero, no los datos.', { c: 'st_queue', h: 'La cola copia lo que le das.' }),
+      Q('Una interrupción debe despertar a una tarea cuando hay datos. ¿Qué usas?', ['Un semáforo binario o una notificación de tarea', 'Un mutex', 'Una variable global y un while', 'HAL_Delay'], 'La tarea duerme sin gastar CPU hasta la señal.', { c: 'st_queue', h: 'Una señal, no un recurso.' }),
+      Q('Una interrupción con prioridad NVIC 3 llama a osSemaphoreRelease. CubeMX tiene el límite en 5. ¿Qué pasa?', ['Puede corromper el núcleo del RTOS: esa interrupción debe tener prioridad 5 o mayor', 'Funciona', 'No compila', 'Se ignora la llamada'], 'Solo las interrupciones menos urgentes que el límite pueden usar la API.', { c: 'st_rtosisr', h: '3 es más urgente que el límite.' }),
+      Q('Con la API nativa, ¿para qué sirve portYIELD_FROM_ISR(woken)?', ['Para cambiar a la tarea despertada nada más salir de la interrupción', 'Para desactivar interrupciones', 'Para borrar la bandera', 'Para dormir la CPU'], 'Si no, la tarea esperaría al siguiente tick.', { c: 'st_rtosisr', h: 'Sin él, esperarías al siguiente tick.' }),
+      { t: 'match', q: 'Une cada herramienta con su uso.', pairs: [['Cola', 'Pasar datos copiándolos'], ['Semáforo binario', 'Avisar de que algo ha ocurrido'], ['Semáforo contador', 'Contar eventos o recursos'], ['Mutex', 'Proteger un recurso compartido']], c: 'st_queue', h: 'Datos, aviso, cuenta y protección.' },
+      Q('El productor usa osWaitForever y la cola está llena. ¿Qué le pasa?', ['Se bloquea hasta que el consumidor saque algo', 'Pierde el dato', 'Sobrescribe el más viejo', 'Se reinicia'], 'Las colas también regulan el ritmo entre tareas.', { c: 'st_queue', h: 'Espera para siempre si hace falta.' }),
+      Q('¿Cuánta CPU gasta esta tarea mientras no llegan mensajes?', ['Ninguna: está bloqueada', 'Toda', 'La mitad', 'Un tick de cada dos'], 'Por eso se diseña con tareas que esperan eventos.', { code: 'for (;;) {\n  osMessageQueueGet(cola, &m, NULL,\n                    osWaitForever);\n  procesar(&m);\n}', c: 'st_rtos', h: 'Piensa en el estado Blocked.' }),
+      I('<b>Resumen</b>\n· Colas para datos (se copian), semáforos y notificaciones para avisar.\n· Desde una ISR: espera 0, funciones FromISR y prioridad NVIC de 5 a 15.\n· Una tarea que espera en una cola no gasta CPU.')
     ]),
     PRJ('st-p13', 'Proyecto: pantalla TFT con menú y FreeRTOS', 'st_tft'),
     L('st37', 'Mutex e inversión de prioridad', 'shield', ['st_mutex', 'st_rtosisr'], [
-      I('Un <b>mutex</b> protege un recurso compartido (la UART, un bus SPI): quien lo toma es el único que puede usarlo hasta que lo devuelve.'),
-      Q('Dos tareas usan printf y los mensajes salen mezclados letra a letra. ¿Solución?', ['Proteger la salida con un mutex', 'Subir la velocidad de la UART', 'Usar un semáforo contador', 'Quitar las prioridades'], 'Toma el mutex, imprime la línea entera y devuélvelo.', { c: 'st_mutex' }),
-      I('<b>Inversión de prioridad</b>: la tarea baja tiene el mutex; la alta lo pide y se bloquea; entonces una tarea media (que no necesita el mutex) expulsa a la baja… y la alta acaba esperando a la media.'),
-      Q('¿Quién está bloqueando en realidad a la tarea alta en ese escenario?', ['La tarea media, que impide a la baja terminar y soltar el mutex', 'La tarea baja por sí sola', 'El planificador', 'La tarea Idle'], 'Una tarea menos importante retrasa a la más importante.', { c: 'st_mutex' }),
-      I('Los mutex de FreeRTOS tienen <b>herencia de prioridad</b>: mientras la baja tiene el mutex que pide la alta, sube temporalmente a la prioridad de la alta. La media ya no puede expulsarla.'),
-      Q('¿Por qué un mutex y no un semáforo binario para proteger un recurso?', ['El mutex tiene herencia de prioridad; el semáforo no', 'El semáforo es más lento', 'Es lo mismo', 'El semáforo no existe en FreeRTOS'], 'Semáforo para señalar; mutex para proteger.', { c: 'st_mutex' }),
-      Q('La tarea A toma el mutex 1 y luego pide el 2; la B toma el 2 y luego pide el 1. ¿Qué puede pasar?', ['Interbloqueo: cada una espera a la otra para siempre', 'Nada', 'Que vayan más rápido', 'Que el RTOS lo resuelva solo'], 'Toma siempre los mutex en el mismo orden.', { c: 'st_mutex' }),
-      Q('¿Puedes tomar un mutex dentro de una interrupción?', ['No: los mutex son solo para tareas', 'Sí, con espera infinita', 'Sí, si la prioridad es 0', 'Solo con la API nativa'], 'Una interrupción no puede bloquearse ni heredar prioridad.', { c: 'st_rtosisr' }),
-      I('Un caso famoso: en 1997, la sonda Mars Pathfinder se reiniciaba en Marte por una inversión de prioridad. Se arregló a distancia activando la herencia de prioridad del mutex implicado.'),
-      Q('¿Qué buena práctica reduce estos problemas?', ['Tener el mutex el menor tiempo posible y nunca esperar (osDelay) con él tomado', 'Tomar todos los mutex al arrancar', 'Usar prioridades iguales siempre', 'No usar colas'], 'Cuanto menos dure la sección protegida, menos conflictos.', { c: 'st_mutex' })
+      Q('Dos tareas usan printf a la vez. ¿Qué crees que verás en el terminal?', ['Letras de los dos mensajes mezcladas', 'Los dos mensajes en orden siempre', 'Nada', 'Solo el de mayor prioridad'], 'Una tarea puede ser expulsada a mitad de su mensaje. Hace falta proteger la UART.', { ...PRED, c: 'st_mutex', h: 'Una tarea puede perder la CPU a mitad de su mensaje.' }),
+      { t: 'explore', text: 'La tarea baja tiene un mutex; la alta lo pide en t = 1 ms.', viz: 'st_inv', params: P_INV(0, 0, 2),
+        tasks: [{ q: 'waitH', min: 6, max: 100, text: 'Activa la tarea media y mira cuánto espera la alta', done: 'Inversión de prioridad: la media, que ni usa el mutex, retrasa a la alta.', hint: 'Activa la tarea media.' },
+          { q: 'fixed', min: 1, max: 1, text: 'Arréglalo sin quitar la tarea media', done: 'Con herencia de prioridad, la baja sube y nadie la expulsa.' }] },
+      I('Un <b>mutex</b> protege un recurso compartido (la UART, un bus SPI): quien lo toma es el único que lo usa hasta que lo devuelve.', { code: 'osMutexAcquire(mutexUart, osWaitForever);\nprintf("Temperatura: %d\\n", t);\nosMutexRelease(mutexUart);' }),
+      I('<b>Inversión de prioridad</b>: la tarea baja tiene el mutex; la alta lo pide y se bloquea; una media que no lo necesita expulsa a la baja… y la alta acaba esperando a la media.', { tune: { viz: 'st_inv', params: P_INV(1, 0, 2) } }),
+      I('Los mutex de FreeRTOS tienen <b>herencia de prioridad</b>: mientras la baja tiene el mutex que pide la alta, sube a la prioridad de la alta. Un semáforo binario no la tiene: semáforo para avisar, mutex para proteger.', { tune: { viz: 'st_inv', params: P_INV(1, 1, 2) }, more: 'Un caso famoso: en 1997, la sonda Mars Pathfinder se reiniciaba en Marte por una inversión de prioridad. Se arregló a distancia activando la herencia de prioridad del mutex implicado.' }),
+      I('Reglas: ten el mutex el <b>menor tiempo</b> posible, nunca esperes con él tomado, tómalos siempre <b>en el mismo orden</b> (si no, interbloqueo) y nunca dentro de una interrupción.', { svg: table([['Corto', 'Toma, usa y suelta'], ['Sin esperas', 'Nada de osDelay con el mutex'], ['Mismo orden', 'Siempre 1 y luego 2'], ['Solo tareas', 'Nunca en una ISR']], 'Reglas del mutex') }),
+      { t: 'steps', text: 'A toma el mutex 1 y luego pide el 2; B toma el 2 y luego pide el 1.', steps: ['A tiene el 1 y espera el 2', 'B tiene el 2 y espera el 1', 'Ninguna suelta lo que tiene: esperan para siempre (<b>interbloqueo</b>)', 'Solución: las dos toman primero el 1 y luego el 2'], result: 'Mismo orden siempre.' },
+      Q('Dos tareas usan printf y los mensajes salen mezclados. ¿Solución?', ['Proteger la salida con un mutex', 'Subir la velocidad de la UART', 'Usar un semáforo contador', 'Quitar las prioridades'], 'Toma el mutex, imprime la línea entera y suéltalo.', { c: 'st_mutex', h: 'Un recurso compartido necesita protección.' }),
+      Q('En la inversión de prioridad, ¿quién bloquea de verdad a la tarea alta?', ['La tarea media, que impide a la baja terminar y soltar el mutex', 'La tarea baja por sí sola', 'El planificador', 'La tarea Idle'], 'Una tarea menos importante retrasa a la más importante.', { c: 'st_mutex', h: '¿Quién impide que la baja termine?' }),
+      Q('¿Por qué un mutex y no un semáforo binario para proteger un recurso?', ['El mutex tiene herencia de prioridad; el semáforo no', 'El semáforo es más lento', 'Es lo mismo', 'El semáforo no existe en FreeRTOS'], 'Semáforo para señalar; mutex para proteger.', { c: 'st_mutex', h: 'Uno sube la prioridad de quien lo tiene.' }),
+      Q('La tarea A toma el mutex 1 y pide el 2; la B toma el 2 y pide el 1. ¿Qué puede pasar?', ['Interbloqueo: cada una espera a la otra para siempre', 'Nada', 'Que vayan más rápido', 'Que el RTOS lo resuelva solo'], 'Toma siempre los mutex en el mismo orden.', { c: 'st_mutex', h: 'Cada una tiene lo que la otra necesita.' }),
+      Q('¿Puedes tomar un mutex dentro de una interrupción?', ['No: los mutex son solo para tareas', 'Sí, con espera infinita', 'Sí, si la prioridad es 0', 'Solo con la API nativa'], 'Una interrupción no puede bloquearse ni heredar prioridad.', { c: 'st_rtosisr', h: 'Una ISR no puede esperar.' }),
+      Q('¿Qué buena práctica reduce estos problemas?', ['Tener el mutex el menor tiempo posible y nunca esperar con él tomado', 'Tomar todos los mutex al arrancar', 'Usar prioridades iguales siempre', 'No usar colas'], 'Cuanto menos dure la sección protegida, menos conflictos.', { c: 'st_mutex', h: 'Cuanto menos tiempo, mejor.' }),
+      I('<b>Resumen</b>\n· Mutex para proteger recursos; semáforo para avisar.\n· Inversión de prioridad: la herencia de los mutex la evita.\n· Corto, sin esperas, siempre en el mismo orden y nunca en una ISR.')
     ]),
     L('st38', 'Temporizadores software y la base de tiempo', 'timer', ['st_swtimer', 'st_rtos', 'st_rtosisr', 'st_tick'], [
-      I('Los <b>temporizadores software</b> de FreeRTOS ejecutan un callback tras un tiempo o periódicamente. Todos sus callbacks corren dentro de una única tarea del sistema (la del servicio de temporizadores).', { code: 'osTimerId_t t = osTimerNew(parpadeo,\n  osTimerPeriodic, NULL, NULL);\nosTimerStart(t, 500);   // ticks' }),
-      Q('¿Qué hace este código?', ['Llama a parpadeo cada 500 ticks (500 ms con tick de 1 kHz)', 'Espera 500 ms una vez', 'Crea una tarea nueva', 'Configura un temporizador hardware'], 'Ideal para trabajos cortos y periódicos.', { code: 'osTimerId_t t = osTimerNew(parpadeo,\n  osTimerPeriodic, NULL, NULL);\nosTimerStart(t, 500);', c: 'st_swtimer' }),
-      Q('Un callback de temporizador software llama a osDelay(100). ¿Problema?', ['Bloquea la tarea de temporizadores y retrasa todos los demás temporizadores', 'Ninguno', 'Se reinicia el chip', 'El temporizador se acelera'], 'Los callbacks deben ser cortos y no bloquear.', { c: 'st_swtimer' }),
-      I('Con FreeRTOS, el <b>SysTick</b> pasa a ser del RTOS. CubeMX te pide mover la base de tiempo de la HAL (la de HAL_GetTick y los tiempos de espera) a un temporizador hardware, por ejemplo TIM11.'),
-      Q('¿Por qué la HAL necesita otra base de tiempo con FreeRTOS?', ['Las esperas de la HAL deben funcionar aunque el planificador no haya arrancado o esté parado, sin depender del tick del RTOS', 'Porque el SysTick es lento', 'Para ahorrar energía', 'Porque la HAL no usa tiempo'], 'Cada uno con su reloj, sin pisarse.', { c: 'st_swtimer' }),
-      Q('Dentro de una tarea, ¿HAL_Delay(100) u osDelay(100)?', ['osDelay: bloquea la tarea y deja la CPU a las demás', 'HAL_Delay: es más precisa', 'Da igual', 'Ninguna funciona'], 'HAL_Delay espera dando vueltas y gasta CPU.', { c: 'st_rtos' }),
-      I('configMAX_SYSCALL_INTERRUPT_PRIORITY (5 en CubeMX) divide las interrupciones en dos grupos: las de prioridad <b>0–4</b> nunca son retrasadas por el RTOS, pero no pueden llamar a su API; las de <b>5–15</b> pueden llamarla.'),
-      Q('La interrupción del control de un motor necesita el mínimo retardo y no llama al RTOS. ¿Qué prioridad?', ['Entre 0 y 4', 'Entre 5 y 15', '15', 'Da igual'], 'El RTOS nunca enmascara esas prioridades.', { c: 'st_rtosisr' }),
-      Q('Con un tick de 1 kHz, ¿cuánto puede durar osDelay(1)?', ['Entre casi 0 y 1 ms, según cuándo se llame dentro del tick', 'Exactamente 1 ms', 'Siempre 2 ms', '1 µs'], 'La resolución de las esperas del RTOS es un tick.', { c: 'st_tick' }),
-      Q('¿Qué es el modo tickless?', ['Detener el tick cuando todas las tareas esperan para dormir más tiempo seguido', 'Un RTOS sin prioridades', 'Quitar el SysTick para siempre', 'Un tick de 1 Hz'], 'Muy útil en equipos con batería.', { c: 'st_rtos' })
+      Q('Con FreeRTOS, CubeMX te pide que la HAL use otro temporizador como base de tiempo en lugar del SysTick. ¿Por qué crees que lo hace?', ['El SysTick pasa a ser del RTOS y la HAL necesita su propio reloj', 'Porque el SysTick se rompe', 'Para gastar menos', 'Por compatibilidad con Arduino'], 'Dos usuarios para un mismo temporizador se pisarían. Antes, el grano del tick.', { ...PRED, c: 'st_swtimer', h: 'Dos usuarios para un mismo temporizador.' }),
+      { t: 'explore', text: 'Llamas a una espera en algún momento entre dos ticks de 1 ms.', viz: 'st_tickres', params: P_TRES(0.5, 1, 0),
+        tasks: [{ q: 'dOs1', min: 0, max: 0.3, text: 'Haz que osDelay(1) dure menos de 0,3 ms', done: 'Si lo llamas justo antes de un tick, ese tick ya cuenta.', hint: 'Llámalo tarde dentro del tick.' },
+          { q: 'dHal1', min: 1.9, max: 2.01, text: 'Haz que HAL_Delay(1) dure casi 2 ms', done: 'Llamado justo tras un tick, más el tick extra de garantía.' }] },
+      I('Los <b>temporizadores software</b> llaman a un callback tras un tiempo o periódicamente. Todos sus callbacks corren en <b>una sola tarea</b> del sistema: deben ser cortos y no bloquear nunca.', { svg: SVG_SWT, code: 'osTimerId_t t = osTimerNew(parpadeo,\n  osTimerPeriodic, NULL, NULL);\nosTimerStart(t, 500);   // ticks' }),
+      I('Con FreeRTOS el <b>SysTick</b> es del RTOS. La base de tiempo de la HAL (HAL_GetTick y sus esperas) pasa a un temporizador hardware, por ejemplo TIM11: así funciona aunque el planificador no haya arrancado o esté parado.', { svg: table([['SysTick', 'Tick de FreeRTOS: osDelay, colas…'], ['TIM11 (por ejemplo)', 'Base de la HAL: HAL_GetTick']], 'Cada uno con su reloj') }),
+      I('La resolución de cualquier espera es un tick: osDelay(1) dura entre casi 0 y 1 ms según cuándo lo llames. Para esperas cortas y exactas, un temporizador hardware.', { tune: { viz: 'st_tickres', params: P_TRES(0.25, 2, 0) }, more: 'Modo tickless: si todas las tareas esperan, el RTOS para el tick y duerme más tiempo seguido. Muy útil con batería.' }),
+      I('Recuerda la frontera: las interrupciones de prioridad <b>0–4</b> nunca las retrasa el RTOS, pero no pueden llamarlo; las de <b>5–15</b> pueden usar las funciones FromISR. El control de un motor, si no llama al RTOS, va en 0–4.', { svg: SVG_RTOSPRIO }),
+      { t: 'steps', text: 'Quieres parpadear un LED cada 500 ms sin crear una tarea.', steps: ['Crea un temporizador periódico: osTimerNew(parpadeo, osTimerPeriodic, NULL, NULL)', 'Arráncalo: osTimerStart(t, 500): 500 ticks = 500 ms con tick de 1 kHz', 'En parpadeo(), solo HAL_GPIO_TogglePin: corto y sin esperas', 'Todos los temporizadores comparten la tarea de servicio'], result: 'Un LED parpadeando con una línea de callback.' },
+      Q('¿Qué hace este código?', ['Llama a parpadeo cada 500 ticks (500 ms con tick de 1 kHz)', 'Espera 500 ms una vez', 'Crea una tarea nueva', 'Configura un temporizador hardware'], 'Ideal para trabajos cortos y periódicos.', { code: 'osTimerId_t t = osTimerNew(parpadeo,\n  osTimerPeriodic, NULL, NULL);\nosTimerStart(t, 500);', c: 'st_swtimer', h: 'Periodic: se repite.' }),
+      Q('Un callback de temporizador software llama a osDelay(100). ¿Problema?', ['Bloquea la tarea de temporizadores y retrasa a todos los demás', 'Ninguno', 'Se reinicia el chip', 'El temporizador se acelera'], 'Los callbacks deben ser cortos y no bloquear.', { c: 'st_swtimer', h: 'Todos comparten una misma tarea.' }),
+      Q('¿Por qué la HAL necesita otra base de tiempo con FreeRTOS?', ['Sus esperas deben funcionar aunque el planificador no haya arrancado o esté parado', 'Porque el SysTick es lento', 'Para ahorrar energía', 'Porque la HAL no usa tiempo'], 'Cada uno con su reloj, sin pisarse.', { c: 'st_swtimer', h: 'Piensa en antes de arrancar el planificador.' }),
+      Q('Dentro de una tarea, ¿HAL_Delay(100) u osDelay(100)?', ['osDelay: bloquea la tarea y deja la CPU a las demás', 'HAL_Delay: es más precisa', 'Da igual', 'Ninguna funciona'], 'HAL_Delay espera dando vueltas.', { c: 'st_rtos', h: 'Una bloquea; la otra da vueltas.' }),
+      Q('La interrupción del control de un motor necesita el mínimo retardo y no llama al RTOS. ¿Qué prioridad?', ['Entre 0 y 4', 'Entre 5 y 15', '15', 'Da igual'], 'El RTOS nunca enmascara esas prioridades.', { c: 'st_rtosisr', h: 'Por encima de la frontera del 5.' }),
+      Q('Con un tick de 1 kHz, ¿cuánto puede durar osDelay(1)?', ['Entre casi 0 y 1 ms, según cuándo se llame', 'Exactamente 1 ms', 'Siempre 2 ms', '1 µs'], 'La resolución de las esperas del RTOS es un tick.', { c: 'st_tick', h: 'Depende de en qué punto del tick la llames.' }),
+      Q('¿Qué es el modo tickless?', ['Detener el tick cuando todas las tareas esperan para dormir más tiempo seguido', 'Un RTOS sin prioridades', 'Quitar el SysTick para siempre', 'Un tick de 1 Hz'], 'Muy útil en equipos con batería.', { c: 'st_rtos', h: 'Sin tick no hay que despertar cada ms.' }),
+      I('<b>Resumen</b>\n· Temporizadores software: callbacks cortos en una sola tarea.\n· Con FreeRTOS, el SysTick es del RTOS y la HAL usa otro temporizador.\n· Las esperas tienen resolución de un tick; 0–4 para ISR que no llaman al RTOS.')
     ]),
     PRJ('st-p14', 'Proyecto: sintetizador I²S polifónico', 'st_synth'),
     PRJ('st-p15', 'Proyecto: estación de soldadura T12', 'st_solder')
   ] };
 
-  const M8 = { id: 'st-m8', title: 'Del prototipo al producto', desc: 'Bajo consumo, watchdogs, cargadores de arranque, Flash, tu propia placa y firmware profesional.', nodes: [
+  const M8 = { id: 'st-m8', title: 'Del prototipo al producto', desc: 'Bajo consumo, watchdogs, cargadores de arranque, la Flash interna, tu propia placa y firmware profesional.', nodes: [
     L('st39', 'Bajo consumo: Sleep, Stop y Standby', 'sleep', ['st_power', 'st_avgcur', 'st_hsi', 'st_32k', 'st_leak', 'st_dbglp'], [
-      I('El consumo dinámico crece con la frecuencia. Para ir con pilas, el chip pasa casi todo el tiempo dormido:\n<b>Sleep</b>: se para el núcleo; periféricos en marcha.\n<b>Stop</b>: se paran casi todos los relojes; RAM y registros se conservan.\n<b>Standby</b>: casi todo apagado; al despertar, arranque desde reset.'),
-      { t: 'match', q: 'Une cada modo con lo que conserva.', pairs: [['Sleep', 'Todo: solo se para el núcleo'], ['Stop', 'RAM y registros, con relojes parados'], ['Standby', 'Solo el dominio de respaldo (RTC y sus registros)']], c: 'st_power' },
-      Q('Tras despertar de Standby, ¿dónde sigue el programa?', ['Desde el reset, como un arranque nuevo', 'En la línea siguiente a la que lo durmió', 'En main, con las variables intactas', 'En la interrupción del RTC'], 'Por eso hay que mirar la bandera de Standby al arrancar.', { c: 'st_power' }),
-      Q('Tras despertar de Stop en una F4, ¿qué reloj tiene el sistema?', ['El HSI: hay que reconfigurar el PLL', 'El PLL, como antes', 'El LSE', 'Ninguno'], 'Llama de nuevo a SystemClock_Config().', { c: 'st_hsi' }),
-      I('Despertar de Stop cada cierto tiempo con el <b>temporizador de despertar del RTC</b>:', { code: 'HAL_RTCEx_SetWakeUpTimer_IT(&hrtc,\n  20480 - 1,\n  RTC_WAKEUPCLOCK_RTCCLK_DIV16);\nHAL_SuspendTick();\nHAL_PWR_EnterSTOPMode(\n  PWR_LOWPOWERREGULATOR_ON,\n  PWR_STOPENTRY_WFI);\nSystemClock_Config();\nHAL_ResumeTick();' }),
-      Nm('LSE ÷16 = 2048 Hz. ¿Qué valor de cuenta pasas para despertar cada 5 s? (cuentas − 1)', 10239, '', '5 × 2048 = 10 240 cuentas → 10 239.', { c: 'st_32k' }),
-      Q('¿Por qué HAL_SuspendTick antes de dormir en Sleep?', ['Porque la interrupción del SysTick despertaría al chip cada milisegundo', 'Para ahorrar Flash', 'Porque el SysTick se rompe', 'No hace falta nunca'], 'Cualquier interrupción saca al núcleo de Sleep.', { c: 'st_power' }),
-      Nm('Un nodo consume 5 mA durante 20 ms cada 10 s y 10 µA el resto. ¿Corriente media en µA?', 19.98, 'µA', '(5000 µA × 0,02 s + 10 µA × 9,98 s) / 10 s ≈ 20 µA.', { tol: 0.5, c: 'st_avgcur' }),
-      Nm('Con una batería de 2000 mAh y 20 µA de media, ¿cuántos años, aproximadamente?', 11.4, 'años', '2000 / 0,02 = 100 000 h ≈ 11,4 años. En la práctica, la autodescarga de la batería lo acortará.', { tol: 0.3, c: 'st_avgcur' }),
-      Q('Tu nodo en Stop consume mucho más de lo esperado. ¿Qué revisas primero en la placa?', ['LED de encendido, regulador con mucho consumo propio, pull-ups y pines flotantes', 'El tamaño de la Flash', 'La versión de CubeIDE', 'La velocidad de la UART'], 'A menudo la placa gasta más que el chip.', { c: 'st_leak' }),
-      Q('Dejas activada la depuración en Stop para el producto final. ¿Efecto?', ['Más consumo: mantiene relojes encendidos para el depurador', 'Ninguno', 'Menos consumo', 'El chip no despierta'], 'Actívala solo mientras desarrollas.', { c: 'st_dbglp' })
+      Q('Un nodo despierta 20 ms cada 10 s para medir y el resto duerme. ¿Qué crees que pesa más en la batería?', ['Depende: hay que comparar corriente × tiempo de cada estado', 'Siempre el rato despierto', 'Siempre el sueño', 'Ninguno: dormir sale gratis'], 'Es una media ponderada por el tiempo, como en el curso base. Juega con ella.', { ...PRED, c: 'st_avgcur', h: 'Media ponderada por el tiempo.' }),
+      { t: 'explore', text: 'Un nodo con batería de 2000 mAh despierta, mide y vuelve a dormir.', viz: 'st_avg', params: P_AVG(20, 100, 1, 500),
+        tasks: [{ q: 'days', min: 365, max: 1e9, text: 'Consigue más de un año de batería', done: 'Despierta poco, duerme mucho y que el sueño gaste poco.', hint: 'Despierta menos a menudo y baja el consumo dormido.' },
+          { q: 'days', min: 1826, max: 1e9, text: 'Ahora más de 5 años', done: 'Con 10 µA dormido y un despertar breve cada minuto, la media baja a unos 12 µA.' }] },
+      I('Tres profundidades:\n<b>Sleep</b>: para el núcleo; despierta cualquier interrupción.\n<b>Stop</b>: para casi todos los relojes; RAM y registros intactos; despierta por EXTI o el RTC.\n<b>Standby</b>: casi todo apagado; al despertar arranca desde el reset.', { svg: SVG_POWER }),
+      I('Trampas: en Sleep, el SysTick te despierta cada milisegundo (llama a HAL_SuspendTick antes de dormir). Al salir de Stop el reloj vuelve al <b>HSI</b>: llama otra vez a SystemClock_Config.', { code: 'HAL_SuspendTick();\nHAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON,\n                      PWR_STOPENTRY_WFI);\nSystemClock_Config();   // vuelve al PLL\nHAL_ResumeTick();' }),
+      I('El RTC, con el cristal LSE de 32 768 Hz, despierta al chip: su temporizador de despertar cuenta, por ejemplo, LSE ÷16 = 2048 Hz. Para t segundos: t × 2048 cuentas, y se carga cuentas − 1.', { code: 'HAL_RTCEx_SetWakeUpTimer_IT(&hrtc, 20480 - 1,\n  RTC_WAKEUPCLOCK_RTCCLK_DIV16);   // 10 s' }),
+      I('A menudo la placa gasta más que el chip: LED de encendido, regulador, pull-ups con corriente, sensores y pines al aire. Y mientras desarrollas, DBGMCU mantiene el depurador vivo en Stop… a cambio de más consumo.', { svg: SVG_LEAK }),
+      { t: 'steps', text: 'Nodo: 5 mA durante 20 ms cada 10 s y 10 µA el resto. ¿Media y duración con 2000 mAh?', steps: ['Despierto: 5000 µA × 0,02 s = 100 µA·s', 'Dormido: 10 µA × 9,98 s = 99,8 µA·s', 'Media: (100 + 99,8) / 10 s ≈ <b>20 µA</b>', 'Duración: 2000 mAh / 0,02 mA = 100 000 h ≈ <b>11,4 años</b>'], result: 'En la práctica, la autodescarga de la batería lo acortará.' },
+      { t: 'match', q: 'Une cada modo con lo que conserva.', pairs: [['Sleep', 'Todo: solo se para el núcleo'], ['Stop', 'RAM y registros, con relojes parados'], ['Standby', 'Solo el dominio de respaldo (RTC y sus registros)']], c: 'st_power', h: 'Cuanto más profundo, menos conserva.' },
+      Q('Tras despertar de Standby, ¿dónde sigue el programa?', ['Desde el reset, como un arranque nuevo', 'En la línea siguiente a la que lo durmió', 'En main, con las variables intactas', 'En la interrupción del RTC'], 'Por eso hay que mirar la bandera de Standby al arrancar.', { c: 'st_power', h: 'En Standby se pierde la RAM.' }),
+      Q('Tras despertar de Stop en una F4, ¿qué reloj tiene el sistema?', ['El HSI: hay que reconfigurar el PLL', 'El PLL, como antes', 'El LSE', 'Ninguno'], 'Llama de nuevo a SystemClock_Config().', { c: 'st_hsi', h: 'Igual que tras el reset.' }),
+      Nm('LSE ÷16 = 2048 Hz. ¿Qué valor cargas para despertar cada 5 s? (cuentas − 1)', 10239, '', '5 × 2048 = 10 240 cuentas → 10 239.', { c: 'st_32k', h: 'Segundos × 2048, menos 1.' }),
+      Q('¿Por qué HAL_SuspendTick antes de dormir en Sleep?', ['Porque la interrupción del SysTick despertaría al chip cada milisegundo', 'Para ahorrar Flash', 'Porque el SysTick se rompe', 'No hace falta nunca'], 'Cualquier interrupción saca al núcleo de Sleep.', { c: 'st_power', h: 'Cualquier interrupción despierta en Sleep.' }),
+      Nm('2 mA durante 50 ms cada 5 s y 5 µA el resto. ¿Corriente media en µA?', 24.95, 'µA', '(2000 × 0,05 + 5 × 4,95) / 5 ≈ 25 µA.', { tol: 0.5, c: 'st_avgcur', h: 'Pasa todo a µA y segundos.' }),
+      Nm('Con 1000 mAh y 50 µA de media, ¿cuántos años, aproximadamente?', 2.28, 'años', '1000 / 0,05 = 20 000 h; / 8760 ≈ 2,3 años.', { tol: 0.1, c: 'st_avgcur', h: 'mAh / mA = horas; un año son 8760 h.' }),
+      Q('Tu nodo en Stop consume mucho más de lo esperado. ¿Qué revisas primero en la placa?', ['LED de encendido, regulador, pull-ups y pines flotantes', 'El tamaño de la Flash', 'La versión de CubeIDE', 'La velocidad de la UART'], 'A menudo la placa gasta más que el chip.', { c: 'st_leak', h: 'Lo que gasta aunque el chip duerma.' }),
+      Q('El depurador se desconecta al entrar en Stop. ¿Qué haces mientras desarrollas?', ['Mantener la depuración en Stop con DBGMCU', 'Cambiar de ST-LINK', 'No usar Stop nunca', 'Subir la frecuencia de SWD'], 'En Stop se paran los relojes que usa la depuración.', { c: 'st_dbglp', h: 'Hay un bloque que mantiene vivo al depurador.' }),
+      Q('Dejas activada la depuración en Stop para el producto final. ¿Efecto?', ['Más consumo: mantiene relojes encendidos para el depurador', 'Ninguno', 'Menos consumo', 'El chip no despierta'], 'Actívala solo mientras desarrollas.', { c: 'st_dbglp', h: 'Esos relojes gastan.' }),
+      I('<b>Resumen</b>\n· Sleep, Stop, Standby: menos consumo y más pérdida a cada escalón.\n· Media = Σ (corriente × tiempo) / periodo; despertar breve y sueño de pocos µA.\n· Tras Stop, vuelve al PLL; revisa lo que gasta la placa.')
     ]),
     L('st40', 'Watchdogs IWDG y WWDG', 'shield', ['st_wdg', 'st_iwdgcalc', 'st_dbglp'], [
-      I('<b>IWDG</b> (independiente): cuenta con el LSI, funciona aunque falle el reloj principal y, una vez arrancado, <b>no se puede parar</b> hasta el siguiente reset.\n<b>WWDG</b> (de ventana): usa PCLK1 y además exige refrescarlo dentro de una ventana: ni muy tarde ni demasiado pronto.'),
-      { t: 'match', q: 'Une cada característica con su watchdog.', pairs: [['Reloj LSI independiente', 'IWDG'], ['Ventana de refresco', 'WWDG'], ['No se puede detener una vez iniciado', 'IWDG '], ['Interrupción de aviso antes del reset', 'WWDG ']], c: 'st_wdg' },
-      G('st_iwdg'), G('st_iwdg'),
-      Q('¿Dónde llamas a HAL_IWDG_Refresh?', ['En el bucle principal, solo tras comprobar que todo va bien', 'En una interrupción de temporizador periódica', 'Al principio de main', 'En el HardFault_Handler'], 'Si lo refrescas desde un temporizador, el watchdog no detecta un bucle principal colgado.', { c: 'st_wdg' }),
-      Q('Refrescas el WWDG demasiado pronto. ¿Qué pasa?', ['Reset: fuera de la ventana también cuenta como fallo', 'Nada', 'Se alarga el tiempo', 'Se desactiva'], 'Detecta tanto cuelgues como programas que van “demasiado rápido” por un error.', { c: 'st_wdg' }),
-      I('Tras un reset, mira <b>por qué</b> ha ocurrido y guárdalo en un registro de errores:', { code: 'if (__HAL_RCC_GET_FLAG(RCC_FLAG_IWDGRST))\n  printf("Reset por watchdog\\n");\n__HAL_RCC_CLEAR_RESET_FLAGS();' }),
-      Q('¿Por qué se borran las banderas al final?', ['Para que en el próximo reset solo aparezca la causa nueva', 'Para desactivar el watchdog', 'Para ahorrar energía', 'No hace falta'], 'Las banderas de RCC->CSR se acumulan hasta que las borras.', { c: 'st_wdg' }),
-      Q('Pausas el programa con el depurador y a los 2 s el chip se reinicia. ¿Por qué?', ['El IWDG sigue contando: congélalo en depuración con DBGMCU', 'El ST-LINK está mal', 'Falta memoria', 'Es un fallo del chip'], 'Las Nucleo y CubeIDE permiten congelar los watchdogs durante la depuración.', { c: 'st_dbglp' }),
-      Q('Con FreeRTOS y 4 tareas, ¿cómo usas bien el watchdog?', ['Cada tarea marca que está viva y una tarea supervisora refresca solo si todas lo han hecho', 'Lo refresca la tarea Idle sin más', 'Lo refresca una ISR', 'No se puede usar con RTOS'], 'Así detectas también una tarea bloqueada.', { c: 'st_wdg' })
+      Q('Refrescas el watchdog desde una interrupción de temporizador cada 10 ms. El bucle principal se cuelga. ¿Qué crees que pasa?', ['Nada: el temporizador lo sigue refrescando y el cuelgue no se detecta', 'Se reinicia enseguida', 'Se para el temporizador', 'El watchdog se apaga'], 'El watchdog solo sabe si alguien lo refresca, no si el programa va bien.', { ...PRED, c: 'st_wdg', h: 'El watchdog solo sabe si alguien lo refresca.' }),
+      { t: 'explore', text: 'El IWDG cuenta atrás con el LSI; cada refresco lo recarga. Si llega a 0, reset.', viz: 'st_iwdg', params: P_IWDG(4, 99, 500),
+        tasks: [{ q: 'ok500', min: 1, max: 1, text: 'Ajusta el IWDG para que refrescar cada 500 ms no lo dispare (LSI nominal)', done: 'Tiempo = preescalador × (RLR + 1) / 32 kHz por encima de 500 ms.', hint: 'Sube el preescalador o RLR.' },
+          { q: 'safe500', min: 1, max: 1, text: 'Que tampoco lo dispare con el LSI más rápido (47 kHz)', done: 'El LSI varía mucho entre chips: deja margen.' }] },
+      I('<b>IWDG</b> (independiente): cuenta con el LSI, funciona aunque falle el reloj principal y, una vez arrancado, no se puede parar.\n<b>WWDG</b> (de ventana): usa PCLK1 y exige refrescar dentro de una ventana: ni tarde ni demasiado pronto.', { svg: SVG_WDG }),
+      I('<b>t = preescalador × (RLR + 1) / fLSI</b>. RLR es de 12 bits (máximo 4095). El LSI de la F4 puede ir de unos 17 a 47 kHz: calcula también el peor caso.', { tune: { viz: 'st_iwdg', params: P_IWDG(32, 999, 500) } }),
+      I('Refresca en un punto que solo se alcanza si <b>todo</b> va bien. Con un RTOS, cada tarea marca que está viva y una supervisora refresca solo si todas lo han hecho.', { code: 'if (vivas == TODAS) {   // cada tarea pone su bit\n  vivas = 0;\n  HAL_IWDG_Refresh(&hiwdg);\n}' }),
+      I('Tras un reset, mira <b>por qué</b> ha ocurrido y borra las banderas. Al depurar, congela el IWDG con DBGMCU: si no, sigue contando con el núcleo parado y reinicia el chip.', { code: 'if (__HAL_RCC_GET_FLAG(RCC_FLAG_IWDGRST))\n  printf("Reset por watchdog\\n");\n__HAL_RCC_CLEAR_RESET_FLAGS();\n__HAL_DBGMCU_FREEZE_IWDG();   // solo al depurar' }),
+      { t: 'steps', text: 'IWDG con LSI de 32 kHz y preescalador ÷32: ¿qué RLR da 1 s?', steps: ['t = pre × (RLR + 1) / fLSI', 'RLR + 1 = t × fLSI / pre = 1 s × 32 000 / 32', 'RLR + 1 = 1000 → <b>RLR = 999</b>', 'Peor caso con el LSI a 47 kHz: 32 × 1000 / 47 000 ≈ <b>0,68 s</b>'], result: 'RLR = 999; refresca bastante antes de 0,68 s.' },
+      { t: 'match', q: 'Une cada característica con su watchdog.', pairs: [['Reloj LSI independiente', 'IWDG'], ['Ventana de refresco', 'WWDG'], ['No se puede detener una vez iniciado', 'IWDG '], ['Interrupción de aviso antes del reset', 'WWDG ']], c: 'st_wdg', h: 'I de independiente; W de ventana (window).' },
+      G('st_iwdg'),
+      Q('¿Dónde llamas a HAL_IWDG_Refresh?', ['En el bucle principal, solo tras comprobar que todo va bien', 'En una interrupción de temporizador periódica', 'Al principio de main', 'En el HardFault_Handler'], 'Si lo refrescas desde un temporizador, no detecta un bucle colgado.', { c: 'st_wdg', h: 'Donde solo llegas si todo funciona.' }),
+      Q('Refrescas el WWDG demasiado pronto. ¿Qué pasa?', ['Reset: fuera de la ventana también cuenta como fallo', 'Nada', 'Se alarga el tiempo', 'Se desactiva'], 'Detecta también programas que van demasiado rápido por un error.', { c: 'st_wdg', h: 'Piensa en la ventana.' }),
+      Q('¿Por qué se borran las banderas de reset al arrancar?', ['Para que en el próximo reset solo aparezca la causa nueva', 'Para desactivar el watchdog', 'Para ahorrar energía', 'No hace falta'], 'Las banderas se acumulan hasta que las borras.', { c: 'st_wdg', h: 'Se acumulan.' }),
+      Q('Pausas el programa con el depurador y a los 2 s el chip se reinicia. ¿Por qué?', ['El IWDG sigue contando: congélalo al depurar con DBGMCU', 'El ST-LINK está mal', 'Falta memoria', 'Es un fallo del chip'], 'El IWDG no se para solo al parar el núcleo.', { c: 'st_dbglp', h: 'Hay algo que sigue contando con el núcleo parado.' }),
+      Q('Con FreeRTOS y 4 tareas, ¿cómo usas bien el watchdog?', ['Cada tarea marca que está viva y una supervisora refresca solo si todas lo han hecho', 'Lo refresca la tarea Idle sin más', 'Lo refresca una ISR', 'No se puede usar con RTOS'], 'Así detectas también una tarea bloqueada.', { c: 'st_wdg', h: 'Que nadie pueda colgarse sin que se note.' }),
+      G('st_iwdg'),
+      I('<b>Resumen</b>\n· IWDG independiente (LSI) e imparable; WWDG con ventana.\n· t = pre × (RLR + 1) / fLSI, con margen por la variación del LSI.\n· Refresca solo si todo va bien; mira la causa del reset; congela el IWDG al depurar.')
     ]),
     PRJ('st-p16', 'Proyecto: nodo sensor de bajo consumo', 'st_lowpower'),
     L('st41', 'Cargador de sistema y DFU', 'rocket', ['st_boot0', 'st_blproto', 'st_toolchain'], [
-      I('Todos los STM32 tienen un <b>cargador de arranque en ROM</b> (memoria de sistema) grabado por ST. Se ejecuta si BOOT0 está a 1 al hacer reset. Según el chip admite USART, USB DFU, I²C, SPI o CAN: la lista está en la nota de aplicación AN2606.'),
-      { t: 'order', q: 'Ordena cómo cargar firmware por USB DFU en una Black Pill.', items: ['Conecta el USB', 'Mantén pulsado BOOT0', 'Pulsa y suelta NRST', 'Suelta BOOT0', 'Conecta por USB en STM32CubeProgrammer y graba', 'Pulsa NRST para ejecutar tu programa'], e: 'BOOT0 solo se lee en el reset.', c: 'st_boot0' },
-      Q('Has grabado por DFU y el programa no arranca al quitar el USB y ponerlo. ¿Qué miras?', ['Que BOOT0 esté a 0 en el reset', 'La velocidad del USB', 'El cristal de 32 kHz', 'La FPU'], 'Con BOOT0 a 1 vuelve a entrar al cargador.', { c: 'st_boot0' }),
-      I('Por UART, el protocolo del cargador (AN3155): envías <b>0x7F</b> para que detecte tu velocidad, responde <b>0x79</b> (ACK) o <b>0x1F</b> (NACK). Cada comando va seguido de su complemento. La UART va en 8 bits con <b>paridad par</b>.'),
-      Q('Tu herramienta de carga por UART no conecta y usa 8N1. ¿Qué falta?', ['Paridad par (8E1)', 'Más velocidad', 'Control de flujo', 'Dos bits de parada'], 'El cargador de sistema exige paridad par.', { c: 'st_blproto' }),
-      Q('El comando de escribir memoria es 0x31. ¿Qué byte envías detrás?', ['0xCE, su complemento', '0x31', '0x00', '0xFF'], '0x31 XOR 0xFF = 0xCE.', { c: 'st_blproto' }),
-      Q('¿Qué hace esta orden?', ['Graba app.bin en 0x08000000 por SWD y verifica', 'Borra la Flash', 'Lee la Flash a app.bin', 'Arranca el cargador'], 'La versión de línea de órdenes es ideal para producción.', { code: 'STM32_Programmer_CLI -c port=SWD\n  -w app.bin 0x08000000 -v', c: 'st_toolchain' }),
-      Q('¿Puede tu aplicación saltar al cargador de sistema sin tocar BOOT0?', ['Sí: desactivando periféricos e interrupciones y saltando a la memoria de sistema (0x1FFF0000 en la F4)', 'No, nunca', 'Solo en la F1', 'Solo con un ST-LINK'], 'Se toma el MSP y el vector de reset de esa dirección, como en tu propio cargador.', { c: 'st_boot0' }),
-      Q('¿Por qué hacer un cargador propio si ya existe el de ROM?', ['Para elegir interfaz y protocolo, verificar o cifrar la imagen y actualizar en el campo sin tocar pines', 'Porque el de ROM no funciona', 'Porque ocupa menos', 'No tiene sentido'], 'Es lo que hacen los productos comerciales.', { c: 'st_boot0' })
+      Q('Quieres grabar una Black Pill sin ST-LINK, solo con el cable USB. ¿Crees que se puede?', ['Sí: el chip trae un cargador en ROM que acepta firmware por USB (DFU)', 'No, nunca', 'Solo con Arduino', 'Solo si ya tiene un programa que lo permita'], 'ST graba un cargador de fábrica. Se entra con BOOT0.', { ...PRED, c: 'st_boot0', h: 'ST graba algo en el chip de fábrica.' }),
+      { t: 'explore', text: 'BOOT0 y NRST en el tiempo. La línea roja es el instante en que se lee BOOT0.', viz: 'st_boot0', params: P_B0(0, 0),
+        tasks: [{ q: 'dfu', min: 1, max: 1, text: 'Entra en el cargador DFU', done: 'BOOT0 a 1 en el instante de soltar NRST.', hint: 'BOOT0 a 1 al soltar NRST.' },
+          { q: 'stay', min: 1, max: 1, text: 'Suelta BOOT0 y comprueba que sigues en el cargador', done: 'BOOT0 solo se mira en el reset.' }] },
+      I('Todos los STM32 traen un <b>cargador en ROM</b> (memoria de sistema) grabado por ST. Se ejecuta si BOOT0 está a 1 en el reset. Según el chip acepta USART, USB DFU, I²C, SPI o CAN (nota de aplicación AN2606).', { tune: { viz: 'st_boot0', params: P_B0(1, 0) } }),
+      I('Por UART, el protocolo (AN3155): envías <b>0x7F</b> para que detecte tu velocidad; responde <b>0x79</b> (ACK) o <b>0x1F</b> (NACK). Cada comando va seguido de su complemento y la UART va en 8 bits con <b>paridad par</b>.', { svg: SVG_BLPROTO }),
+      I('Para producción, la línea de órdenes de STM32CubeProgrammer graba y verifica sin abrir el IDE, por SWD, UART o USB.', { code: 'STM32_Programmer_CLI -c port=SWD \\\n  -w app.bin 0x08000000 -v' }),
+      I('Tu aplicación también puede saltar al cargador de ROM sin tocar BOOT0. Y un <b>cargador propio</b> va más allá: tu interfaz, tu protocolo, verificar o cifrar la imagen y actualizar en el campo.', { code: '/* Saltar al cargador de ROM (F4) */\nHAL_DeInit();             // periféricos a reset\nSysTick->CTRL = 0;        // para el SysTick\nfor (int i = 0; i < 8; i++) {   // apaga y limpia las IRQ\n  NVIC->ICER[i] = 0xFFFFFFFF;\n  NVIC->ICPR[i] = 0xFFFFFFFF;\n}\nuint32_t *rom = (uint32_t *)0x1FFF0000;\n__set_MSP(rom[0]);\n((void (*)(void))rom[1])();' }),
+      { t: 'steps', text: 'Graba por DFU una Black Pill.', steps: ['Conecta el USB', 'Mantén BOOT0, pulsa y suelta NRST, suelta BOOT0', 'En STM32CubeProgrammer, conecta por USB y graba', 'Pulsa NRST para ejecutar tu programa'], result: 'Sin ST-LINK, aunque también sin depurador.' },
+      { t: 'order', q: 'Ordena cómo cargar firmware por USB DFU en una Black Pill.', items: ['Conecta el USB', 'Mantén pulsado BOOT0', 'Pulsa y suelta NRST', 'Suelta BOOT0', 'Conecta por USB en STM32CubeProgrammer y graba', 'Pulsa NRST para ejecutar tu programa'], e: 'BOOT0 solo se lee en el reset.', c: 'st_boot0', h: 'BOOT0 tiene que estar pulsado cuando sueltas NRST.' },
+      Q('Has grabado por DFU y el programa no arranca al quitar el USB y ponerlo. ¿Qué miras?', ['Que BOOT0 esté a 0 en el reset', 'La velocidad del USB', 'El cristal de 32 kHz', 'La FPU'], 'Con BOOT0 a 1 vuelve a entrar al cargador.', { c: 'st_boot0', h: '¿Qué vale BOOT0 al arrancar?' }),
+      Q('Tu herramienta de carga por UART no conecta y usa 8N1. ¿Qué falta?', ['Paridad par (8E1)', 'Más velocidad', 'Control de flujo', 'Dos bits de parada'], 'El cargador de sistema exige paridad par.', { c: 'st_blproto', h: 'El cargador pide un bit más.' }),
+      Q('El comando de escribir memoria es 0x31. ¿Qué byte envías detrás?', ['0xCE, su complemento', '0x31', '0x00', '0xFF'], '0x31 XOR 0xFF = 0xCE.', { c: 'st_blproto', h: 'XOR con 0xFF.' }),
+      Q('¿Qué hace esta orden?', ['Graba app.bin en 0x08000000 por SWD y verifica', 'Borra la Flash', 'Lee la Flash a app.bin', 'Arranca el cargador'], 'La versión de línea de órdenes es ideal para producción.', { code: 'STM32_Programmer_CLI -c port=SWD\n  -w app.bin 0x08000000 -v', c: 'st_toolchain', h: '-w escribe, -v verifica.' }),
+      Q('¿Puede tu aplicación saltar al cargador de sistema sin tocar BOOT0?', ['Sí: desactivando periféricos e interrupciones y saltando a la memoria de sistema (0x1FFF0000 en la F4)', 'No, nunca', 'Solo en la F1', 'Solo con un ST-LINK'], 'Se toma el MSP y el vector de reset de esa dirección.', { c: 'st_boot0', h: 'La memoria de sistema también tiene su tabla de vectores.' }),
+      Q('¿Por qué hacer un cargador propio si ya existe el de ROM?', ['Para elegir interfaz y protocolo, verificar o cifrar la imagen y actualizar sin tocar pines', 'Porque el de ROM no funciona', 'Porque ocupa menos', 'No tiene sentido'], 'Es lo que hacen los productos comerciales.', { c: 'st_boot0', h: 'Piensa en actualizar aparatos ya vendidos.' }),
+      Q('El comando de leer memoria es 0x11. ¿Qué byte envías detrás?', ['0xEE', '0x11', '0x00', '0xFF'], '0x11 XOR 0xFF = 0xEE.', { c: 'st_blproto', h: 'Invierte cada bit.' }),
+      I('<b>Resumen</b>\n· BOOT0 a 1 en el reset → cargador de ROM (UART, USB DFU…).\n· Protocolo UART: 0x7F, ACK 0x79, comando + complemento, paridad par.\n· STM32_Programmer_CLI para producción; cargador propio para actualizar en el campo.')
     ]),
     L('st42', 'Escribir en la Flash y protegerla', 'memory', ['st_flash', 'st_rdp', 'st_linker'], [
-      I('La Flash de la F401/F411 se divide en <b>sectores</b> desiguales: cuatro de 16 KB (0x08000000–0x0800FFFF), uno de 64 KB (desde 0x08010000) y el resto de 128 KB. Solo se puede borrar un sector entero.'),
-      Q('¿Dónde empieza el sector 4 de una F411?', ['0x08010000', '0x08004000', '0x08040000', '0x08020000'], '4 × 16 KB = 64 KB = 0x10000.', { c: 'st_flash' }),
-      Q('¿Qué valor tiene la Flash recién borrada?', ['Todos los bits a 1: 0xFF', 'Todos a 0', 'Aleatorio', 'El valor anterior'], 'Programar solo puede pasar bits de 1 a 0.', { c: 'st_flash' }),
-      I('Secuencia con la HAL:', { code: 'HAL_FLASH_Unlock();\nFLASH_EraseInitTypeDef e = {\n  .TypeErase = FLASH_TYPEERASE_SECTORS,\n  .Sector = FLASH_SECTOR_7,\n  .NbSectors = 1,\n  .VoltageRange = FLASH_VOLTAGE_RANGE_3 };\nuint32_t err;\nHAL_FLASHEx_Erase(&e, &err);\nHAL_FLASH_Program(FLASH_TYPEPROGRAM_WORD,\n  0x08060000, dato);\nHAL_FLASH_Lock();' }),
-      Q('¿Qué indica FLASH_VOLTAGE_RANGE_3?', ['Que el chip va a 2,7–3,6 V y puede programar palabras de 32 bits', 'Que se borran 3 sectores', 'Que se usa el banco 3', 'Que la Flash va a 3 MHz'], 'Con tensiones menores hay que programar de menos en menos bits.', { c: 'st_flash' }),
-      Q('Mientras se borra un sector de 128 KB, ¿qué le pasa a tu programa si corre desde la misma Flash?', ['Se queda parado hasta que termina el borrado, que puede durar más de un segundo', 'Sigue normal', 'Se reinicia', 'Corre más rápido'], 'Ojo con los watchdogs y con las interrupciones urgentes.', { c: 'st_flash' }),
-      Q('¿Por qué no guardar un contador en Flash cada segundo?', ['Cada sector aguanta del orden de 10 000 borrados: se gastaría pronto', 'Porque es lento', 'Porque la Flash es de solo lectura', 'No hay problema'], 'Agrupa escrituras, rota posiciones o usa otra memoria.', { c: 'st_flash' }),
-      Q('Usas el último sector para datos. ¿Qué cambias en el script del enlazador?', ['Reducir LENGTH de FLASH para que el programa no pueda ocupar ese sector', 'Nada', 'Aumentar la RAM', 'Mover .bss'], 'Si no, una actualización que crezca borraría tus datos o tu código.', { c: 'st_linker' }),
-      I('<b>Protección de lectura (RDP)</b> en los option bytes:\n<b>Nivel 0</b>: sin protección.\n<b>Nivel 1</b>: el depurador no puede leer la Flash; volver a 0 borra toda la Flash.\n<b>Nivel 2</b>: depuración desactivada para siempre. <b>Irreversible.</b>'),
-      Q('¿Qué pasa si bajas el RDP de nivel 1 a nivel 0?', ['Se borra toda la Flash: así nadie recupera tu código', 'Nada', 'Se bloquea el chip', 'Se activa el nivel 2'], 'Protege la propiedad intelectual sin perder el chip.', { c: 'st_rdp' }),
-      Q('¿Cuándo pondrías el RDP a nivel 2?', ['Solo en un producto final muy seguro de que nunca necesitarás depurar ni reprogramar por SWD', 'En cada prototipo', 'Para ahorrar energía', 'Para acelerar la Flash'], 'Es irreversible: un error y el chip ya no se puede depurar nunca.', { c: 'st_rdp' })
+      Q('Una posición de Flash vale 0x0F y escribes 0xF0 encima, sin borrar. ¿Qué crees que queda?', ['0x00', '0xF0', '0xFF', '0x0F'], 'Programar solo puede bajar bits a 0. Compruébalo.', { ...PRED, c: 'st_flash', h: 'Programar solo puede bajar bits.' }),
+      { t: 'explore', text: 'Elige lo que hay en la Flash, lo que escribes y si borras antes.', viz: 'st_flash', params: P_FLASH(0, 0, 0),
+        tasks: [{ q: 'res', min: 0, max: 0, text: 'Escribe 0xF0 sobre 0x0F sin borrar', done: 'AND bit a bit: 0x0F AND 0xF0 = 0x00.', hint: 'Contenido 0F y escribes F0.' },
+          { q: 'r2', min: 1, max: 1, text: 'Consigue que quede 0x5A encima de 0xA5', done: 'Hay que borrar antes: el sector entero vuelve a 0xFF.' }] },
+      I('Borrar pone todos los bits a <b>1</b> (0xFF). Programar solo puede pasar bits de 1 a 0. Para volver a 1 hay que borrar el <b>sector entero</b>.', { tune: { viz: 'st_flash', params: P_FLASH(2, 1, 1) } }),
+      I('La Flash de la F401/F411 se divide en <b>sectores</b> desiguales: cuatro de 16 KB, uno de 64 KB (desde 0x08010000) y el resto de 128 KB. Cada sector aguanta del orden de <b>10 000</b> borrados, y mientras se borra, la CPU que ejecuta desde esa Flash se para (hasta 1–2 s en los de 128 KB).', { svg: table([['Sectores 0–3', '16 KB cada uno, desde 0x08000000'], ['Sector 4', '64 KB, desde 0x08010000'], ['Sectores 5–7', '128 KB cada uno (F411)'], ['Borrado', 'Sector entero; unos 10 000 ciclos']], 'Flash de una F411 (512 KB)') }),
+      I('Con la HAL: desbloquear, borrar el sector, programar y bloquear.', { code: 'HAL_FLASH_Unlock();\nFLASH_EraseInitTypeDef e = {\n  .TypeErase = FLASH_TYPEERASE_SECTORS,\n  .Sector = FLASH_SECTOR_7, .NbSectors = 1,\n  .VoltageRange = FLASH_VOLTAGE_RANGE_3 };\nuint32_t err;\nHAL_FLASHEx_Erase(&e, &err);\nHAL_FLASH_Program(FLASH_TYPEPROGRAM_WORD,\n  0x08060000, dato);\nHAL_FLASH_Lock();' }),
+      I('<b>Protección de lectura (RDP)</b> en los option bytes: nivel 0, sin protección; nivel 1, el depurador no lee la Flash (volver a 0 la borra entera); nivel 2, depuración desactivada para siempre: <b>irreversible</b>.', { svg: SVG_RDP }),
+      { t: 'steps', text: 'Usas el último sector de una F411 (512 KB) para guardar datos.', steps: ['512 KB: sectores 0–3 (4 × 16), 4 (64) y 5–7 (3 × 128)', 'El sector 7 empieza en 0x08000000 + 384 KB = <b>0x08060000</b>', 'En el .ld, LENGTH de FLASH = 384K para que el programa no lo pise', 'Borra el sector 7 antes de reescribir y agrupa las escrituras'], result: 'Datos en 0x08060000, a salvo del programa.' },
+      Q('¿Dónde empieza el sector 4 de una F411?', ['0x08010000', '0x08004000', '0x08040000', '0x08020000'], '4 × 16 KB = 64 KB = 0x10000.', { c: 'st_flash', h: 'Suma cuatro sectores de 16 KB.' }),
+      Q('¿Qué valor tiene la Flash recién borrada?', ['Todos los bits a 1: 0xFF', 'Todos a 0', 'Aleatorio', 'El valor anterior'], 'Programar solo puede pasar bits de 1 a 0.', { c: 'st_flash', h: 'Borrar pone unos.' }),
+      Q('¿Qué indica FLASH_VOLTAGE_RANGE_3?', ['Que el chip va a 2,7–3,6 V y puede programar palabras de 32 bits', 'Que se borran 3 sectores', 'Que se usa el banco 3', 'Que la Flash va a 3 MHz'], 'Con tensiones menores hay que programar de menos en menos bits.', { c: 'st_flash', h: 'Tiene que ver con la alimentación.' }),
+      Q('Mientras se borra un sector de 128 KB, ¿qué le pasa a tu programa si corre desde la misma Flash?', ['Se queda parado hasta que termina el borrado, que puede durar más de un segundo', 'Sigue normal', 'Se reinicia', 'Corre más rápido'], 'Ojo con los watchdogs y las interrupciones urgentes.', { c: 'st_flash', h: 'La CPU no puede leer instrucciones de esa Flash mientras se borra.' }),
+      Q('¿Por qué no guardar un contador en la Flash cada segundo?', ['Cada sector aguanta del orden de 10 000 borrados: se gastaría en horas', 'Porque es lento', 'Porque la Flash es de solo lectura', 'No hay problema'], 'Agrupa escrituras, rota posiciones o usa otra memoria.', { c: 'st_flash', h: 'Cuenta borrados por día.' }),
+      Q('Usas el último sector para datos. ¿Qué cambias en el script del enlazador?', ['Reducir LENGTH de FLASH para que el programa no pueda ocuparlo', 'Nada', 'Aumentar la RAM', 'Mover .bss'], 'Si no, una actualización que crezca borraría tus datos o tu código.', { c: 'st_linker', h: 'Lo que no está en LENGTH, el programa no lo usa.' }),
+      Q('¿Qué pasa si bajas el RDP de nivel 1 a nivel 0?', ['Se borra toda la Flash: así nadie recupera tu código', 'Nada', 'Se bloquea el chip', 'Se activa el nivel 2'], 'Protege tu código sin perder el chip.', { c: 'st_rdp', h: 'Abrir la puerta vacía la habitación.' }),
+      Q('¿Cuándo pondrías el RDP a nivel 2?', ['Solo en un producto final, seguro de que nunca necesitarás depurar ni reprogramar por SWD', 'En cada prototipo', 'Para ahorrar energía', 'Para acelerar la Flash'], 'Es irreversible.', { c: 'st_rdp', h: 'No tiene vuelta atrás.' }),
+      I('<b>Resumen</b>\n· Borrar pone 0xFF por sectores; programar solo baja bits.\n· Unos 10 000 borrados por sector; la CPU se para mientras se borra.\n· Reserva el sector en el .ld; RDP 1 protege y RDP 2 es para siempre.')
     ]),
     PRJ('st-p17', 'Proyecto: cargador de arranque propio', 'st_boot'),
     L('st43', 'Diseña tu propia placa STM32', 'pcb', ['st_board', 'st_crystal', 'st_bringup'], [
-      I('El circuito mínimo de un STM32: alimentación de 3,3 V, condensadores de desacoplo, condensadores de VCAP (en las F4), filtro de VDDA, BOOT0, NRST, el cristal y un conector de depuración. Todo está en la nota de aplicación de “primeros pasos con hardware” de cada familia.'),
-      Q('Tu F411 no arranca y VCAP_1 no tiene condensador. ¿Por qué importa?', ['VCAP estabiliza el regulador interno del núcleo; sin él no funciona bien', 'No importa', 'Solo afecta al ADC', 'VCAP es una entrada analógica'], 'Pon el valor y el tipo que indica la hoja de datos.', { c: 'st_board' }),
-      G('st_crystal'), G('st_crystal'),
-      Q('¿Cómo dejas BOOT0 en una placa propia?', ['Con una resistencia de unos 10 kΩ a masa y un pulsador o puente a 3,3 V', 'Al aire', 'Directo a 3,3 V', 'Conectado a NRST'], 'Así arranca siempre tu programa salvo que lo pidas.', { c: 'st_board' }),
-      Q('¿Para qué un condensador de 100 nF en NRST?', ['Filtra ruidos que podrían reiniciar el chip', 'Para que arranque más rápido', 'Para el cristal', 'Para el USB'], 'Junto con la pull-up interna.', { c: 'st_board' }),
-      Q('¿Por qué VDDA lleva su propio filtrado (ferrita y condensadores)?', ['El ADC y el DAC miden respecto a ella: el ruido digital empeora las medidas', 'Por estética', 'Porque consume mucho', 'Para el USB'], 'Separa la alimentación analógica de la digital.', { c: 'st_board' }),
-      I('Conector de depuración: como mínimo 3,3 V, GND, SWDIO, SWCLK y NRST (mejor también SWO). Hay un estándar de 10 pines a 1,27 mm (Cortex Debug) y conectores sin soldar como Tag-Connect.'),
-      Q('¿Qué protección añades al conector USB de una placa propia?', ['Un supresor ESD en D+ y D− (por ejemplo USBLC6-2SC6)', 'Un fusible en D+', 'Una resistencia de 1 MΩ', 'Ninguna'], 'Las descargas electrostáticas entran por los conectores.', { c: 'st_board' }),
-      Q('Alimentas desde una Li-ion (3,0–4,2 V) con un AMS1117 de 3,3 V (caída de ~1 V). ¿Problema?', ['Pronto no habrá margen y la salida bajará de 3,3 V: usa un LDO de caída muy baja o un buck-boost', 'Ninguno', 'Se quemará el STM32', 'Dará 4,2 V'], 'El AMS1117 necesita unos 4,3 V a la entrada para dar 3,3 V.', { c: 'st_board' }),
-      Q('¿Por qué asignar los pines en CubeMX antes de dibujar el esquema?', ['Para comprobar que cada función tiene un pin posible sin conflictos', 'Para que la PCB sea más bonita', 'Porque KiCad lo exige', 'No hace falta'], 'Descubrir un conflicto con la placa fabricada es carísimo.', { c: 'st_bringup' }),
-      { t: 'order', q: 'Ordena la puesta en marcha de una placa nueva.', items: ['Inspección visual y continuidad entre 3,3 V y GND', 'Alimentar con fuente limitada y medir 3,3 V', 'Conectar el ST-LINK y leer el Device ID', 'Grabar un parpadeo', 'Comprobar el reloj con MCO', 'Probar cada periférico por separado'], e: 'Paso a paso: si algo falla, sabes exactamente qué.', c: 'st_bringup' }
+      Q('Montas tu primera placa con un STM32 y no arranca. ¿Qué crees que es más probable?', ['Un fallo del circuito mínimo: VCAP, BOOT0, NRST o la alimentación', 'El chip venía roto', 'El programa', 'El color de la placa'], 'Antes que el código, el hardware básico. Empezamos por el cristal.', { ...PRED, c: 'st_board', h: 'Antes que el código, el hardware básico.' }),
+      { t: 'explore', text: 'Los dos condensadores del cristal, más la capacidad parásita, forman su carga.', viz: 'st_xtal', params: P_XTAL(10, 3, 22),
+        tasks: [{ q: 'match', min: 1, max: 1, text: 'Elige el condensador que deja la carga justa', done: 'Ideal: 2 × (10 − 3) = 14 pF; el comercial más cercano, 15 pF.', hint: 'Baja el condensador.' },
+          { q: 'match6', min: 1, max: 1, text: 'Cambia a un cristal de 6 pF y vuelve a ajustar', done: 'Cristales de poca carga: condensadores pequeños.' }] },
+      I('El circuito mínimo: 3,3 V con un 100 nF junto a cada VDD, el condensador de <b>VCAP</b> (F4), filtro en <b>VDDA</b>, <b>BOOT0</b> a masa con 10 kΩ, <b>NRST</b> con 100 nF, el cristal y un conector de depuración. Cada familia tiene una nota de aplicación de primeros pasos con el hardware.', { svg: SVG_MINBOARD }),
+      I('Los dos condensadores del cristal quedan en serie para él, más la capacidad parásita: <b>CL = C/2 + Cpar</b>, así que <b>C = 2 × (CL − Cpar)</b>.', { tune: { viz: 'st_xtal', params: P_XTAL(12.5, 4, 18) } }),
+      I('Si alimentas desde una Li-ion (3,0–4,2 V), el regulador necesita margen: un AMS1117 cae ~1 V y pronto deja de dar 3,3 V. Usa un LDO de caída muy baja o un buck-boost.', { tune: { viz: 'st_ldo', params: P_LDO(3.7, 1.0) } }),
+      I('Antes de dibujar, asigna los pines en <b>CubeMX</b> para ver que cada función tiene un pin posible sin conflictos. Pon un conector de depuración y, en el USB, un supresor ESD.', { svg: table([['Cortex Debug', '10 pines a 1,27 mm'], ['Tag-Connect', 'Sin conector soldado'], ['Señales', '3,3 V, GND, SWDIO, SWCLK, NRST, SWO'], ['USB', 'Supresor ESD en D+ y D−']], 'Conectores') }),
+      { t: 'steps', text: 'Puesta en marcha de tu placa nueva.', steps: ['Inspección y continuidad: que no haya corto entre 3,3 V y GND', 'Fuente con límite de corriente: mide 3,3 V', 'ST-LINK: lee el Device ID', 'Graba un parpadeo y comprueba el reloj con MCO', 'Prueba cada periférico por separado'], result: 'Si un paso falla, sabes exactamente dónde mirar.' },
+      Q('Tu F411 no arranca y VCAP_1 no tiene condensador. ¿Por qué importa?', ['VCAP estabiliza el regulador interno del núcleo; sin él no funciona bien', 'No importa', 'Solo afecta al ADC', 'VCAP es una entrada analógica'], 'Pon el valor y el tipo que indica la hoja de datos.', { c: 'st_board', h: 'Es el condensador del regulador interno.' }),
+      G('st_crystal'),
+      Q('¿Cómo dejas BOOT0 en una placa propia?', ['Con unos 10 kΩ a masa y un pulsador o puente a 3,3 V', 'Al aire', 'Directo a 3,3 V', 'Conectado a NRST'], 'Así arranca siempre tu programa salvo que lo pidas.', { c: 'st_board', h: 'Por defecto debe arrancar tu programa.' }),
+      Q('¿Para qué un condensador de 100 nF en NRST?', ['Filtra ruidos que podrían reiniciar el chip', 'Para que arranque más rápido', 'Para el cristal', 'Para el USB'], 'Junto con la pull-up interna.', { c: 'st_board', h: 'Piensa en ruido sobre la línea de reset.' }),
+      Q('¿Por qué VDDA lleva su propio filtrado (ferrita y condensadores)?', ['El ADC y el DAC miden respecto a ella: el ruido digital empeora las medidas', 'Por estética', 'Porque consume mucho', 'Para el USB'], 'Separa la alimentación analógica de la digital.', { c: 'st_board', h: 'La «A» es de analógica.' }),
+      Q('¿Qué protección añades al conector USB de una placa propia?', ['Un supresor ESD en D+ y D− (por ejemplo USBLC6-2SC6)', 'Un fusible en D+', 'Una resistencia de 1 MΩ', 'Ninguna'], 'Las descargas electrostáticas entran por los conectores.', { c: 'st_board', h: 'Descargas electrostáticas.' }),
+      TU('Batería a 3,5 V: elige un regulador que mantenga los 3,3 V.', 'st_ldo', { vin: { val: 3.5, fixed: true }, drop: li('Caída del regulador', 1.0, [1.0, 0.3, 0.1], 'V', 1) }, { q: 'ok', min: 1, max: 1, text: 'Objetivo: 3,3 V a la salida', hint: 'Busca la menor caída.' }, 'Con 0,1 V de caída quedan 3,4 V disponibles: suficiente.', { c: 'st_board', h: 'Entrada − caída debe ser al menos 3,3 V.' }),
+      Q('¿Por qué asignar los pines en CubeMX antes de dibujar el esquema?', ['Para comprobar que cada función tiene un pin posible sin conflictos', 'Para que la PCB sea más bonita', 'Porque KiCad lo exige', 'No hace falta'], 'Descubrir un conflicto con la placa fabricada es carísimo.', { c: 'st_bringup', h: 'Más barato descubrirlo antes de fabricar.' }),
+      { t: 'order', q: 'Ordena la puesta en marcha de una placa nueva.', items: ['Inspección visual y continuidad entre 3,3 V y GND', 'Alimentar con fuente limitada y medir 3,3 V', 'Conectar el ST-LINK y leer el Device ID', 'Grabar un parpadeo', 'Comprobar el reloj con MCO', 'Probar cada periférico por separado'], e: 'Paso a paso: si algo falla, sabes exactamente qué.', c: 'st_bringup', h: 'De lo más básico (sin corriente) a lo más complejo.' },
+      G('st_crystal'),
+      I('<b>Resumen</b>\n· Circuito mínimo: desacoplo, VCAP, VDDA filtrada, BOOT0 a masa, NRST con 100 nF.\n· Cristal: C = 2 × (CL − Cpar). Regulador con margen.\n· Pines en CubeMX antes del esquema; puesta en marcha paso a paso.')
     ]),
     L('st44', 'Firmware profesional', 'code', ['st_profw', 'st_halstatus'], [
-      I('Un firmware que crece necesita <b>capas</b>: drivers (hablan con el hardware), servicios (filtros, protocolos, control) y aplicación (estados y lógica). Cada capa solo usa la de debajo.'),
-      Q('¿Qué ganas si tu driver de sensor recibe funciones de lectura y escritura del bus en vez de llamar directamente a la HAL?', ['Puedes probarlo en el PC y cambiar de bus o de chip sin tocarlo', 'Ocupa menos', 'Va más rápido', 'Nada'], 'Inyección de dependencias en C: structs con punteros a función.', { c: 'st_profw' }),
-      I('<b>Pruebas en el PC</b>: la lógica pura (PID, analizadores de tramas, máquinas de estados) se compila y prueba en el ordenador con un marco como Unity o GoogleTest, en segundos y sin placa.'),
-      Q('¿Qué se prueba mejor en el PC que en la placa?', ['Un analizador de tramas NMEA', 'El tiempo de subida de un pin', 'El consumo en Stop', 'El arranque del cristal'], 'Lo que no depende del hardware.', { c: 'st_profw' }),
-      I('<b>Errores</b>: comprueba los retornos de la HAL, usa assert con USE_FULL_ASSERT durante el desarrollo y escribe un HardFault_Handler que guarde PC, LR y CFSR en una zona que sobreviva al reset para analizar fallos del campo.'),
-      Q('¿Para qué sirve USE_FULL_ASSERT en la HAL?', ['Comprueba los parámetros de las funciones HAL y llama a assert_failed si hay uno inválido', 'Acelera la HAL', 'Activa el watchdog', 'Desactiva las interrupciones'], 'Úsalo en desarrollo; en producción ocupa espacio.', { c: 'st_halstatus' }),
-      Q('¿Qué NO deberías subir a git en un proyecto de CubeIDE?', ['La carpeta Debug/ con los objetos compilados', 'El archivo .ioc', 'Las fuentes de Core/', 'El script del enlazador'], 'Lo generado al compilar se reconstruye; el .ioc es tu configuración.', { c: 'st_profw' }),
-      Q('¿Por qué compilar con -Wall -Wextra y tratar los avisos?', ['Muchos avisos son errores reales: variables sin inicializar, comparaciones de signo…', 'Para que tarde más', 'Para que ocupe menos', 'No sirve de nada'], 'Y añade un analizador estático si puedes.', { c: 'st_profw' }),
-      Q('¿Qué es MISRA C?', ['Un conjunto de reglas de C para software crítico, muy usado en automoción', 'Un compilador', 'Un RTOS', 'Un depurador'], 'Prohíbe construcciones de C peligrosas o ambiguas.', { c: 'st_profw' }),
-      { t: 'order', q: 'Ordena una publicación de firmware.', items: ['Todas las pruebas pasan en integración continua', 'Se actualiza el número de versión', 'Se crea una etiqueta en git', 'Se compila la versión de producción', 'Se guarda el .elf con símbolos junto al .bin', 'Se graba y se verifica en placas de prueba'], e: 'Guardar el .elf permite analizar fallos de esa versión exacta.', c: 'st_profw' }
+      Q('Tu driver de sensor llama directamente a la HAL. ¿Crees que puedes probar su lógica en el PC, sin placa?', ['No tal cual: depende del hardware; hay que separarlo', 'Sí, siempre', 'Solo con un emulador de STM32', 'No hace falta probar nada'], 'En el PC no hay HAL ni periféricos. La solución es separar capas. Antes, cómo numerar lo que publicas.', { ...PRED, c: 'st_profw', h: 'En el PC no hay periféricos.' }),
+      { t: 'explore', text: 'Ya has publicado una versión (arriba). ¿Qué número toca según el cambio?', viz: 'st_semver', params: P_SEMVER(0),
+        tasks: [{ q: 'v', min: 10403, max: 10403, text: 'Publica una corrección de errores', done: 'Sube PARCHE: 1.4.3.' },
+          { q: 'v', min: 10500, max: 10500, text: 'Ahora una función nueva compatible', done: 'Sube MENOR y PARCHE vuelve a 0: 1.5.0.' },
+          { q: 'v', min: 20000, max: 20000, text: 'Y un cambio que rompe la compatibilidad', done: 'Sube MAYOR: 2.0.0. Quien lo use sabe que debe revisar.' }] },
+      I('Un firmware que crece se divide en <b>capas</b>: drivers (hablan con el hardware), servicios (filtros, protocolos, control) y aplicación (estados y lógica). Cada capa solo usa la de debajo.', { svg: SVG_FWLAYERS }),
+      I('Si un driver recibe las funciones de lectura y escritura del bus en vez de llamar a la HAL, puedes <b>probarlo en el PC</b> con un marco como Unity o GoogleTest, y cambiar de bus o de chip sin tocarlo.', { code: 'typedef struct {\n  int (*leer)(uint8_t reg, uint8_t *v);\n  int (*escribir)(uint8_t reg, uint8_t v);\n} bus_t;\n\nint sensor_init(const bus_t *b);  // no sabe qué hay debajo' }),
+      I('Errores: comprueba los retornos de la HAL, usa USE_FULL_ASSERT en desarrollo y escribe un HardFault_Handler que guarde PC, LR y CFSR en una zona que sobreviva al reset. Compila con -Wall -Wextra y trata los avisos; en software crítico hay reglas como <b>MISRA C</b>.', { svg: SVG_HALST }),
+      I('Publicar: pruebas en verde en integración continua, número de versión, etiqueta en git, compilación de producción y guardar el <b>.elf</b> con símbolos junto al .bin. En git va el código y el .ioc, no la carpeta Debug/.', { svg: SVG_PROFW }),
+      { t: 'steps', text: 'Llega del campo un aparato que se reinicia. Tu HardFault_Handler guardó el PC: 0x08003A1C.', steps: ['Mira qué versión exacta lleva el aparato', 'Abre el .elf guardado de esa versión', 'arm-none-eabi-addr2line -e app.elf 0x08003A1C', 'Te dice el archivo y la línea donde falló'], result: 'Sin el .elf de esa versión, ese número no dice nada.' },
+      Q('¿Qué ganas si tu driver recibe funciones de lectura y escritura del bus en vez de llamar directamente a la HAL?', ['Puedes probarlo en el PC y cambiar de bus o de chip sin tocarlo', 'Ocupa menos', 'Va más rápido', 'Nada'], 'Inyección de dependencias en C: estructuras con punteros a función.', { c: 'st_profw', h: 'Piensa en sustituir el bus por uno falso.' }),
+      Q('¿Qué se prueba mejor en el PC que en la placa?', ['Un analizador de tramas NMEA', 'El tiempo de subida de un pin', 'El consumo en Stop', 'El arranque del cristal'], 'Lo que no depende del hardware.', { c: 'st_profw', h: 'Lo que no depende del hardware.' }),
+      Q('¿Para qué sirve USE_FULL_ASSERT en la HAL?', ['Comprueba los parámetros de las funciones HAL y llama a assert_failed si uno es inválido', 'Acelera la HAL', 'Activa el watchdog', 'Desactiva las interrupciones'], 'Úsalo en desarrollo; en producción ocupa espacio.', { c: 'st_halstatus', h: 'Assert = comprobar algo que debería cumplirse.' }),
+      Q('¿Qué NO deberías subir a git en un proyecto de CubeIDE?', ['La carpeta Debug/ con los objetos compilados', 'El archivo .ioc', 'Las fuentes de Core/', 'El script del enlazador'], 'Lo generado al compilar se reconstruye; el .ioc es tu configuración.', { c: 'st_profw', h: 'Lo que se puede regenerar compilando.' }),
+      Q('¿Por qué compilar con -Wall -Wextra y tratar los avisos?', ['Muchos avisos son errores reales: variables sin inicializar, comparaciones de signo…', 'Para que tarde más', 'Para que ocupe menos', 'No sirve de nada'], 'Y añade un analizador estático si puedes.', { c: 'st_profw', h: 'El compilador ve cosas que tú no.' }),
+      Q('¿Qué es MISRA C?', ['Un conjunto de reglas de C para software crítico, muy usado en automoción', 'Un compilador', 'Un RTOS', 'Un depurador'], 'Prohíbe construcciones de C peligrosas o ambiguas.', { c: 'st_profw', h: 'Reglas para software crítico.' }),
+      { t: 'order', q: 'Ordena una publicación de firmware.', items: ['Todas las pruebas pasan en integración continua', 'Se actualiza el número de versión', 'Se crea una etiqueta en git', 'Se compila la versión de producción', 'Se guarda el .elf con símbolos junto al .bin', 'Se graba y se verifica en placas de prueba'], e: 'Guardar el .elf permite analizar fallos de esa versión exacta.', c: 'st_profw', h: 'Primero que todo funcione; al final, grabar.' },
+      Q('Un cliente informa de un fallo en una versión de hace meses. ¿Qué te permite analizarlo con precisión?', ['Haber guardado el .elf con símbolos de esa versión exacta', 'Tener el .bin', 'Recordar los cambios', 'Compilar la versión actual'], 'El .bin no tiene símbolos y la versión actual es otro programa.', { c: 'st_profw', h: 'Necesitas los símbolos de esa versión.' }),
+      I('<b>Resumen</b>\n· Capas: drivers, servicios y aplicación; lo que no toca hardware se prueba en el PC.\n· Comprueba retornos, asserts en desarrollo y HardFault que guarde pistas.\n· Versiona, etiqueta y guarda el .elf de cada publicación.')
     ]),
     PRJ('st-p18', 'Proyecto final: robot autoequilibrado con tu placa', 'st_final')
   ] };

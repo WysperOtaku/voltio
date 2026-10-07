@@ -10,7 +10,9 @@ Funciona sin servidor: todo el progreso se guarda en el propio dispositivo.
 - `src/` código fuente (JavaScript sin dependencias de compilación).
 - `build.py` une todo en un único `www/index.html`.
 - `www/` lo que empaqueta Capacitor.
+- `src/base/` el curso base, un módulo por archivo (`mNN.js`, en orden de nombre).
 - `src/tracks/` una especialidad por archivo (ver abajo).
+- `src/fx.js` sonidos sintetizados, partículas y la mascota Chispa.
 - `tools/validate.js` revisa el temario entero (ids, conceptos, generadores, visualizaciones, proyectos…).
 - `tools/sketches/` programas de Arduino y sus `.hex` compilados (ya incluidos en `src/sketches.js`).
 - `.github/workflows/android.yml` compila y firma el APK en cada `push` a `main` y lo publica en Releases.
@@ -62,3 +64,17 @@ generadores con `Gen.add(clave, fn, concepto)`. Todo lo de una especialidad llev
 Proyectos: además del formato plano (`steps`, `checks`) admiten `level` (1–5), `hours`, `skills`, `extra` y
 `phases: [{ title, steps, checks, code? }]`. Las comprobaciones se guardan aplanadas en `S.chk[id]`.
 La recompensa crece con el nivel.
+
+## Lecciones
+
+Una lección enseña antes de preguntar: gancho de predicción → explora → explica → ejemplo resuelto → práctica → resumen.
+Además de los ejercicios de siempre hay pasos que no puntúan:
+
+- `{ t: 'explore', viz, params, tasks: [{ q, min, max, text, done, hint }] }`: visualización con mini-retos.
+- `{ t: 'steps', text, steps: [...], result }`: ejemplo resuelto que se descubre paso a paso.
+- `Q(..., { predict: true })`: pregunta de predicción que no penaliza.
+- `I(texto, { more })`: tarjeta con «Cuéntame más».
+
+Todo ejercicio puntuable lleva `c` (concepto exacto) y `h` (pista sin la respuesta, que da Chispa al tocarla).
+Los SVG de las explicaciones pueden animarse con las clases `a-flow`, `a-pulse`, `a-blink`, `a-spin`, `a-bob`, `a-drift`, `a-fade` y `a-draw`.
+Sonido y mascota se pueden apagar en Perfil.
