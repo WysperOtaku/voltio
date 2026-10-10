@@ -13,6 +13,7 @@ Funciona sin servidor: todo el progreso se guarda en el propio dispositivo.
 - `src/base/` el curso base, un módulo por archivo (`mNN.js`, en orden de nombre).
 - `src/tracks/` una especialidad por archivo (ver abajo).
 - `src/fx.js` sonidos sintetizados, partículas y la mascota Chispa.
+- `src/study.js` exámenes de nivel, repaso de temario por módulo y resumen semanal.
 - `tools/validate.js` revisa el temario entero (ids, conceptos, generadores, visualizaciones, proyectos…).
 - `tools/sketches/` programas de Arduino y sus `.hex` compilados (ya incluidos en `src/sketches.js`).
 - `.github/workflows/android.yml` compila y firma el APK en cada `push` a `main` y lo publica en Releases.
@@ -78,3 +79,16 @@ Además de los ejercicios de siempre hay pasos que no puntúan:
 Todo ejercicio puntuable lleva `c` (concepto exacto) y `h` (pista sin la respuesta, que da Chispa al tocarla).
 Los SVG de las explicaciones pueden animarse con las clases `a-flow`, `a-pulse`, `a-blink`, `a-spin`, `a-bob`, `a-drift`, `a-fade` y `a-draw`.
 Sonido y mascota se pueden apagar en Perfil.
+
+## Exámenes de nivel, repaso y resumen semanal
+
+- Cada módulo (base y especialidades) termina con un **examen de nivel** (nodo `x-<módulo>`, añadido en `app.js`).
+  Hay que sacar un **90 %** para desbloquear el siguiente módulo; el de `m12` abre las especialidades.
+  Sin Chispa, sin pistas y sin corrección hasta la nota final, que se revisa pregunta a pregunta.
+- El examen se arma en cada intento (`buildExam`): unas 3 preguntas por lección (entre 12 y 40) del banco propio del
+  módulo (`exam: [...]` en el objeto del módulo, preguntas nuevas con `c`, `e` y `h`), generadores con números nuevos
+  y ejercicios de las lecciones. Las notas se guardan en `S.exam[módulo]`; los fallos pasan a Repasar.
+- **Repasar → Repasar temario**: una lección larga por módulo con el resumen y el ejemplo de cada lección y ejercicios;
+  «Lo flojo» repasa solo los conceptos fallados en el último examen.
+- **Resumen semanal** (Perfil y aviso en Aprender): se calcula con `S.wk[fecha]` (XP, minutos, lecciones, exámenes y
+  aciertos por concepto), que se guarda 70 días.

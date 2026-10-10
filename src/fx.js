@@ -99,7 +99,7 @@ const Fx = (() => {
 /* Chispa vive siempre en pantalla: flota, parpadea, mira a los lados y reacciona a los aciertos
    y fallos. Si la tocas te da una pista del ejercicio (o un consejo fuera de las lecciones). */
 const Mascot = (() => {
-  let el = null, bubble = null, hideT = 0, provider = null, enabled = true, idleT = 0;
+  let el = null, bubble = null, hideT = 0, provider = null, enabled = true, idleT = 0, suspended = false;
   function svg() {
     return `<svg viewBox="0 0 90 110" class="cg" aria-hidden="true"><defs><radialGradient id="cgm" cx="45%" cy="35%" r="65%"><stop offset="0" stop-color="#FFE9A8"/><stop offset="1" stop-color="#FFB000"/></radialGradient></defs>
       <circle class="cg-glow" cx="45" cy="45" r="42" fill="#FFB000" opacity=".22"/>
@@ -126,8 +126,8 @@ const Mascot = (() => {
   function place() {
     if (!el) return;
     const lesson = document.querySelector('.lesson:last-of-type');
-    el.hidden = !enabled; el.classList.toggle('inlesson', !!lesson);
-    if (!enabled) hide();
+    el.hidden = !enabled || suspended; el.classList.toggle('inlesson', !!lesson);
+    if (!enabled || suspended) hide();
   }
   function tap() {
     Fx.sound('chirp'); Fx.anim(el, 'jump'); clearTimeout(idleT);
@@ -135,7 +135,7 @@ const Mascot = (() => {
     if (r && r.text) say(r.text, r.mood || 'think', r.ms || 7000, r.title);
   }
   function say(text, m = 'happy', ms = 5000, title) {
-    if (!el || !enabled) return;
+    if (!el || !enabled || suspended) return;
     mood(m); bubble.innerHTML = (title ? `<b>${title}</b>` : '') + `<span>${text}</span><small>Toca para cerrar</small>`;
     bubble.hidden = false; bubble.classList.toggle('inlesson', el.classList.contains('inlesson'));
     Fx.anim(bubble, 'pop'); Fx.sound('hint');
@@ -151,5 +151,7 @@ const Mascot = (() => {
     else if (kind === 'party') { mood('wow'); Fx.anim(el, 'spin'); }
     else mood(kind);
   }
-  return { mount, place, say, hide, react, mood, set provider(fn) { provider = fn; }, setEnabled(v) { enabled = !!v; place(); }, get el() { return el; } };
+  return { mount, place, say, hide, react, mood, set provider(fn) { provider = fn; }, setEnabled(v) { enabled = !!v; place(); },
+    // En los exámenes Chispa se va: ni pistas ni reacciones hasta la nota final
+    suspend(v) { suspended = !!v; place(); }, get el() { return el; } };
 })();

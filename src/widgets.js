@@ -285,7 +285,7 @@ const Widgets = (() => {
     const box = el.querySelector('.vizbox'), goalEl = el.querySelector('.goal');
     let t0 = performance.now(), raf = 0, o = viz.calc(p);
     const meets = () => { const v = o[ex.goal.q]; return v >= ex.goal.min && v <= ex.goal.max && !(ex.goal.notBurnt && o.burnt); };
-    function paint() { o = viz.calc(p); box.innerHTML = viz.svg(p, o, (performance.now() - t0) / 1000); ex.onChange && ex.onChange(o); if (goalEl) { const ok = meets(); goalEl.className = 'goal' + (ok ? ' met' : ''); goalEl.textContent = ok ? 'Objetivo conseguido' : ex.goal.text; } }
+    function paint() { o = viz.calc(p); box.innerHTML = viz.svg(p, o, (performance.now() - t0) / 1000); ex.onChange && ex.onChange(o); if (goalEl) { const ok = meets() && !ctx.exam; goalEl.className = 'goal' + (ok ? ' met' : ''); goalEl.textContent = ok ? 'Objetivo conseguido' : ex.goal.text; /* en el examen no se chiva si ya se cumple */ } }
     el.querySelectorAll('input[data-k]').forEach(inp => inp.addEventListener('input', () => {
       const k = inp.dataset.k, d = defs[k], list = d.list || (d.fmt === 'R' ? E12.filter(r => r >= (d.min || 10) && r <= (d.max || 1e6)) : null);
       p[k] = list ? list[+inp.value] : +inp.value; el.querySelector(`[data-out="${k}"]`).textContent = fmtParam(k, p[k], d); paint(); sfx('tick');
@@ -492,9 +492,11 @@ const Widgets = (() => {
     return { check: () => ({ ok: sel === ex.a, right: 'el esquema marcado' }), lock: () => el.querySelectorAll('.opt').forEach(b => { b.disabled = true; if (+b.dataset.i === ex.a) b.classList.add('right'); else if (+b.dataset.i === sel) b.classList.add('wrong'); }) };
   }
   function numw(ex, el, ctx) {
-    el.innerHTML = `${ex.code ? `<pre class="code">${esc(ex.code)}</pre>` : ''}${ex.sch ? `<div class="schbox">${Schem.draw(SCH[ex.sch])}</div>` : ''}<label class="numin"><input inputmode="decimal" autocomplete="off" placeholder="Tu respuesta" aria-label="Respuesta en ${ex.u}"><span>${ex.u}</span></label>`;
+    el.innerHTML = `${ex.code ? `<pre class="code">${esc(ex.code)}</pre>` : ''}${ex.sch ? `<div class="schbox">${Schem.draw(SCH[ex.sch])}</div>` : ''}<label class="numin"><button type="button" class="pm" aria-label="Cambiar el signo">±</button><input inputmode="decimal" autocomplete="off" placeholder="Tu respuesta" aria-label="Respuesta en ${ex.u}"><span>${ex.u}</span></label>`;
     const inp = el.querySelector('input');
-    const parse = s => { s = String(s).trim().replace(/\s/g, '').replace(',', '.').replace(/[^\d.\-]/g, ''); return s === '' ? NaN : Number(s); };
+    // El teclado decimal del móvil (iPhone) no tiene signo menos: el botón ± lo pone o lo quita. Sale siempre, para no chivar el signo.
+    el.querySelector('.pm').addEventListener('click', e => { e.preventDefault(); const v = inp.value.trim(); inp.value = v.startsWith('-') || v.startsWith('−') ? v.slice(1) : '-' + v; inp.dispatchEvent(new Event('input')); inp.focus(); sfx('tap'); });
+    const parse = s => { s = String(s).trim().replace(/\s/g, '').replace('−', '-').replace(',', '.').replace(/[^\d.\-]/g, ''); return s === '' || s === '-' ? NaN : Number(s); };
     inp.addEventListener('input', () => ctx.ready(!isNaN(parse(inp.value))));
     inp.addEventListener('keydown', e => { if (e.key === 'Enter') ctx.submit(); });
     setTimeout(() => inp.focus(), 50);
@@ -541,6 +543,18 @@ const Widgets = (() => {
     let selL = null, mistakes = 0, done = 0;
     const cell = (v) => v.startsWith('sym:') ? Schem.symbol(v.slice(4)).replace('width="120"', 'width="74"') : esc(v);
     el.innerHTML = `<div class="match"><div class="mcol">${L.map(([v, i]) => `<button data-l="${i}">${cell(v)}</button>`).join('')}</div><div class="mcol">${R.map(([v, i]) => `<button data-r="${i}">${cell(v)}</button>`).join('')}</div></div>`;
+    if (ctx.exam) {
+      // Examen: se emparejan sin saber si está bien; se puede deshacer tocando de nuevo. Se corrige al final.
+      const pairOf = {}; let n = 0;
+      const paint = () => { el.querySelectorAll('[data-l],[data-r]').forEach(b => { const k = b.dataset.l != null ? 'l' + b.dataset.l : 'r' + b.dataset.r; const tag = pairOf[k]; b.dataset.tag = tag || ''; b.classList.toggle('paired', !!tag); }); ctx.ready(Object.keys(pairOf).length === ex.pairs.length * 2); };
+      const unpair = k => { const t = pairOf[k]; if (!t) return; Object.keys(pairOf).forEach(x => { if (pairOf[x] === t) delete pairOf[x]; }); };
+      el.addEventListener('click', e => {
+        const l = e.target.closest('[data-l]'), r = e.target.closest('[data-r]');
+        if (l) { unpair('l' + l.dataset.l); el.querySelectorAll('[data-l]').forEach(b => b.setAttribute('aria-pressed', 'false')); l.setAttribute('aria-pressed', 'true'); selL = l; paint(); }
+        if (r) { unpair('r' + r.dataset.r); if (selL) { const t = String(++n); pairOf['l' + selL.dataset.l] = t; pairOf['r' + r.dataset.r] = t; selL.setAttribute('aria-pressed', 'false'); selL = null; } paint(); }
+      });
+      return { check: () => { let bad = 0; Object.keys(pairOf).filter(k => k[0] === 'l').forEach(k => { const t = pairOf[k], rk = Object.keys(pairOf).find(x => x[0] === 'r' && pairOf[x] === t); if (rk.slice(1) !== k.slice(1)) bad++; }); return { ok: bad === 0 }; } };
+    }
     el.addEventListener('click', e => {
       const l = e.target.closest('[data-l]'), r = e.target.closest('[data-r]');
       if (l && !l.disabled) { el.querySelectorAll('[data-l]').forEach(b => b.setAttribute('aria-pressed', 'false')); l.setAttribute('aria-pressed', 'true'); selL = l; }

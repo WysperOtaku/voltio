@@ -27,7 +27,7 @@ const errs = [], warns = [];
 const E = (w, m) => errs.push(w + ': ' + m), W = (w, m) => warns.push(w + ': ' + m);
 const ids = new Map();
 const TYPES = Object.keys(Widgets.KIND).concat('gen');
-let nLessons = 0, nEx = 0, nSims = 0, nProj = 0, nNoHint = 0;
+let nLessons = 0, nEx = 0, nSims = 0, nProj = 0, nNoHint = 0, nExam = 0;
 
 function checkEx(ex, where, lessonC) {
   if (!ex || typeof ex !== 'object') return E(where, 'paso vacío');
@@ -97,7 +97,13 @@ function checkNodes(nodes, where) {
     else if (n.kind !== 'route') E(w, 'tipo de nodo desconocido ' + n.kind);
   });
 }
-UNITS.forEach(u => checkNodes(u.nodes, 'base/' + u.id));
+// Banco de preguntas del examen de nivel de cada módulo (u.exam): ejercicios puntuables con concepto
+function checkExamPool(u, w) {
+  if (u.exam == null) return;
+  if (!Array.isArray(u.exam)) return E(w, 'exam debe ser un array');
+  u.exam.forEach((ex, i) => { const ww = w + ' › examen#' + i; if (Widgets.UNGRADED.has(ex.t) || ex.t === 'gen' || ex.predict) E(ww, 'en el examen solo van ejercicios puntuables (sin predict)'); if (ex.live) E(ww, 'nada de tablas live en el examen'); checkEx(ex, ww, null); nExam++; });
+}
+UNITS.forEach(u => { checkNodes(u.nodes, 'base/' + u.id); checkExamPool(u, 'base/' + u.id); });
 const tids = new Set();
 TRACKS.forEach(t => {
   const w = 'track/' + t.id;
@@ -105,7 +111,7 @@ TRACKS.forEach(t => {
   ['title', 'desc', 'color', 'icon'].forEach(k => { if (!t[k]) E(w, 'falta ' + k); });
   if (t.icon && !ICONS.includes(t.icon)) E(w, 'icono inexistente ' + t.icon);
   if (!t.units || !t.units.length) E(w, 'sin módulos');
-  (t.units || []).forEach(u => { if (ids.has(u.id)) E(w, 'id de módulo repetido ' + u.id); ids.set(u.id, w); if (!u.title || !u.desc) E(w + '/' + u.id, 'módulo sin título o descripción'); checkNodes(u.nodes || [], w + '/' + u.id); });
+  (t.units || []).forEach(u => { checkExamPool(u, w + '/' + u.id); if (ids.has(u.id)) E(w, 'id de módulo repetido ' + u.id); ids.set(u.id, w); if (!u.title || !u.desc) E(w + '/' + u.id, 'módulo sin título o descripción'); checkNodes(u.nodes || [], w + '/' + u.id); });
 });
 // Conceptos: todas las alternativas con pregunta válida
 for (const [k, c] of Object.entries(CONCEPTS)) {
@@ -134,7 +140,7 @@ for (const k of Object.keys(SCH)) { try { Schem.draw(SCH[k]); } catch (e) { E('s
 const quiet = process.argv.includes('--quiet');
 console.log(`Base: ${UNITS.length} módulos · Especialidades: ${TRACKS.length} (${TRACKS.map(t => t.id + ':' + t.units.reduce((a, u) => a + u.nodes.length, 0)).join(', ')})`);
 console.log(`Lecciones ${nLessons} · ejercicios ${nEx} · retos ${nSims} · proyectos ${nProj} · conceptos ${Object.keys(CONCEPTS).length} · generadores ${Gen.keys.length}`);
-console.log(`Ejercicios sin pista (h): ${nNoHint}`);
+console.log(`Ejercicios sin pista (h): ${nNoHint} · preguntas de examen propias: ${nExam} en ${[...UNITS, ...TRACKS.flatMap(t => t.units)].filter(u => u.exam && u.exam.length).length} módulos`);
 if (warns.length && !quiet) { console.log(`\nAvisos (${warns.length}):`); warns.slice(0, 40).forEach(w => console.log('  · ' + w)); }
 if (errs.length) { console.log(`\nERRORES (${errs.length}):`); errs.forEach(e => console.log('  ✗ ' + e)); process.exit(1); }
 console.log('\nOK: sin errores.');

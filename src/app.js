@@ -2,6 +2,8 @@
 /* Cada nodo pertenece a una secuencia: el curso base ('base') o una especialidad (su id).
    Dentro de cada secuencia el avance es lineal; las especialidades se abren al terminar GATE_UNIT. */
 const GATE_UNIT = 'm12';
+// Cada módulo termina con su examen de nivel (después de lecciones, retos y proyectos).
+[...UNITS, ...TRACKS.flatMap(t => t.units)].forEach(u => { if (u.nodes.some(n => n.kind === 'lesson') && !u.nodes.some(n => n.kind === 'exam')) u.nodes.push({ id: 'x-' + u.id, kind: 'exam', title: 'Examen del módulo', icon: 'exam' }); });
 const flatUnits = (units, track) => units.flatMap((u, ui) => u.nodes.map(n => ({ ...n, unit: u.id, ui, utitle: u.title, track: track ? track.id : null, seq: track ? track.id : 'base' })));
 const ALL = [...flatUnits(UNITS, null), ...TRACKS.flatMap(t => flatUnits(t.units, t))];
 const NODE = Object.fromEntries(ALL.map(n => [n.id, n]));
@@ -13,7 +15,7 @@ const LESSON = Object.fromEntries(ALL.filter(n => n.kind === 'lesson').map(n => 
 const KEY = 'voltio-v1';
 const MILESTONES = [[3, 20], [7, 50], [14, 80], [30, 150], [50, 200], [100, 500], [365, 1000]];
 const FREEZE_PRICE = 100, FREEZE_MAX = 2, REPAIR_PRICE = 200, REPAIR_DAYS = 3, CHALLENGE_LESSONS = 3;
-function fresh() { return { v: 3, offset: 0, streak: 0, longest: 0, covered: null, hist: {}, freezes: 1, gems: 300, xp: 0, done: {}, perDay: {}, lost: null, miles: [], pending: [], circ: {}, chk: {}, labMode: 'battery', meterAuto: false, miss: {}, altIdx: {}, sound: true, mascot: true }; }
+function fresh() { return { v: 3, offset: 0, streak: 0, longest: 0, covered: null, hist: {}, freezes: 1, gems: 300, xp: 0, done: {}, perDay: {}, lost: null, miles: [], pending: [], circ: {}, chk: {}, labMode: 'battery', meterAuto: false, miss: {}, altIdx: {}, sound: true, mascot: true, exam: {}, wk: {} }; }
 let S;
 try { S = JSON.parse(localStorage.getItem(KEY)) || fresh(); } catch (e) { S = fresh(); }
 if (S.v !== 3) S = { ...fresh(), ...S, v: 3, done: {}, chk: {}, circ: {} };
@@ -173,6 +175,7 @@ const ICONS = {
   sleep: '<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/>',
   gauge: '<path d="M3 17a9 9 0 1 1 18 0" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><path d="M12 17l5-6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><circle cx="12" cy="17" r="2" fill="currentColor"/>',
   rocket: '<path d="M12 2c4 3 5 8 3 13H9C7 10 8 5 12 2z" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/><circle cx="12" cy="9" r="2" fill="currentColor"/><path d="M9 15l-3 3v3l4-2M15 15l3 3v3l-4-2" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>',
+  exam: '<path d="M7 3h10v4a5 5 0 0 1-10 0z" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/><path d="M7 5H4v1a3 3 0 0 0 3 3M17 5h3v1a3 3 0 0 1-3 3M12 12v4M8 21h8M9 21l1-5h4l1 5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>',
   check: '<path d="M5 13l4 4 10-10" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>',
   lock: '<rect x="5" y="11" width="14" height="10" rx="2" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M8 11V8a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="2.2"/>'
 };
@@ -211,7 +214,7 @@ function pathHTML(units, { firstOpen, track = null, start = 0 }) {
 function bindNodes() {
   main.querySelectorAll('[data-node]').forEach(b => b.addEventListener('click', () => {
     const n = NODE[b.dataset.node];
-    if (!isUnlocked(n.id)) { toast(n.track && !tracksOpen() ? 'Termina el módulo de Microcontroladores para abrir las especialidades' : 'Completa el paso anterior primero'); return; }
+    if (!isUnlocked(n.id)) { const seq = SEQ[n.seq], i = seq.indexOf(n); let pv = null; for (let j = i - 1; j >= 0; j--) if (seq[j].kind !== 'project') { pv = seq[j]; break; } toast(n.track && !tracksOpen() && (!pv || pv.seq !== n.seq) ? 'Aprueba el examen de Microcontroladores para abrir las especialidades' : pv && pv.kind === 'exam' ? 'Aprueba el examen del módulo anterior (90 %) para seguir' : 'Completa el paso anterior primero'); return; }
     nodeSheet(n);
   }));
 }
@@ -221,6 +224,7 @@ function renderLearn() {
   if (repairAvailable()) html += repairCard(true);
   else if (S.hist[today()] !== 'done') html += `<div class="card hello"><div class="row">${chispa(S.streak ? 'happy' : 'think', 48)}<div class="grow"><h3>${S.streak > 0 ? 'Mantén encendida tu racha' : 'Enciende tu primera racha'}</h3><p style="margin:0">Completa una lección, un repaso o un reto hoy para ${S.streak > 0 ? 'llegar a ' + (S.streak + 1) + ' días' : 'empezar'}.</p></div></div></div>`;
   const nm = Object.keys(S.miss).length;
+  if (S.wkSeen !== weekKey() && Object.keys(S.wk || {}).some(d => d < weekKey() && d >= add(weekKey(), -7))) html += `<button class="card revcta weekcta" id="wkcta"><span class="revn">${chispa('happy', 34)}</span><span><b>Tu resumen semanal está listo</b><br><small>Lo que has aprendido, lo que más te ha costado y cómo vas</small></span></button>`;
   if (nm) html += `<button class="card revcta" id="revcta"><span class="revn">${nm}</span><span><b>Repasa tus fallos</b><br><small>Con explicaciones distintas a la primera vez</small></span></button>`;
   const firstOpen = firstOpenIn('base');
   // El carrusel de especialidades va justo después del módulo puerta; el curso base sigue debajo.
@@ -232,6 +236,7 @@ function renderLearn() {
   bindNodes();
   bindCarousel();
   const rc = $('#revcta'); rc && (rc.onclick = () => startReview());
+  const wc = $('#wkcta'); wc && (wc.onclick = () => startWeekly());
   bindRepair();
   if (firstOpen && (!renderLearn.scrolled || justDone)) { renderLearn.scrolled = true; const el = main.querySelector(`[data-node="${firstOpen.id}"]`); el && setTimeout(() => el.scrollIntoView({ block: 'center', behavior: justDone ? 'smooth' : 'auto' }), 60); }
   if (justDone) { setTimeout(() => { Fx.sound('step'); Fx.burstAt(main.querySelector('.node.just-open'), { n: 18 }); }, 700); justDone = null; }
@@ -282,7 +287,7 @@ function renderTrack() {
   else if (firstOpen && !renderTrack.scrolled[t.id] && firstOpen !== SEQ[t.id][0]) { renderTrack.scrolled[t.id] = true; const el = main.querySelector(`[data-node="${firstOpen.id}"]`); el && setTimeout(() => el.scrollIntoView({ block: 'center' }), 60); }
 }
 
-const KINDNAME = { lesson: 'Lección', sim: 'Reto de simulador', project: 'Proyecto real', route: 'Reto de rutado' };
+const KINDNAME = { lesson: 'Lección', sim: 'Reto de simulador', project: 'Proyecto real', route: 'Reto de rutado', exam: 'Examen de nivel' };
 function nodeSheet(n) {
   const done = !!S.done[n.id], where = n.track ? TRACK[n.track].short + ' · ' + n.utitle : n.utitle;
   const gens = n.kind === 'lesson' ? [...new Set(n.ex.filter(e => e.t === 'gen').map(e => e.g))] : [];
@@ -293,9 +298,10 @@ function nodeSheet(n) {
   bg.innerHTML = `<div class="modal nsheet" role="dialog" aria-modal="true" style="--uc:${nodeColor(n)}">
     <div class="nsh"><span class="nkind">${KINDNAME[n.kind]} · ${esc(where)}</span><button class="close" aria-label="Cerrar">×</button></div>
     <h2>${esc(n.title)}</h2>
-    <p>${n.kind === 'lesson' ? `${n.ex.length} pasos · ${graded} ejercicios${done ? ' · completada' : ''}` : esc(n.brief || (n.kind === 'project' ? PROJECTS[n.project].intro : ''))}</p>
+    <p>${n.kind === 'lesson' ? `${n.ex.length} pasos · ${graded} ejercicios${done ? ' · completada' : ''}` : n.kind === 'exam' ? examSheetText(n) : esc(n.brief || (n.kind === 'project' ? PROJECTS[n.project].intro : ''))}</p>
     ${n.kind === 'project' ? projMeta(PROJECTS[n.project]) : ''}
-    <button class="btn amber" data-a="start">${done ? (n.kind === 'lesson' ? 'Repetir lección' : 'Abrir de nuevo') : 'Empezar'}</button>
+    <button class="btn amber" data-a="start">${n.kind === 'exam' ? (done ? 'Repetir el examen' : 'Empezar el examen') : done ? (n.kind === 'lesson' ? 'Repetir lección' : 'Abrir de nuevo') : 'Empezar'}</button>
+    ${n.kind === 'exam' ? `<button class="btn ghost" data-a="modrev">Repasar el módulo antes</button>` : ''}
     ${alts.length ? `<button class="btn ghost" data-a="alt">Otra forma de verlo</button>` : ''}
     ${gens.length ? `<button class="btn ghost" data-a="practice">Practicar con números nuevos</button>` : ''}
   </div>`;
@@ -306,11 +312,16 @@ function nodeSheet(n) {
   bg.querySelectorAll('[data-a]').forEach(b => b.onclick = () => {
     close();
     if (b.dataset.a === 'start') openNode(n);
+    if (b.dataset.a === 'modrev') moduleReview(unitById(n.unit));
     if (b.dataset.a === 'alt') startLesson({ id: n.id + ':alt', title: 'Otra forma de verlo: ' + n.title, extra: true, c: n.c, ex: alts.flatMap(c => CONCEPTS[c].alts.flatMap((a, i) => altPair(c, i))) });
     if (b.dataset.a === 'practice') startLesson({ id: n.id + ':prac', title: 'Práctica: ' + n.title, extra: true, c: n.c, ex: Array.from({ length: 8 }, (_, i) => ({ t: 'gen', g: gens[i % gens.length] })) });
   });
 }
-function openNode(n) { if (n.kind === 'lesson') startLesson(n); else if (n.kind === 'sim') startSim(n); else if (n.kind === 'project') startProject(n); else if (n.kind === 'route') startRoute(n); }
+function examSheetText(n) {
+  const u = unitById(n.unit), r = (S.exam || {})[n.unit];
+  return `${examSize(u)} preguntas de todo el módulo · necesitas un ${EXAM_PASS} % · sin pistas ni correcciones hasta el final${r ? ` · mejor nota: ${r.best} %` : ''}`;
+}
+function openNode(n) { if (n.kind === 'exam') return startExam(n); if (n.kind === 'lesson') startLesson(n); else if (n.kind === 'sim') startSim(n); else if (n.kind === 'project') startProject(n); else if (n.kind === 'route') startRoute(n); }
 
 function repairCard(short) {
   const left = diff(today(), S.lost.expires), lt = S.perDay[today()] || 0;
@@ -326,23 +337,7 @@ function bindRepair() {
   }));
 }
 
-/* ----- Repaso ----- */
-function renderReview() {
-  const items = Object.values(S.miss);
-  const byC = {};
-  items.forEach(m => { const c = m.c || 'otros'; (byC[c] = byC[c] || []).push(m); });
-  if (!items.length) {
-    main.innerHTML = `<h2 class="ptitle">Repasar</h2><div class="card center-card">${chispa('happy', 80)}<h3>Nada pendiente</h3><p>Cuando falles un ejercicio aparecerá aquí, y podrás repasarlo con explicaciones distintas hasta que lo domines.</p></div>
-      <h3 class="sub">Explicaciones alternativas</h3>${conceptLists()}`;
-  } else {
-    main.innerHTML = `<h2 class="ptitle">Repasar</h2><p class="small" style="margin:0 0 6px">Cada ejercicio sale de la lista cuando lo aciertas dos veces seguidas.</p>
-      <button class="btn amber" id="revgo" style="margin:12px 0">Repasar ahora (${Math.min(items.length, 10)} ${Math.min(items.length, 10) === 1 ? 'ejercicio' : 'ejercicios'})</button>
-      <h3 class="sub">Por tema</h3>${Object.entries(byC).map(([c, ms]) => `<div class="card revrow"><div class="grow"><b>${esc(CONCEPTS[c] ? CONCEPTS[c].name : 'Otros')}</b><br><small>${ms.length} ${ms.length === 1 ? 'ejercicio pendiente' : 'ejercicios pendientes'} · ${ms.reduce((a, m) => a + m.n, 0)} fallos</small></div>${CONCEPTS[c] ? `<button class="sbtn" data-c="${c}">Otra forma de verlo</button>` : ''}</div>`).join('')}
-      <h3 class="sub">Todas las explicaciones alternativas</h3>${conceptLists()}`;
-    $('#revgo').onclick = () => startReview();
-  }
-  main.querySelectorAll('[data-c]').forEach(b => b.onclick = () => { const c = b.dataset.c; startLesson({ id: 'alt:' + c, title: 'Otra forma de verlo: ' + CONCEPTS[c].name, extra: true, c: [c], ex: CONCEPTS[c].alts.flatMap((a, i) => altPair(c, i)) }); });
-}
+/* ----- Repaso: la pestaña Repasar está en study.js ----- */
 /* Todas las explicaciones alternativas, agrupadas por el curso donde se usa cada concepto por primera vez
    (curso base y luego cada especialidad); los conceptos que ya no usa ningún ejercicio no se listan. */
 function conceptLists() {
@@ -359,6 +354,7 @@ function startReview() {
   const items = Object.values(S.miss).sort((a, b) => b.n - a.n || (b.t > a.t ? 1 : -1)).slice(0, 10);
   const ex = items.map(m => {
     if (m.g) return { t: 'gen', g: m.g, _key: m.k };
+    if (m.x) { const u = unitById(m.x), e = u && u.exam && u.exam[m.i]; if (!e) { delete S.miss[m.k]; return null; } return { ...e, _key: m.k }; }
     // Si la lección se ha reescrito, se busca el ejercicio por su enunciado; si ya no existe, se olvida.
     const l = LESSON[m.l]; let e = l && l.ex[m.i];
     if (l && (!e || Widgets.UNGRADED.has(e.t) || (m.q && e.q !== m.q))) { const j = m.q ? l.ex.findIndex(x => x.q === m.q) : -1; e = j >= 0 ? l.ex[j] : null; if (j >= 0) m.i = j; }
@@ -397,7 +393,7 @@ function renderStreak() {
 
 function renderProfile() {
   const total = ALL.length, done = ALL.filter(n => S.done[n.id]).length, autoUnlocked = !!S.done.f6;
-  main.innerHTML = `<h2 class="ptitle">Tu progreso</h2>
+  main.innerHTML = `<h2 class="ptitle">Tu progreso</h2>${weeklyTeaser()}
    <div class="kv"><div><b>${S.xp}</b><span>XP total</span></div><div><b>${done}/${total}</b><span>Pasos completados</span></div><div><b>${S.streak}</b><span>Racha actual</span></div><div><b>${Object.keys(S.miss).length}</b><span>Por repasar</span></div></div>
    <div class="card"><h3>Módulos</h3>${UNITS.map((u, ui) => { const d = u.nodes.filter(n => S.done[n.id]).length; return `<div class="mprog" style="--uc:${unitColor(ui)}"><span>${ui}. ${esc(u.title)}</span><div class="uprog"><i style="width:${d / u.nodes.length * 100}%"></i></div><small>${d}/${u.nodes.length}</small></div>`; }).join('')}</div>
    ${TRACKS.length ? `<div class="card"><h3>Especialidades</h3>${tracksOpen() ? '' : `<p>Se abren al terminar Microcontroladores (${gateLeft() === 1 ? 'te falta 1 paso' : 'te faltan ' + gateLeft() + ' pasos'}).</p>`}${TRACKS.map(t => { const s = trackStats(t); return `<button class="mprog trow" data-track="${t.id}" style="--uc:${t.color}"><span>${esc(t.title)}<small>${esc(s.rank)} · ${s.pd}/${s.pt} proyectos</small></span><div class="uprog"><i style="width:${s.nodes.length ? s.done / s.nodes.length * 100 : 0}%"></i></div><small>${s.done}/${s.nodes.length}</small></button>`; }).join('')}</div>` : ''}
@@ -411,6 +407,7 @@ function renderProfile() {
     <p class="small" style="margin:10px 0 0">${NativePrefs ? 'Estás en la app: el progreso se guarda en el almacenamiento del móvil.' : 'Estás en la versión web: el progreso se guarda en este navegador.'}</p></div>
    <div class="card"><h3>Sobre el temario</h3><p style="margin:0">El orden sigue la progresión de <i>Getting Started in Electronics</i> (Forrest Mims III), con la profundidad de <i>The Art of Electronics</i> e ideas prácticas de <i>Make: Electronics</i>. Las explicaciones, ejercicios y simulaciones son originales.</p></div>`;
   main.querySelectorAll('[data-track]').forEach(x => x.onclick = () => { curTrack = x.dataset.track; go('track'); });
+  $('#wkgo').onclick = () => startWeekly();
   $('#psound').onchange = e => { S.sound = e.target.checked; Fx.setSound(S.sound); save(); Fx.sound('select'); };
   $('#pmascot').onchange = e => { S.mascot = e.target.checked; Mascot.setEnabled(S.mascot); save(); };
   const m = $('#mauto'); m && m.addEventListener('change', () => { S.meterAuto = m.checked; save(); toast(m.checked ? 'Multímetro automático activado' : 'Multímetro manual activado'); });
@@ -461,7 +458,7 @@ function flush() {
 /* ===================== PANTALLA COMPLETA ===================== */
 function overlay() {
   const L = document.createElement('div'); L.className = 'lesson'; document.body.appendChild(L); document.body.style.overflow = 'hidden';
-  Fx.sound('open'); Mascot.place();
+  Fx.sound('open'); Mascot.place(); sessionStart = Date.now();
   return { L, close() { L.remove(); document.body.style.overflow = ''; Mascot.provider = defaultTip; Mascot.place(); render(); } };
 }
 function finishScreen(L, close, node, { xp, gems, extra = '', perfect = false }) {
@@ -469,7 +466,9 @@ function finishScreen(L, close, node, { xp, gems, extra = '', perfect = false })
   const first = graded && (!S.done[node.id] || S.done[node.id] === 'skip');
   if (graded && !first) gems = Math.round(gems / 3);
   const wasOpen = tracksOpen();
-  S.xp += xp; S.gems += gems; if (graded) S.done[node.id] = true; save();
+  S.xp += xp; S.gems += gems; if (graded) S.done[node.id] = true;
+  const dr = dayRec(); dr.xp += xp; dr.min += Math.round((Date.now() - sessionStart) / 60000); if (graded && node.kind === 'lesson' && !dr.l.includes(node.id)) dr.l.push(node.id);
+  save();
   const before = S.streak, r = practicedToday(), lt = S.perDay[today()];
   if (graded) justDone = node.id;
   L.innerHTML = `<div class="lesson-in finish"><div class="center"><div class="fchispa">${chispa('happy', 92)}</div>${perfect ? '<div class="perfect">¡Sin fallos! +5 XP</div>' : ''}
@@ -607,13 +606,14 @@ function startLesson(lesson) {
         Fx.sound(r.ok ? 'correct' : 'step', combo); Mascot.react(r.ok ? 'right' : 'wow');
         if (r.ok) Fx.burstAt(chk, { n: 16 });
       } else if (r.ok) {
+        statAnswer(ex.c || (lesson.c || [])[0], true);
         doneCount++; combo++; best = Math.max(best, combo); vib(25); tone = 'ok';
         if (ex.t !== 'meter' || !ex._miss) recordHit(ex);
         head = combo >= 3 ? pickOne(['¡Imparable!', '¡Sigue así!', '¡En racha!', '¡Qué nivel!']) : pickOne(['¡Correcto!', '¡Bien visto!', '¡Exacto!', '¡Eso es!']);
         Fx.sound('correct', combo - 1); Fx.burstAt(chk, { n: 14 + Math.min(combo, 6) * 4 }); Mascot.react('right');
         if (combo === 3 || combo === 5 || combo % 10 === 0) { setTimeout(() => Fx.sound('combo', combo), 260); toast(`¡${combo} seguidas!`); }
       } else {
-        mistakes++; combo = 0; vib([60, 40, 60]); tone = 'bad';
+        mistakes++; combo = 0; vib([60, 40, 60]); tone = 'bad'; statAnswer(ex.c || (lesson.c || [])[0], false);
         Fx.sound('wrong'); Fx.anim(wbox, 'shake'); Mascot.react('wrong');
         const c = ex.c || (lesson.c || [])[0];
         recordMiss(ex, lesson.id, c);
@@ -645,7 +645,7 @@ function defaultTip() {
   if (view === 'streak') return { title: 'Tu racha', text: S.streak ? `Llevas ${S.streak} ${S.streak === 1 ? 'día' : 'días'}. Un protector cubre un día sin practicar.` : 'Completa una lección hoy para encenderme… digo, para encender tu racha.', mood: 'happy' };
   return { title: 'Chispa', text: pickOne(TIPS), mood: 'happy' };
 }
-let justDone = null;
+let justDone = null, sessionStart = Date.now();
 
 /* ===================== RETO DE SIMULADOR ===================== */
 function startSim(node) {
@@ -743,7 +743,7 @@ function renderLab() {
 }
 
 /* ===================== ARRANQUE ===================== */
-(async () => { await loadNative(); evaluate(); Fx.setSound(S.sound !== false); Mascot.mount(); Mascot.setEnabled(S.mascot !== false); Mascot.provider = defaultTip; render(); flush(); setTimeout(() => S.mascot !== false && S.hist[today()] !== 'done' && Mascot.say(defaultTip().text, 'happy', 5000, '¡Hola!'), 900); })();
+(async () => { await loadNative(); evaluate(); pruneStats(); Fx.setSound(S.sound !== false); Mascot.mount(); Mascot.setEnabled(S.mascot !== false); Mascot.provider = defaultTip; render(); flush(); setTimeout(() => S.mascot !== false && S.hist[today()] !== 'done' && Mascot.say(defaultTip().text, 'happy', 5000, '¡Hola!'), 900); })();
 document.addEventListener('click', e => { if (e.target.closest('.nav button, .node, .tcard, .backlink, .modal .btn, .cbtn, .seg button')) Fx.sound('tap'); }, true);
 document.addEventListener('visibilitychange', () => { if (document.hidden) { flushSave(); return; } evaluate(); if (!document.querySelector('.lesson')) render(); flush(); });
 window.addEventListener('pagehide', flushSave);
