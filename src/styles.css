@@ -622,3 +622,70 @@ body{background-color:var(--bg);background-image:radial-gradient(circle,var(--pe
 .match button.paired::after{content:attr(data-tag);position:absolute;top:-8px;right:-8px;width:22px;height:22px;border-radius:50%;background:var(--ice);color:#fff;font-size:12px;font-weight:800;display:grid;place-items:center}
 
 .numin .pm{flex:none;width:48px;min-height:48px;border-radius:10px;border:2px solid var(--line);background:var(--surface);font-weight:800;font-size:20px;margin-right:8px}
+
+/* ===================== RESPUESTA NUMÉRICA COMPACTA Y CALCULADORA ===================== */
+.numin{gap:8px;margin-top:4px}
+.numin input{font-size:20px;padding:9px 12px;border-radius:10px}
+.numin span{font-size:18px}
+.numin .pm{width:42px;min-height:44px;margin-right:0;font-size:18px}
+.calc{margin-top:10px}
+.ctog{display:inline-flex;align-items:center;gap:6px;background:none;border:0;color:var(--muted);font-weight:700;font-size:14px;padding:6px 2px;min-height:36px}
+.cbody{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:8px}
+.cdisp{display:flex;flex-direction:column;align-items:flex-end;gap:2px;background:var(--bg);border-radius:10px;padding:6px 10px;margin-bottom:6px;min-height:52px;overflow:hidden}
+.cexpr{font-size:14px;color:var(--muted);word-break:break-all;text-align:right;min-height:18px}
+.cres{font-family:var(--display);font-size:20px;white-space:nowrap}.cres.dim{color:var(--muted)}
+.ckeys{display:grid;grid-template-columns:repeat(5,1fr);gap:5px}
+.ck{min-height:40px;border-radius:9px;border:1px solid var(--line);background:var(--bg);font-weight:700;font-size:16px;padding:0;color:var(--ink)}
+.ck:active{transform:scale(.95)}
+.ck.op,.ck.fn{background:color-mix(in srgb,var(--ice) 14%,var(--surface))}
+.ck.eq{background:var(--led);color:#1B1300;border-color:#B87D00}
+.ck.clr,.ck.del{color:var(--err)}
+.ck.pre{font-size:14px;background:color-mix(in srgb,var(--gem) 12%,var(--surface))}
+.cuse{width:100%;margin-top:6px;min-height:40px;border-radius:10px;border:2px solid var(--ok);background:var(--ok-soft);color:var(--ok);font-weight:800}
+.cuse:disabled{opacity:.4}
+
+/* ===================== OBJETIVO DIARIO ===================== */
+.gring{transform:rotate(-90deg);flex:none}
+.gring .gbg{fill:none;stroke:var(--line);stroke-width:3}
+.gring .gfg{fill:none;stroke:var(--ok);stroke-width:3;stroke-linecap:round;transition:stroke-dashoffset .8s cubic-bezier(.2,.9,.3,1)}
+.gring .gok{fill:none;stroke:var(--ok);stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;transform:rotate(90deg);transform-origin:12px 12px}
+.gring.full .gbg{stroke:var(--ok-soft)}
+.goalstat{padding:2px}
+.daycard .row{align-items:center}
+.daycard .dring{display:grid;place-items:center}
+.daycard h3{font-size:17px}
+.goalseg{grid-template-columns:repeat(5,1fr)}
+.timerow{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:4px 0 10px;font-weight:700}
+.timerow input{font:inherit;font-size:18px;padding:8px 10px;border-radius:10px;border:2px solid var(--line);background:var(--surface);color:var(--ink);min-height:44px}
+
+/* ===================== BIENVENIDA Y CALENTAMIENTO ===================== */
+.splash{background:radial-gradient(circle at 50% 30%,color-mix(in srgb,var(--led) 20%,var(--bg)),var(--bg) 60%);display:flex;align-items:center;justify-content:center}
+.splin{width:100%;max-width:440px;padding:24px 22px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:6px}
+.sbulb{position:relative;width:190px;height:210px;display:grid;place-items:center;margin-bottom:6px}
+.sbulb .chispa{position:relative;z-index:1;transition:filter .5s}
+.srays{position:absolute;inset:-10px;width:calc(100% + 20px);height:calc(100% + 20px);opacity:0}
+.srays line{stroke:var(--led);stroke-width:6;stroke-linecap:round}
+.sbulb.off .chispa{filter:grayscale(1) brightness(.55)}
+.sbulb.flick .chispa{animation:flick .7s steps(1) forwards}
+@keyframes flick{0%{filter:grayscale(1) brightness(.55)}15%{filter:none}25%{filter:grayscale(1) brightness(.6)}45%{filter:none}55%{filter:grayscale(.8) brightness(.7)}70%,100%{filter:none}}
+.sbulb.on .chispa{animation:sbounce 1.4s cubic-bezier(.3,1.5,.5,1) both,fbounce 1.3s 1.4s ease-in-out infinite}
+.sbulb.on .srays{opacity:1;animation:srays 1s ease-out both,aspin 14s 1s linear infinite;transform-origin:50% 50%}
+.sbulb.on::before{content:"";position:absolute;inset:-30px;border-radius:50%;background:radial-gradient(circle,var(--led-glow),transparent 65%);animation:sglow 2.4s ease-in-out infinite}
+@keyframes sbounce{0%{transform:scale(.8)}40%{transform:scale(1.15) translateY(-10px)}100%{transform:none}}
+@keyframes srays{from{opacity:0;transform:scale(.6)}to{opacity:1;transform:scale(1)}}
+@keyframes sglow{0%,100%{opacity:.6;transform:scale(.95)}50%{opacity:1;transform:scale(1.08)}}
+.sgreet{font-size:32px;letter-spacing:-.02em}
+.ssub{margin:0;color:var(--muted)}
+.scard{display:flex;flex-direction:column;gap:3px;width:100%;margin:14px 0 8px;background:var(--surface);border:2px solid var(--led);border-radius:16px;padding:14px 16px;text-align:left}
+.scard b{font-family:var(--display);font-size:19px}.scard span{font-weight:700}.scard small{color:var(--muted);font-size:14px}
+.splin .btn{width:100%}
+.sheet.mini{padding:12px 18px 14px}.sheet.mini .shead{margin-bottom:10px}
+.warmup .kind{color:#B87D00}
+.wres{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;width:100%;margin-top:4px}
+.wres span{width:14px;height:14px;border-radius:50%;background:var(--ok)}.wres span.no{background:var(--err)}
+@media (prefers-reduced-motion:reduce){.sbulb .chispa,.srays,.sbulb::before{animation:none!important}.sbulb.on .srays{opacity:1}}
+
+/* Logotipo: «Ledly» en Righteous, con la d dibujada como un LED de patas naranjas */
+.brand .logo{font-family:"Righteous",var(--display);font-weight:400;font-size:25px;letter-spacing:.01em;line-height:1;white-space:nowrap;color:var(--ink)}
+.logo-d{height:1em;width:.62em;vertical-align:-.2em;overflow:visible;margin:0 .015em 0 .005em}
+.lgleg{stroke:#F07D10;stroke-width:7.5;fill:none;stroke-linecap:round;stroke-linejoin:round}

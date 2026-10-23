@@ -1,4 +1,4 @@
-# Voltio
+# Ledly
 
 App para aprender electrónica: un curso base de 15 módulos y seis especialidades
 (AVR, ESP32, Raspberry Pi Pico, STM32, IoT, Radio y RF), ejercicios interactivos, multímetro
@@ -14,6 +14,8 @@ Funciona sin servidor: todo el progreso se guarda en el propio dispositivo.
 - `src/tracks/` una especialidad por archivo (ver abajo).
 - `src/fx.js` sonidos sintetizados, partículas y la mascota Chispa.
 - `src/study.js` exámenes de nivel, repaso de temario por módulo y resumen semanal.
+- `src/daily.js` tiempo y objetivo diario, calentamiento al abrir la app y notificaciones locales.
+- `resources/` icono (`icon.mjs`, SVG generados en código) e icono de notificación; `tools/android-res.mjs` los convierte en recursos de Android en CI.
 - `tools/validate.js` revisa el temario entero (ids, conceptos, generadores, visualizaciones, proyectos…).
 - `tools/sketches/` programas de Arduino y sus `.hex` compilados (ya incluidos en `src/sketches.js`).
 - `.github/workflows/android.yml` compila y firma el APK en cada `push` a `main` y lo publica en Releases.
@@ -92,3 +94,18 @@ Sonido y mascota se pueden apagar en Perfil.
   «Lo flojo» repasa solo los conceptos fallados en el último examen.
 - **Resumen semanal** (Perfil y aviso en Aprender): se calcula con `S.wk[fecha]` (XP, minutos, lecciones, exámenes y
   aciertos por concepto), que se guarda 70 días.
+
+## El día a día
+
+- **Objetivo diario** (Perfil → Tu día: 5–30 min). Cuenta el tiempo dentro de lecciones, retos, exámenes y repasos
+  (`S.wk[fecha].sec`, máx. 30 min por pantalla). Anillo en la cabecera y celebración (+10 gemas) al cumplirlo.
+- **Calentamiento**: la primera vez que abres la app cada día sale una bienvenida animada y un repaso rápido
+  (3–10 preguntas, sin explicaciones entre medias). `warmupPlan` mezcla fallos pendientes, lecciones con el repaso
+  espaciado vencido (`S.seen`, intervalos 1/3/7/14/30/60 días) y conceptos flojos; da más preguntas si hay mucho
+  pendiente o llevas días sin entrar, y menos si tu objetivo es de 5 min.
+- **Notificaciones** (`@capacitor/local-notifications`): a tu hora, recordatorios si se te pasa, aviso a las 21:30 si
+  la racha está en peligro, protector usado, racha perdida y días que quedan para repararla. Como la app no corre en
+  segundo plano, se reprograman los próximos 7 días cada vez que abres, cierras o terminas algo.
+- **Calculadora** debajo de las respuestas numéricas (prefijos, notación E, raíz, π; sin `eval`).
+- **Icono**: `node tools/android-res.mjs` (lo ejecuta CI tras `npx cap add android`) genera iconos normal, redondo y
+  adaptativo, el icono de notificación y la pantalla de arranque, y añade el permiso POST_NOTIFICATIONS.

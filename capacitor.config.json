@@ -1,8 +1,14 @@
 {
   "appId": "app.voltio.electronica",
-  "appName": "Voltio",
+  "appName": "Ledly",
   "webDir": "www",
   "android": {
     "backgroundColor": "#EEF2F5"
+  },
+  "plugins": {
+    "LocalNotifications": {
+      "smallIcon": "ic_stat_voltio",
+      "iconColor": "#FFB000"
+    }
   }
 }

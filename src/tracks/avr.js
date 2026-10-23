@@ -1,4 +1,4 @@
-/* Voltio · especialidad: Arduino y AVR a fondo.
+/* Ledly · especialidad: Arduino y AVR a fondo.
    El ATmega328P registro a registro: puertos, temporizadores, interrupciones, periféricos,
    bajo consumo, el chip fuera de la placa y las herramientas de un profesional.
    Datos técnicos según la hoja de datos del ATmega328P; todo el texto y el código son originales. */

@@ -1,4 +1,4 @@
-/* Voltio · curso base, módulo 16: Microcontroladores I: programar
+/* Ledly · curso base, módulo 16: Microcontroladores I: programar
    Orden: n1 (qué es) → n2 (primer programa) → n3 (salidas) → s7a → n15 (monitor serie) → n10 (variables)
    → n11 (cuentas) → n12 (decisiones y bucles) → n13 (funciones) → n14 (arrays) → s7b → p7.
    Convenciones (lotes 5 y 6): Uno por defecto, const int en mayúsculas para pines, Serial.begin(9600), comentarios en español.

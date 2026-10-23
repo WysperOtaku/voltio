@@ -1,4 +1,4 @@
-/* Voltio · curso base, módulo 14: Alimentación
+/* Ledly · curso base, módulo 14: Alimentación
    Orden: o1 (pilas) → sg5 → o5 (cargar litio) → k8 (reguladores: margen y LDO) → o2 (el calor del lineal)
    → o20 (LM317) → p8 → o3 (conmutados) → o4 (protección) → p14.
    Usa: b7, b9, c4, c6 (autonomía), d6, f10 (CV/CC), g9 (bobina), h20 (ciclo de trabajo), i2, i5, i9 (Schottky, TVS),

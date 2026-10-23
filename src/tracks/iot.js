@@ -1,4 +1,4 @@
-/* Voltio · especialidad: Internet de las cosas. El sistema completo, del sensor al panel:
+/* Ledly · especialidad: Internet de las cosas. El sistema completo, del sensor al panel:
    redes, HTTP, MQTT, datos, seguridad, energía, fiabilidad y plataformas locales
    (Home Assistant, ESPHome, Zigbee, Thread, LoRaWAN, NB-IoT). Prioriza lo local y la privacidad.
    Todo el texto, el código y los ejercicios son originales. */

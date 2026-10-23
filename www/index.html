@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#14213D">
-<title>Voltio</title>
+<title>Ledly</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Atkinson+Hyperlegible:wght@400;700&family=Righteous&display=swap" rel="stylesheet">
 <style>[hidden]{display:none!important}
 :root{
   --bg:#EEF2F5;--surface:#FFFFFF;--ink:#14213D;--muted:#5B6782;--line:#D5DCE6;
@@ -631,12 +631,80 @@ body{background-color:var(--bg);background-image:radial-gradient(circle,var(--pe
 .match button.paired::after{content:attr(data-tag);position:absolute;top:-8px;right:-8px;width:22px;height:22px;border-radius:50%;background:var(--ice);color:#fff;font-size:12px;font-weight:800;display:grid;place-items:center}
 
 .numin .pm{flex:none;width:48px;min-height:48px;border-radius:10px;border:2px solid var(--line);background:var(--surface);font-weight:800;font-size:20px;margin-right:8px}
+
+/* ===================== RESPUESTA NUMÉRICA COMPACTA Y CALCULADORA ===================== */
+.numin{gap:8px;margin-top:4px}
+.numin input{font-size:20px;padding:9px 12px;border-radius:10px}
+.numin span{font-size:18px}
+.numin .pm{width:42px;min-height:44px;margin-right:0;font-size:18px}
+.calc{margin-top:10px}
+.ctog{display:inline-flex;align-items:center;gap:6px;background:none;border:0;color:var(--muted);font-weight:700;font-size:14px;padding:6px 2px;min-height:36px}
+.cbody{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:8px}
+.cdisp{display:flex;flex-direction:column;align-items:flex-end;gap:2px;background:var(--bg);border-radius:10px;padding:6px 10px;margin-bottom:6px;min-height:52px;overflow:hidden}
+.cexpr{font-size:14px;color:var(--muted);word-break:break-all;text-align:right;min-height:18px}
+.cres{font-family:var(--display);font-size:20px;white-space:nowrap}.cres.dim{color:var(--muted)}
+.ckeys{display:grid;grid-template-columns:repeat(5,1fr);gap:5px}
+.ck{min-height:40px;border-radius:9px;border:1px solid var(--line);background:var(--bg);font-weight:700;font-size:16px;padding:0;color:var(--ink)}
+.ck:active{transform:scale(.95)}
+.ck.op,.ck.fn{background:color-mix(in srgb,var(--ice) 14%,var(--surface))}
+.ck.eq{background:var(--led);color:#1B1300;border-color:#B87D00}
+.ck.clr,.ck.del{color:var(--err)}
+.ck.pre{font-size:14px;background:color-mix(in srgb,var(--gem) 12%,var(--surface))}
+.cuse{width:100%;margin-top:6px;min-height:40px;border-radius:10px;border:2px solid var(--ok);background:var(--ok-soft);color:var(--ok);font-weight:800}
+.cuse:disabled{opacity:.4}
+
+/* ===================== OBJETIVO DIARIO ===================== */
+.gring{transform:rotate(-90deg);flex:none}
+.gring .gbg{fill:none;stroke:var(--line);stroke-width:3}
+.gring .gfg{fill:none;stroke:var(--ok);stroke-width:3;stroke-linecap:round;transition:stroke-dashoffset .8s cubic-bezier(.2,.9,.3,1)}
+.gring .gok{fill:none;stroke:var(--ok);stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;transform:rotate(90deg);transform-origin:12px 12px}
+.gring.full .gbg{stroke:var(--ok-soft)}
+.goalstat{padding:2px}
+.daycard .row{align-items:center}
+.daycard .dring{display:grid;place-items:center}
+.daycard h3{font-size:17px}
+.goalseg{grid-template-columns:repeat(5,1fr)}
+.timerow{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:4px 0 10px;font-weight:700}
+.timerow input{font:inherit;font-size:18px;padding:8px 10px;border-radius:10px;border:2px solid var(--line);background:var(--surface);color:var(--ink);min-height:44px}
+
+/* ===================== BIENVENIDA Y CALENTAMIENTO ===================== */
+.splash{background:radial-gradient(circle at 50% 30%,color-mix(in srgb,var(--led) 20%,var(--bg)),var(--bg) 60%);display:flex;align-items:center;justify-content:center}
+.splin{width:100%;max-width:440px;padding:24px 22px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:6px}
+.sbulb{position:relative;width:190px;height:210px;display:grid;place-items:center;margin-bottom:6px}
+.sbulb .chispa{position:relative;z-index:1;transition:filter .5s}
+.srays{position:absolute;inset:-10px;width:calc(100% + 20px);height:calc(100% + 20px);opacity:0}
+.srays line{stroke:var(--led);stroke-width:6;stroke-linecap:round}
+.sbulb.off .chispa{filter:grayscale(1) brightness(.55)}
+.sbulb.flick .chispa{animation:flick .7s steps(1) forwards}
+@keyframes flick{0%{filter:grayscale(1) brightness(.55)}15%{filter:none}25%{filter:grayscale(1) brightness(.6)}45%{filter:none}55%{filter:grayscale(.8) brightness(.7)}70%,100%{filter:none}}
+.sbulb.on .chispa{animation:sbounce 1.4s cubic-bezier(.3,1.5,.5,1) both,fbounce 1.3s 1.4s ease-in-out infinite}
+.sbulb.on .srays{opacity:1;animation:srays 1s ease-out both,aspin 14s 1s linear infinite;transform-origin:50% 50%}
+.sbulb.on::before{content:"";position:absolute;inset:-30px;border-radius:50%;background:radial-gradient(circle,var(--led-glow),transparent 65%);animation:sglow 2.4s ease-in-out infinite}
+@keyframes sbounce{0%{transform:scale(.8)}40%{transform:scale(1.15) translateY(-10px)}100%{transform:none}}
+@keyframes srays{from{opacity:0;transform:scale(.6)}to{opacity:1;transform:scale(1)}}
+@keyframes sglow{0%,100%{opacity:.6;transform:scale(.95)}50%{opacity:1;transform:scale(1.08)}}
+.sgreet{font-size:32px;letter-spacing:-.02em}
+.ssub{margin:0;color:var(--muted)}
+.scard{display:flex;flex-direction:column;gap:3px;width:100%;margin:14px 0 8px;background:var(--surface);border:2px solid var(--led);border-radius:16px;padding:14px 16px;text-align:left}
+.scard b{font-family:var(--display);font-size:19px}.scard span{font-weight:700}.scard small{color:var(--muted);font-size:14px}
+.splin .btn{width:100%}
+.sheet.mini{padding:12px 18px 14px}.sheet.mini .shead{margin-bottom:10px}
+.warmup .kind{color:#B87D00}
+.wres{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;width:100%;margin-top:4px}
+.wres span{width:14px;height:14px;border-radius:50%;background:var(--ok)}.wres span.no{background:var(--err)}
+@media (prefers-reduced-motion:reduce){.sbulb .chispa,.srays,.sbulb::before{animation:none!important}.sbulb.on .srays{opacity:1}}
+
+/* Logotipo: «Ledly» en Righteous, con la d dibujada como un LED de patas naranjas */
+.brand .logo{font-family:"Righteous",var(--display);font-weight:400;font-size:25px;letter-spacing:.01em;line-height:1;white-space:nowrap;color:var(--ink)}
+.logo-d{height:1em;width:.62em;vertical-align:-.2em;overflow:visible;margin:0 .015em 0 .005em}
+.lgleg{stroke:#F07D10;stroke-width:7.5;fill:none;stroke-linecap:round;stroke-linejoin:round}
 </style>
 </head>
 <body>
 <div class="app">
   <header class="top">
-    <div class="brand"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M13 2L5 14h6l-1 8 8-12h-6z" fill="var(--led)"/></svg>Voltio</div>
+    <div class="brand"><span class="logo" role="img" aria-label="Ledly">Le<svg class="logo-d" viewBox="0 0 62 100" aria-hidden="true"><defs><radialGradient id="lgb" cx="35%" cy="35%" r="75%"><stop offset="0" stop-color="#FFE9A8"/><stop offset=".5" stop-color="#FFC233"/><stop offset="1" stop-color="#FF9F00"/></radialGradient></defs><path d="M43 46h3q6 0 6 -6V5" class="lgleg"/><path d="M43 65h9q7 0 7 -7V15" class="lgleg"/><path d="M36 31H27a24.5 24.5 0 0 0 0 49h9z" fill="url(#lgb)"/><rect x="34.5" y="27" width="9.5" height="57" rx="3" fill="#E08A00"/><path d="M11 49a15 15 0 0 1 11 -11" stroke="#fff" stroke-opacity=".75" stroke-width="4.5" fill="none" stroke-linecap="round"/></svg>ly</span></div>
+    <button class="stat goalstat" data-go="profile" id="tGoal" aria-label="Objetivo diario"></button>
     <button class="stat" data-go="streak" aria-label="Racha"><span class="mini-led" id="tLed"></span><span id="tStreak">0</span></button>
     <button class="stat" data-go="streak" data-anchor="shop" aria-label="Protectores"><span class="ice"></span><span id="tFreeze">0</span></button>
     <button class="stat" data-go="streak" data-anchor="shop" aria-label="Gemas"><span class="gem"></span><span id="tGems">0</span></button>
@@ -653,7 +721,7 @@ body{background-color:var(--bg);background-image:radial-gradient(circle,var(--pe
 <script>(()=>{function X(t,e){let s=t.dataView.getUint16(93,!0);t.data[s]=t.pc&255,t.data[s-1]=t.pc>>8&255,t.pc22Bits&&(t.data[s-2]=t.pc>>16&255),t.dataView.setUint16(93,s-(t.pc22Bits?3:2),!0),t.data[95]&=127,t.cycles+=2,t.pc=e}var lt=256,dt=128,M=class{constructor(e,s=8192){this.progMem=e,this.sramBytes=s,this.data=new Uint8Array(this.sramBytes+lt),this.data16=new Uint16Array(this.data.buffer),this.dataView=new DataView(this.data.buffer),this.progBytes=new Uint8Array(this.progMem.buffer),this.readHooks=[],this.writeHooks=[],this.pendingInterrupts=new Array(dt),this.nextClockEvent=null,this.clockEventPool=[],this.pc22Bits=this.progBytes.length>131072,this.gpioPorts=new Set,this.gpioByPort=[],this.onWatchdogReset=()=>{},this.pc=0,this.cycles=0,this.nextInterrupt=-1,this.maxInterrupt=0,this.reset()}reset(){this.SP=this.data.length-1,this.pc=0,this.pendingInterrupts.fill(null),this.nextInterrupt=-1,this.nextClockEvent=null}readData(e){return e>=32&&this.readHooks[e]?this.readHooks[e](e):this.data[e]}writeData(e,s,i=255){let a=this.writeHooks[e];a&&a(s,this.data[e],e,i)||(this.data[e]=s)}get SP(){return this.dataView.getUint16(93,!0)}set SP(e){this.dataView.setUint16(93,e,!0)}get SREG(){return this.data[95]}get interruptsEnabled(){return!!(this.SREG&128)}setInterruptFlag(e){let{flagRegister:s,flagMask:i,enableRegister:a,enableMask:n}=e;e.inverseFlag?this.data[s]&=~i:this.data[s]|=i,this.data[a]&n&&this.queueInterrupt(e)}updateInterruptEnable(e,s){let{enableMask:i,flagRegister:a,flagMask:n,inverseFlag:r}=e;if(s&i){let o=this.data[a]&n;(r?!o:o)&&this.queueInterrupt(e)}else this.clearInterrupt(e,!1)}queueInterrupt(e){let{address:s}=e;this.pendingInterrupts[s]=e,(this.nextInterrupt===-1||this.nextInterrupt>s)&&(this.nextInterrupt=s),s>this.maxInterrupt&&(this.maxInterrupt=s)}clearInterrupt({address:e,flagRegister:s,flagMask:i},a=!0){a&&(this.data[s]&=~i);let{pendingInterrupts:n,maxInterrupt:r}=this;if(n[e]&&(n[e]=null,this.nextInterrupt===e)){this.nextInterrupt=-1;for(let o=e+1;o<=r;o++)if(n[o]){this.nextInterrupt=o;break}}}clearInterruptByFlag(e,s){let{flagRegister:i,flagMask:a}=e;s&a&&(this.data[i]&=~a,this.clearInterrupt(e))}addClockEvent(e,s){let{clockEventPool:i}=this;s=this.cycles+Math.max(1,s);let a=i.pop(),n=a??{cycles:s,callback:e,next:null};n.cycles=s,n.callback=e;let{nextClockEvent:r}=this,o=null;for(;r&&r.cycles<s;)o=r,r=r.next;return o?(o.next=n,n.next=r):(this.nextClockEvent=n,n.next=r),e}updateClockEvent(e,s){return this.clearClockEvent(e)?(this.addClockEvent(e,s),!0):!1}clearClockEvent(e){let{nextClockEvent:s}=this;if(!s)return!1;let{clockEventPool:i}=this,a=null;for(;s;){if(s.callback===e)return a?a.next=s.next:this.nextClockEvent=s.next,i.length<10&&i.push(s),!0;a=s,s=s.next}return!1}tick(){let{nextClockEvent:e}=this;e&&e.cycles<=this.cycles&&(e.callback(),this.nextClockEvent=e.next,this.clockEventPool.length<10&&this.clockEventPool.push(e));let{nextInterrupt:s}=this;if(this.interruptsEnabled&&s>=0){let i=this.pendingInterrupts[s];X(this,i.address),i.constant||this.clearInterrupt(i)}}};function W(t){return(t&65039)===36864||(t&65039)===37376||(t&65038)===37902||(t&65038)===37900}function q(t){let e=t.progMem[t.pc];if((e&64512)===7168){let s=t.data[(e&496)>>4],i=t.data[e&15|(e&512)>>5],a=s+i+(t.data[95]&1),n=a&255;t.data[(e&496)>>4]=n;let r=t.data[95]&192;r|=n?0:2,r|=128&n?4:0,r|=(n^i)&(s^n)&128?8:0,r|=r>>2&1^r>>3&1?16:0,r|=a&256?1:0,r|=1&(s&i|i&~n|~n&s)?32:0,t.data[95]=r}else if((e&64512)===3072){let s=t.data[(e&496)>>4],i=t.data[e&15|(e&512)>>5],a=s+i&255;t.data[(e&496)>>4]=a;let n=t.data[95]&192;n|=a?0:2,n|=128&a?4:0,n|=(a^i)&(a^s)&128?8:0,n|=n>>2&1^n>>3&1?16:0,n|=s+i&256?1:0,n|=1&(s&i|i&~a|~a&s)?32:0,t.data[95]=n}else if((e&65280)===38400){let s=2*((e&48)>>4)+24,i=t.dataView.getUint16(s,!0),a=i+(e&15|(e&192)>>2)&65535;t.dataView.setUint16(s,a,!0);let n=t.data[95]&224;n|=a?0:2,n|=32768&a?4:0,n|=~i&a&32768?8:0,n|=n>>2&1^n>>3&1?16:0,n|=~a&i&32768?1:0,t.data[95]=n,t.cycles++}else if((e&64512)===8192){let s=t.data[(e&496)>>4]&t.data[e&15|(e&512)>>5];t.data[(e&496)>>4]=s;let i=t.data[95]&225;i|=s?0:2,i|=128&s?4:0,i|=i>>2&1^i>>3&1?16:0,t.data[95]=i}else if((e&61440)===28672){let s=t.data[((e&240)>>4)+16]&(e&15|(e&3840)>>4);t.data[((e&240)>>4)+16]=s;let i=t.data[95]&225;i|=s?0:2,i|=128&s?4:0,i|=i>>2&1^i>>3&1?16:0,t.data[95]=i}else if((e&65039)===37893){let s=t.data[(e&496)>>4],i=s>>>1|128&s;t.data[(e&496)>>4]=i;let a=t.data[95]&224;a|=i?0:2,a|=128&i?4:0,a|=s&1,a|=a>>2&1^a&1?8:0,a|=a>>2&1^a>>3&1?16:0,t.data[95]=a}else if((e&65423)===38024)t.data[95]&=~(1<<((e&112)>>4));else if((e&65032)===63488){let s=e&7,i=(e&496)>>4;t.data[i]=~(1<<s)&t.data[i]|(t.data[95]>>6&1)<<s}else if((e&64512)===62464)t.data[95]&1<<(e&7)||(t.pc=t.pc+(((e&504)>>3)-(e&512?64:0)),t.cycles++);else if((e&64512)===61440)t.data[95]&1<<(e&7)&&(t.pc=t.pc+(((e&504)>>3)-(e&512?64:0)),t.cycles++);else if((e&65423)===37896)t.data[95]|=1<<((e&112)>>4);else if((e&65032)===64e3){let s=t.data[(e&496)>>4],i=e&7;t.data[95]=t.data[95]&191|(s>>i&1?64:0)}else if((e&65038)===37902){let s=t.progMem[t.pc+1]|(e&1)<<16|(e&496)<<13,i=t.pc+2,a=t.dataView.getUint16(93,!0),{pc22Bits:n}=t;t.data[a]=255&i,t.data[a-1]=i>>8&255,n&&(t.data[a-2]=i>>16&255),t.dataView.setUint16(93,a-(n?3:2),!0),t.pc=s-1,t.cycles+=n?4:3}else if((e&65280)===38912){let s=e&248,i=e&7,a=t.readData((s>>3)+32),n=1<<i;t.writeData((s>>3)+32,a&~n,n)}else if((e&65039)===37888){let s=(e&496)>>4,i=255-t.data[s];t.data[s]=i;let a=t.data[95]&225|1;a|=i?0:2,a|=128&i?4:0,a|=a>>2&1^a>>3&1?16:0,t.data[95]=a}else if((e&64512)===5120){let s=t.data[(e&496)>>4],i=t.data[e&15|(e&512)>>5],a=s-i,n=t.data[95]&192;n|=a?0:2,n|=128&a?4:0,n|=((s^i)&(s^a)&128)!==0?8:0,n|=n>>2&1^n>>3&1?16:0,n|=i>s?1:0,n|=1&(~s&i|i&a|a&~s)?32:0,t.data[95]=n}else if((e&64512)===1024){let s=t.data[(e&496)>>4],i=t.data[e&15|(e&512)>>5],a=t.data[95],n=s-i-(a&1);a=a&192|(!n&&a>>1&1?2:0)|(i+(a&1)>s?1:0),a|=128&n?4:0,a|=(s^i)&(s^n)&128?8:0,a|=a>>2&1^a>>3&1?16:0,a|=1&(~s&i|i&n|n&~s)?32:0,t.data[95]=a}else if((e&61440)===12288){let s=t.data[((e&240)>>4)+16],i=e&15|(e&3840)>>4,a=s-i,n=t.data[95]&192;n|=a?0:2,n|=128&a?4:0,n|=(s^i)&(s^a)&128?8:0,n|=n>>2&1^n>>3&1?16:0,n|=i>s?1:0,n|=1&(~s&i|i&a|a&~s)?32:0,t.data[95]=n}else if((e&64512)===4096){if(t.data[(e&496)>>4]===t.data[e&15|(e&512)>>5]){let s=t.progMem[t.pc+1],i=W(s)?2:1;t.pc+=i,t.cycles+=i}}else if((e&65039)===37898){let s=t.data[(e&496)>>4],i=s-1;t.data[(e&496)>>4]=i;let a=t.data[95]&225;a|=i?0:2,a|=128&i?4:0,a|=s===128?8:0,a|=a>>2&1^a>>3&1?16:0,t.data[95]=a}else if(e===38169){let s=t.pc+1,i=t.dataView.getUint16(93,!0),a=t.data[92];t.data[i]=s&255,t.data[i-1]=s>>8&255,t.data[i-2]=s>>16&255,t.dataView.setUint16(93,i-3,!0),t.pc=(a<<16|t.dataView.getUint16(30,!0))-1,t.cycles+=3}else if(e===37913){let s=t.data[92];t.pc=(s<<16|t.dataView.getUint16(30,!0))-1,t.cycles++}else if(e===38360){let s=t.data[91];t.data[0]=t.progBytes[s<<16|t.dataView.getUint16(30,!0)],t.cycles+=2}else if((e&65039)===36870){let s=t.data[91];t.data[(e&496)>>4]=t.progBytes[s<<16|t.dataView.getUint16(30,!0)],t.cycles+=2}else if((e&65039)===36871){let s=t.data[91],i=t.dataView.getUint16(30,!0);t.data[(e&496)>>4]=t.progBytes[s<<16|i],t.dataView.setUint16(30,i+1,!0),i===65535&&(t.data[91]=(s+1)%(t.progBytes.length>>16)),t.cycles+=2}else if((e&64512)===9216){let s=t.data[(e&496)>>4]^t.data[e&15|(e&512)>>5];t.data[(e&496)>>4]=s;let i=t.data[95]&225;i|=s?0:2,i|=128&s?4:0,i|=i>>2&1^i>>3&1?16:0,t.data[95]=i}else if((e&65416)===776){let s=t.data[((e&112)>>4)+16],i=t.data[(e&7)+16],a=s*i<<1;t.dataView.setUint16(0,a,!0),t.data[95]=t.data[95]&252|(65535&a?0:2)|(s*i&32768?1:0),t.cycles++}else if((e&65416)===896){let s=t.dataView.getInt8(((e&112)>>4)+16),i=t.dataView.getInt8((e&7)+16),a=s*i<<1;t.dataView.setInt16(0,a,!0),t.data[95]=t.data[95]&252|(65535&a?0:2)|(s*i&32768?1:0),t.cycles++}else if((e&65416)===904){let s=t.dataView.getInt8(((e&112)>>4)+16),i=t.data[(e&7)+16],a=s*i<<1;t.dataView.setInt16(0,a,!0),t.data[95]=t.data[95]&252|(65535&a?2:0)|(s*i&32768?1:0),t.cycles++}else if(e===38153){let s=t.pc+1,i=t.dataView.getUint16(93,!0),{pc22Bits:a}=t;t.data[i]=s&255,t.data[i-1]=s>>8&255,a&&(t.data[i-2]=s>>16&255),t.dataView.setUint16(93,i-(a?3:2),!0),t.pc=t.dataView.getUint16(30,!0)-1,t.cycles+=a?3:2}else if(e===37897)t.pc=t.dataView.getUint16(30,!0)-1,t.cycles++;else if((e&63488)===45056){let s=t.readData((e&15|(e&1536)>>5)+32);t.data[(e&496)>>4]=s}else if((e&65039)===37891){let s=t.data[(e&496)>>4],i=s+1&255;t.data[(e&496)>>4]=i;let a=t.data[95]&225;a|=i?0:2,a|=128&i?4:0,a|=s===127?8:0,a|=a>>2&1^a>>3&1?16:0,t.data[95]=a}else if((e&65038)===37900)t.pc=(t.progMem[t.pc+1]|(e&1)<<16|(e&496)<<13)-1,t.cycles+=2;else if((e&65039)===37382){let s=(e&496)>>4,i=t.data[s],a=t.readData(t.dataView.getUint16(30,!0));t.writeData(t.dataView.getUint16(30,!0),a&255-i),t.data[s]=a}else if((e&65039)===37381){let s=(e&496)>>4,i=t.data[s],a=t.readData(t.dataView.getUint16(30,!0));t.writeData(t.dataView.getUint16(30,!0),a|i),t.data[s]=a}else if((e&65039)===37383){let s=t.data[(e&496)>>4],i=t.readData(t.dataView.getUint16(30,!0));t.writeData(t.dataView.getUint16(30,!0),s^i),t.data[(e&496)>>4]=i}else if((e&61440)===57344)t.data[((e&240)>>4)+16]=e&15|(e&3840)>>4;else if((e&65039)===36864){t.cycles++;let s=t.readData(t.progMem[t.pc+1]);t.data[(e&496)>>4]=s,t.pc++}else if((e&65039)===36876)t.cycles++,t.data[(e&496)>>4]=t.readData(t.dataView.getUint16(26,!0));else if((e&65039)===36877){let s=t.dataView.getUint16(26,!0);t.cycles++,t.data[(e&496)>>4]=t.readData(s),t.dataView.setUint16(26,s+1,!0)}else if((e&65039)===36878){let s=t.dataView.getUint16(26,!0)-1;t.dataView.setUint16(26,s,!0),t.cycles++,t.data[(e&496)>>4]=t.readData(s)}else if((e&65039)===32776)t.cycles++,t.data[(e&496)>>4]=t.readData(t.dataView.getUint16(28,!0));else if((e&65039)===36873){let s=t.dataView.getUint16(28,!0);t.cycles++,t.data[(e&496)>>4]=t.readData(s),t.dataView.setUint16(28,s+1,!0)}else if((e&65039)===36874){let s=t.dataView.getUint16(28,!0)-1;t.dataView.setUint16(28,s,!0),t.cycles++,t.data[(e&496)>>4]=t.readData(s)}else if((e&53768)===32776&&e&7|(e&3072)>>7|(e&8192)>>8)t.cycles++,t.data[(e&496)>>4]=t.readData(t.dataView.getUint16(28,!0)+(e&7|(e&3072)>>7|(e&8192)>>8));else if((e&65039)===32768)t.cycles++,t.data[(e&496)>>4]=t.readData(t.dataView.getUint16(30,!0));else if((e&65039)===36865){let s=t.dataView.getUint16(30,!0);t.cycles++,t.data[(e&496)>>4]=t.readData(s),t.dataView.setUint16(30,s+1,!0)}else if((e&65039)===36866){let s=t.dataView.getUint16(30,!0)-1;t.dataView.setUint16(30,s,!0),t.cycles++,t.data[(e&496)>>4]=t.readData(s)}else if((e&53768)===32768&&e&7|(e&3072)>>7|(e&8192)>>8)t.cycles++,t.data[(e&496)>>4]=t.readData(t.dataView.getUint16(30,!0)+(e&7|(e&3072)>>7|(e&8192)>>8));else if(e===38344)t.data[0]=t.progBytes[t.dataView.getUint16(30,!0)],t.cycles+=2;else if((e&65039)===36868)t.data[(e&496)>>4]=t.progBytes[t.dataView.getUint16(30,!0)],t.cycles+=2;else if((e&65039)===36869){let s=t.dataView.getUint16(30,!0);t.data[(e&496)>>4]=t.progBytes[s],t.dataView.setUint16(30,s+1,!0),t.cycles+=2}else if((e&65039)===37894){let s=t.data[(e&496)>>4],i=s>>>1;t.data[(e&496)>>4]=i;let a=t.data[95]&224;a|=i?0:2,a|=s&1,a|=a>>2&1^a&1?8:0,a|=a>>2&1^a>>3&1?16:0,t.data[95]=a}else if((e&64512)===11264)t.data[(e&496)>>4]=t.data[e&15|(e&512)>>5];else if((e&65280)===256){let s=2*(e&15),i=2*((e&240)>>4);t.data[i]=t.data[s],t.data[i+1]=t.data[s+1]}else if((e&64512)===39936){let s=t.data[(e&496)>>4]*t.data[e&15|(e&512)>>5];t.dataView.setUint16(0,s,!0),t.data[95]=t.data[95]&252|(65535&s?0:2)|(32768&s?1:0),t.cycles++}else if((e&65280)===512){let s=t.dataView.getInt8(((e&240)>>4)+16)*t.dataView.getInt8((e&15)+16);t.dataView.setInt16(0,s,!0),t.data[95]=t.data[95]&252|(65535&s?0:2)|(32768&s?1:0),t.cycles++}else if((e&65416)===768){let s=t.dataView.getInt8(((e&112)>>4)+16)*t.data[(e&7)+16];t.dataView.setInt16(0,s,!0),t.data[95]=t.data[95]&252|(65535&s?0:2)|(32768&s?1:0),t.cycles++}else if((e&65039)===37889){let s=(e&496)>>4,i=t.data[s],a=0-i;t.data[s]=a;let n=t.data[95]&192;n|=a?0:2,n|=128&a?4:0,n|=a===128?8:0,n|=n>>2&1^n>>3&1?16:0,n|=a?1:0,n|=1&(a|i)?32:0,t.data[95]=n}else if(e!==0){if((e&64512)===10240){let s=t.data[(e&496)>>4]|t.data[e&15|(e&512)>>5];t.data[(e&496)>>4]=s;let i=t.data[95]&225;i|=s?0:2,i|=128&s?4:0,i|=i>>2&1^i>>3&1?16:0,t.data[95]=i}else if((e&61440)===24576){let s=t.data[((e&240)>>4)+16]|(e&15|(e&3840)>>4);t.data[((e&240)>>4)+16]=s;let i=t.data[95]&225;i|=s?0:2,i|=128&s?4:0,i|=i>>2&1^i>>3&1?16:0,t.data[95]=i}else if((e&63488)===47104)t.writeData((e&15|(e&1536)>>5)+32,t.data[(e&496)>>4]);else if((e&65039)===36879){let s=t.dataView.getUint16(93,!0)+1;t.dataView.setUint16(93,s,!0),t.data[(e&496)>>4]=t.data[s],t.cycles++}else if((e&65039)===37391){let s=t.dataView.getUint16(93,!0);t.data[s]=t.data[(e&496)>>4],t.dataView.setUint16(93,s-1,!0),t.cycles++}else if((e&61440)===53248){let s=(e&2047)-(e&2048?2048:0),i=t.pc+1,a=t.dataView.getUint16(93,!0),{pc22Bits:n}=t;t.data[a]=255&i,t.data[a-1]=i>>8&255,n&&(t.data[a-2]=i>>16&255),t.dataView.setUint16(93,a-(n?3:2),!0),t.pc+=s,t.cycles+=n?3:2}else if(e===38152){let{pc22Bits:s}=t,i=t.dataView.getUint16(93,!0)+(s?3:2);t.dataView.setUint16(93,i,!0),t.pc=(t.data[i-1]<<8)+t.data[i]-1,s&&(t.pc|=t.data[i-2]<<16),t.cycles+=s?4:3}else if(e===38168){let{pc22Bits:s}=t,i=t.dataView.getUint16(93,!0)+(s?3:2);t.dataView.setUint16(93,i,!0),t.pc=(t.data[i-1]<<8)+t.data[i]-1,s&&(t.pc|=t.data[i-2]<<16),t.cycles+=s?4:3,t.data[95]|=128}else if((e&61440)===49152)t.pc=t.pc+((e&2047)-(e&2048?2048:0)),t.cycles++;else if((e&65039)===37895){let s=t.data[(e&496)>>4],i=s>>>1|(t.data[95]&1)<<7;t.data[(e&496)>>4]=i;let a=t.data[95]&224;a|=i?0:2,a|=128&i?4:0,a|=1&s?1:0,a|=a>>2&1^a&1?8:0,a|=a>>2&1^a>>3&1?16:0,t.data[95]=a}else if((e&64512)===2048){let s=t.data[(e&496)>>4],i=t.data[e&15|(e&512)>>5],a=t.data[95],n=s-i-(a&1);t.data[(e&496)>>4]=n,a=a&192|(!n&&a>>1&1?2:0)|(i+(a&1)>s?1:0),a|=128&n?4:0,a|=(s^i)&(s^n)&128?8:0,a|=a>>2&1^a>>3&1?16:0,a|=1&(~s&i|i&n|n&~s)?32:0,t.data[95]=a}else if((e&61440)===16384){let s=t.data[((e&240)>>4)+16],i=e&15|(e&3840)>>4,a=t.data[95],n=s-i-(a&1);t.data[((e&240)>>4)+16]=n,a=a&192|(!n&&a>>1&1?2:0)|(i+(a&1)>s?1:0),a|=128&n?4:0,a|=(s^i)&(s^n)&128?8:0,a|=a>>2&1^a>>3&1?16:0,a|=1&(~s&i|i&n|n&~s)?32:0,t.data[95]=a}else if((e&65280)===39424){let s=((e&248)>>3)+32,i=1<<(e&7);t.writeData(s,t.readData(s)|i,i),t.cycles++}else if((e&65280)===39168){if(!(t.readData(((e&248)>>3)+32)&1<<(e&7))){let i=t.progMem[t.pc+1],a=W(i)?2:1;t.cycles+=a,t.pc+=a}}else if((e&65280)===39680){if(t.readData(((e&248)>>3)+32)&1<<(e&7)){let i=t.progMem[t.pc+1],a=W(i)?2:1;t.cycles+=a,t.pc+=a}}else if((e&65280)===38656){let s=2*((e&48)>>4)+24,i=t.dataView.getUint16(s,!0),a=e&15|(e&192)>>2,n=i-a;t.dataView.setUint16(s,n,!0);let r=t.data[95]&192;r|=n?0:2,r|=32768&n?4:0,r|=i&~n&32768?8:0,r|=r>>2&1^r>>3&1?16:0,r|=a>i?1:0,r|=1&(~i&a|a&n|n&~i)?32:0,t.data[95]=r,t.cycles++}else if((e&65032)===64512){if(!(t.data[(e&496)>>4]&1<<(e&7))){let s=t.progMem[t.pc+1],i=W(s)?2:1;t.cycles+=i,t.pc+=i}}else if((e&65032)===65024){if(t.data[(e&496)>>4]&1<<(e&7)){let s=t.progMem[t.pc+1],i=W(s)?2:1;t.cycles+=i,t.pc+=i}}else if(e!==38280){if(e!==38376){if(e!==38392){if((e&65039)===37376){let s=t.data[(e&496)>>4],i=t.progMem[t.pc+1];t.writeData(i,s),t.pc++,t.cycles++}else if((e&65039)===37388)t.writeData(t.dataView.getUint16(26,!0),t.data[(e&496)>>4]),t.cycles++;else if((e&65039)===37389){let s=t.dataView.getUint16(26,!0);t.writeData(s,t.data[(e&496)>>4]),t.dataView.setUint16(26,s+1,!0),t.cycles++}else if((e&65039)===37390){let s=t.data[(e&496)>>4],i=t.dataView.getUint16(26,!0)-1;t.dataView.setUint16(26,i,!0),t.writeData(i,s),t.cycles++}else if((e&65039)===33288)t.writeData(t.dataView.getUint16(28,!0),t.data[(e&496)>>4]),t.cycles++;else if((e&65039)===37385){let s=t.data[(e&496)>>4],i=t.dataView.getUint16(28,!0);t.writeData(i,s),t.dataView.setUint16(28,i+1,!0),t.cycles++}else if((e&65039)===37386){let s=t.data[(e&496)>>4],i=t.dataView.getUint16(28,!0)-1;t.dataView.setUint16(28,i,!0),t.writeData(i,s),t.cycles++}else if((e&53768)===33288&&e&7|(e&3072)>>7|(e&8192)>>8)t.writeData(t.dataView.getUint16(28,!0)+(e&7|(e&3072)>>7|(e&8192)>>8),t.data[(e&496)>>4]),t.cycles++;else if((e&65039)===33280)t.writeData(t.dataView.getUint16(30,!0),t.data[(e&496)>>4]),t.cycles++;else if((e&65039)===37377){let s=t.dataView.getUint16(30,!0);t.writeData(s,t.data[(e&496)>>4]),t.dataView.setUint16(30,s+1,!0),t.cycles++}else if((e&65039)===37378){let s=t.data[(e&496)>>4],i=t.dataView.getUint16(30,!0)-1;t.dataView.setUint16(30,i,!0),t.writeData(i,s),t.cycles++}else if((e&53768)===33280&&e&7|(e&3072)>>7|(e&8192)>>8)t.writeData(t.dataView.getUint16(30,!0)+(e&7|(e&3072)>>7|(e&8192)>>8),t.data[(e&496)>>4]),t.cycles++;else if((e&64512)===6144){let s=t.data[(e&496)>>4],i=t.data[e&15|(e&512)>>5],a=s-i;t.data[(e&496)>>4]=a;let n=t.data[95]&192;n|=a?0:2,n|=128&a?4:0,n|=(s^i)&(s^a)&128?8:0,n|=n>>2&1^n>>3&1?16:0,n|=i>s?1:0,n|=1&(~s&i|i&a|a&~s)?32:0,t.data[95]=n}else if((e&61440)===20480){let s=t.data[((e&240)>>4)+16],i=e&15|(e&3840)>>4,a=s-i;t.data[((e&240)>>4)+16]=a;let n=t.data[95]&192;n|=a?0:2,n|=128&a?4:0,n|=(s^i)&(s^a)&128?8:0,n|=n>>2&1^n>>3&1?16:0,n|=i>s?1:0,n|=1&(~s&i|i&a|a&~s)?32:0,t.data[95]=n}else if((e&65039)===37890){let s=(e&496)>>4,i=t.data[s];t.data[s]=(15&i)<<4|(240&i)>>>4}else if(e===38312)t.onWatchdogReset();else if((e&65039)===37380){let s=(e&496)>>4,i=t.data[s],a=t.data[t.dataView.getUint16(30,!0)];t.data[t.dataView.getUint16(30,!0)]=i,t.data[s]=a}}}}}t.pc=(t.pc+1)%t.progMem.length,t.cycles++}var I;(function(t){t[t.AVCC=0]="AVCC",t[t.AREF=1]="AREF",t[t.Internal1V1=2]="Internal1V1",t[t.Internal2V56=3]="Internal2V56",t[t.Reserved=4]="Reserved"})(I||(I={}));var C;(function(t){t[t.SingleEnded=0]="SingleEnded",t[t.Differential=1]="Differential",t[t.Constant=2]="Constant",t[t.Temperature=3]="Temperature"})(C||(C={}));var st={0:{type:C.SingleEnded,channel:0},1:{type:C.SingleEnded,channel:1},2:{type:C.SingleEnded,channel:2},3:{type:C.SingleEnded,channel:3},4:{type:C.SingleEnded,channel:4},5:{type:C.SingleEnded,channel:5},6:{type:C.SingleEnded,channel:6},7:{type:C.SingleEnded,channel:7},8:{type:C.Temperature},14:{type:C.Constant,voltage:1.1},15:{type:C.Constant,voltage:0}},xt={type:C.Constant,voltage:0},G={ADMUX:124,ADCSRA:122,ADCSRB:123,ADCL:120,ADCH:121,DIDR0:126,adcInterrupt:42,numChannels:8,muxInputMask:15,muxChannels:st,adcReferences:[I.AREF,I.AVCC,I.Reserved,I.Internal1V1]},Ct=7,gt=8,Rt=16,et=64,z=128,St=31,Tt=32,It=8,pt=8,mt=3,ut=6,O=class{constructor(e,s){this.cpu=e,this.config=s,this.channelValues=new Array(this.config.numChannels),this.avcc=5,this.aref=5,this.onADCRead=i=>{var a;let n=0;switch(i.type){case C.Constant:n=i.voltage;break;case C.SingleEnded:n=(a=this.channelValues[i.channel])!==null&&a!==void 0?a:0;break;case C.Differential:n=i.gain*((this.channelValues[i.positiveChannel]||0)-(this.channelValues[i.negativeChannel]||0));break;case C.Temperature:n=.378125;break}let r=n/this.referenceVoltage*1024,o=Math.min(Math.max(Math.floor(r),0),1023);this.cpu.addClockEvent(()=>this.completeADCRead(o),this.sampleCycles)},this.converting=!1,this.conversionCycles=25,this.ADC={address:this.config.adcInterrupt,flagRegister:this.config.ADCSRA,flagMask:Rt,enableRegister:this.config.ADCSRA,enableMask:gt},e.writeHooks[s.ADCSRA]=(i,a)=>{var n;if(i&z&&!(a&z)&&(this.conversionCycles=25),e.data[s.ADCSRA]=i,e.updateInterruptEnable(this.ADC,i),!this.converting&&i&et){if(!(i&z))return this.cpu.addClockEvent(()=>this.completeADCRead(0),this.sampleCycles),!0;let r=this.cpu.data[this.config.ADMUX]&St;e.data[s.ADCSRB]&It&&(r|=32),r&=s.muxInputMask;let o=(n=s.muxChannels[r])!==null&&n!==void 0?n:xt;return this.converting=!0,this.onADCRead(o),!0}}}completeADCRead(e){let{ADCL:s,ADCH:i,ADMUX:a,ADCSRA:n}=this.config;this.converting=!1,this.conversionCycles=13,this.cpu.data[a]&Tt?(this.cpu.data[s]=e<<6&255,this.cpu.data[i]=e>>2):(this.cpu.data[s]=e&255,this.cpu.data[i]=e>>8&3),this.cpu.data[n]&=~et,this.cpu.setInterruptFlag(this.ADC)}get prescaler(){let{ADCSRA:e}=this.config;switch(this.cpu.data[e]&Ct){case 0:case 1:return 2;case 2:return 4;case 3:return 8;case 4:return 16;case 5:return 32;case 6:return 64;default:return 128}}get referenceVoltageType(){var e;let{ADMUX:s,adcReferences:i}=this.config,a=this.cpu.data[s]>>ut&mt;return i.length>4&&this.cpu.data[s]&pt&&(a|=4),(e=i[a])!==null&&e!==void 0?e:I.Reserved}get referenceVoltage(){switch(this.referenceVoltageType){case I.AVCC:return this.avcc;case I.AREF:return this.aref;case I.Internal1V1:return 1.1;case I.Internal2V56:return 2.56;default:return this.avcc}}get sampleCycles(){return this.conversionCycles*this.prescaler}};var K={CLKPR:97},At=[1,2,4,8,16,32,64,128,256,2,4,8,16,32,64,128],F=class{constructor(e,s,i=K){this.cpu=e,this.baseFreqHz=s,this.config=i,this.clockEnabledCycles=0,this.prescalerValue=1,this.cyclesDelta=0,this.cpu.writeHooks[this.config.CLKPR]=a=>{if((!this.clockEnabledCycles||this.clockEnabledCycles<e.cycles)&&a===128)this.clockEnabledCycles=this.cpu.cycles+4;else if(this.clockEnabledCycles&&this.clockEnabledCycles>=e.cycles){this.clockEnabledCycles=0;let n=a&15,r=this.prescalerValue;this.prescalerValue=At[n],this.cpu.data[this.config.CLKPR]=n,r!==this.prescalerValue&&(this.cyclesDelta=(e.cycles+this.cyclesDelta)*(r/this.prescalerValue)-e.cycles)}return!0}}get frequency(){return this.baseFreqHz/this.prescalerValue}get prescaler(){return this.prescalerValue}get timeNanos(){return(this.cpu.cycles+this.cyclesDelta)/this.frequency*1e9}get timeMicros(){return(this.cpu.cycles+this.cyclesDelta)/this.frequency*1e6}get timeMillis(){return(this.cpu.cycles+this.cyclesDelta)/this.frequency*1e3}};var Pt=2,Ut=4,Et=8,wt=16,yt=32,Kt=Pt|Ut|Et|wt|yt;var it={EICR:105,EIMSK:61,EIFR:60,index:0,iscOffset:0,interrupt:2},at={EICR:105,EIMSK:61,EIFR:60,index:1,iscOffset:2,interrupt:4},nt={PCIE:0,PCICR:104,PCIFR:59,PCMSK:107,pinChangeInterrupt:6,mask:255,offset:0},rt={PCIE:1,PCICR:104,PCIFR:59,PCMSK:108,pinChangeInterrupt:8,mask:255,offset:0},ot={PCIE:2,PCICR:104,PCIFR:59,PCMSK:109,pinChangeInterrupt:10,mask:255,offset:0};var y={PIN:35,DDR:36,PORT:37,pinChange:nt,externalInterrupts:[]},j={PIN:38,DDR:39,PORT:40,pinChange:rt,externalInterrupts:[]},U={PIN:41,DDR:42,PORT:43,pinChange:ot,externalInterrupts:[null,null,it,at]};var P;(function(t){t[t.Low=0]="Low",t[t.High=1]="High",t[t.Input=2]="Input",t[t.InputPullUp=3]="InputPullUp"})(P||(P={}));var f;(function(t){t[t.None=0]="None",t[t.Enable=1]="Enable",t[t.Set=2]="Set",t[t.Clear=3]="Clear",t[t.Toggle=4]="Toggle"})(f||(f={}));var w;(function(t){t[t.LowLevel=0]="LowLevel",t[t.Change=1]="Change",t[t.FallingEdge=2]="FallingEdge",t[t.RisingEdge=3]="RisingEdge"})(w||(w={}));var V=class{constructor(e,s){var i,a,n,r;this.cpu=e,this.portConfig=s,this.externalClockListeners=[],this.listeners=[],this.pinValue=0,this.overrideMask=255,this.overrideValue=0,this.lastValue=0,this.lastDdr=0,this.lastPin=0,this.openCollector=0,e.gpioPorts.add(this),e.gpioByPort[s.PORT]=this,e.writeHooks[s.DDR]=c=>{let S=e.data[s.PORT];return e.data[s.DDR]=c,this.writeGpio(S,c),this.updatePinRegister(c),!0},e.writeHooks[s.PORT]=c=>{let S=e.data[s.DDR];return e.data[s.PORT]=c,this.writeGpio(c,S),this.updatePinRegister(S),!0},e.writeHooks[s.PIN]=(c,S,p,m)=>{let g=e.data[s.PORT],_=e.data[s.DDR],b=g^c&m;return e.data[s.PORT]=b,this.writeGpio(b,_),this.updatePinRegister(_),!0};let{externalInterrupts:o}=s;this.externalInts=o.map(c=>c?{address:c.interrupt,flagRegister:c.EIFR,flagMask:1<<c.index,enableRegister:c.EIMSK,enableMask:1<<c.index}:null);let R=new Set(o.map(c=>c?.EICR));for(let c of R)this.attachInterruptHook(c||0);let T=(a=(i=o.find(c=>c&&c.EIMSK))===null||i===void 0?void 0:i.EIMSK)!==null&&a!==void 0?a:0;this.attachInterruptHook(T,"mask");let d=(r=(n=o.find(c=>c&&c.EIFR))===null||n===void 0?void 0:n.EIFR)!==null&&r!==void 0?r:0;this.attachInterruptHook(d,"flag");let{pinChange:x}=s;if(this.PCINT=x?{address:x.pinChangeInterrupt,flagRegister:x.PCIFR,flagMask:1<<x.PCIE,enableRegister:x.PCICR,enableMask:1<<x.PCIE}:null,x){let{PCIFR:c,PCMSK:S}=x;e.writeHooks[c]=p=>{for(let m of this.cpu.gpioPorts){let{PCINT:g}=m;g&&e.clearInterruptByFlag(g,p)}return!0},e.writeHooks[S]=p=>{e.data[S]=p;for(let m of this.cpu.gpioPorts){let{PCINT:g}=m;g&&e.updateInterruptEnable(g,p)}return!0}}}addListener(e){this.listeners.push(e)}removeListener(e){this.listeners=this.listeners.filter(s=>s!==e)}pinState(e){let s=this.cpu.data[this.portConfig.DDR],i=this.cpu.data[this.portConfig.PORT],a=1<<e,n=i&a?P.InputPullUp:P.Input,r=this.openCollector&a?n:P.High;return s&a?this.lastValue&a?r:P.Low:n}setPin(e,s){let i=1<<e;this.pinValue&=~i,s&&(this.pinValue|=i),this.updatePinRegister(this.cpu.data[this.portConfig.DDR])}timerOverridePin(e,s){let{cpu:i,portConfig:a}=this,n=1<<e;if(s===f.None)this.overrideMask|=n,this.overrideValue&=~n;else switch(this.overrideMask&=~n,s){case f.Enable:this.overrideValue&=~n,this.overrideValue|=i.data[a.PORT]&n;break;case f.Set:this.overrideValue|=n;break;case f.Clear:this.overrideValue&=~n;break;case f.Toggle:this.overrideValue^=n;break}let r=i.data[a.DDR];this.writeGpio(i.data[a.PORT],r),this.updatePinRegister(r)}updatePinRegister(e){var s,i;let a=this.pinValue&~e|this.lastValue&e;if(this.cpu.data[this.portConfig.PIN]=a,this.lastPin!==a){for(let n=0;n<8;n++)if((a&1<<n)!==(this.lastPin&1<<n)){let r=!!(a&1<<n);this.toggleInterrupt(n,r),(i=(s=this.externalClockListeners)[n])===null||i===void 0||i.call(s,r)}this.lastPin=a}}toggleInterrupt(e,s){let{cpu:i,portConfig:a,externalInts:n,PCINT:r}=this,{externalInterrupts:o,pinChange:R}=a,T=o[e],d=n[e];if(d&&T){let{EIMSK:x,index:c,EICR:S,iscOffset:p}=T;if(i.data[x]&1<<c){let m=i.data[S]>>p&3,g=!1;switch(d.constant=!1,m){case w.LowLevel:g=!s,d.constant=!0;break;case w.Change:g=!0;break;case w.FallingEdge:g=!s;break;case w.RisingEdge:g=s;break}g?i.setInterruptFlag(d):d.constant&&i.clearInterrupt(d,!0)}}if(R&&r&&R.mask&1<<e){let{PCMSK:x}=R;i.data[x]&1<<e+R.offset&&i.setInterruptFlag(r)}}attachInterruptHook(e,s="other"){if(!e)return;let{cpu:i}=this;i.writeHooks[e]=a=>{s!=="flag"&&(i.data[e]=a);for(let n of i.gpioPorts){for(let r of n.externalInts)r&&s==="mask"&&i.updateInterruptEnable(r,a),r&&!r.constant&&s==="flag"&&i.clearInterruptByFlag(r,a);n.checkExternalInterrupts()}return!0}}checkExternalInterrupts(){let{cpu:e}=this,{externalInterrupts:s}=this.portConfig;for(let i=0;i<8;i++){let a=s[i];if(!a)continue;let n=!!(this.lastPin&1<<i),{EIFR:r,EIMSK:o,index:R,EICR:T,iscOffset:d,interrupt:x}=a;if(!(e.data[o]&1<<R)||n)continue;(e.data[T]>>d&3)===w.LowLevel&&e.queueInterrupt({address:x,flagRegister:r,flagMask:1<<R,enableRegister:o,enableMask:1<<R,constant:!0})}}writeGpio(e,s){let i=(e&this.overrideMask|this.overrideValue)&s|e&~s,a=this.lastValue;if(i!==a||s!==this.lastDdr){this.lastValue=i,this.lastDdr=s;for(let n of this.listeners)n(i,a)}}};var ft={0:0,1:1,2:8,3:64,4:256,5:1024,6:0,7:0},v;(function(t){t[t.FallingEdge=6]="FallingEdge",t[t.RisingEdge=7]="RisingEdge"})(v||(v={}));var J={TOV:1,OCFA:2,OCFB:4,OCFC:0,TOIE:1,OCIEA:2,OCIEB:4,OCIEC:0},Q=Object.assign({bits:8,captureInterrupt:0,compAInterrupt:28,compBInterrupt:30,compCInterrupt:0,ovfInterrupt:32,TIFR:53,OCRA:71,OCRB:72,OCRC:0,ICR:0,TCNT:70,TCCRA:68,TCCRB:69,TCCRC:0,TIMSK:110,dividers:ft,compPortA:U.PORT,compPinA:6,compPortB:U.PORT,compPinB:5,compPortC:0,compPinC:0,externalClockPort:U.PORT,externalClockPin:4},J),Y=Object.assign({bits:16,captureInterrupt:20,compAInterrupt:22,compBInterrupt:24,compCInterrupt:0,ovfInterrupt:26,TIFR:54,OCRA:136,OCRB:138,OCRC:0,ICR:134,TCNT:132,TCCRA:128,TCCRB:129,TCCRC:130,TIMSK:111,dividers:ft,compPortA:y.PORT,compPinA:1,compPortB:y.PORT,compPinB:2,compPortC:0,compPinC:0,externalClockPort:U.PORT,externalClockPin:5},J),$=Object.assign({bits:8,captureInterrupt:0,compAInterrupt:14,compBInterrupt:16,compCInterrupt:0,ovfInterrupt:18,TIFR:55,OCRA:179,OCRB:180,OCRC:0,ICR:0,TCNT:178,TCCRA:176,TCCRB:177,TCCRC:0,TIMSK:112,dividers:{0:0,1:1,2:8,3:32,4:64,5:128,6:256,7:1024},compPortA:y.PORT,compPinA:3,compPortB:U.PORT,compPinB:3,compPortC:0,compPinC:0,externalClockPort:0,externalClockPin:0},J),D;(function(t){t[t.Normal=0]="Normal",t[t.PWMPhaseCorrect=1]="PWMPhaseCorrect",t[t.CTC=2]="CTC",t[t.FastPWM=3]="FastPWM",t[t.PWMPhaseFrequencyCorrect=4]="PWMPhaseFrequencyCorrect",t[t.Reserved=5]="Reserved"})(D||(D={}));var l;(function(t){t[t.Max=0]="Max",t[t.Top=1]="Top",t[t.Bottom=2]="Bottom"})(l||(l={}));var h;(function(t){t[t.Immediate=0]="Immediate",t[t.Top=1]="Top",t[t.Bottom=2]="Bottom"})(h||(h={}));var E=1,k=2,B=1,{Normal:tt,PWMPhaseCorrect:u,CTC:L,FastPWM:A,Reserved:Z,PWMPhaseFrequencyCorrect:H}=D,Bt=[[tt,255,h.Immediate,l.Max,0],[u,255,h.Top,l.Bottom,0],[L,E,h.Immediate,l.Max,0],[A,255,h.Bottom,l.Max,0],[Z,255,h.Immediate,l.Max,0],[u,E,h.Top,l.Bottom,B],[Z,255,h.Immediate,l.Max,0],[A,E,h.Bottom,l.Top,B]],kt=[[tt,65535,h.Immediate,l.Max,0],[u,255,h.Top,l.Bottom,0],[u,511,h.Top,l.Bottom,0],[u,1023,h.Top,l.Bottom,0],[L,E,h.Immediate,l.Max,0],[A,255,h.Bottom,l.Top,0],[A,511,h.Bottom,l.Top,0],[A,1023,h.Bottom,l.Top,0],[H,k,h.Bottom,l.Bottom,0],[H,E,h.Bottom,l.Bottom,B],[u,k,h.Top,l.Bottom,0],[u,E,h.Top,l.Bottom,B],[L,k,h.Immediate,l.Max,0],[Z,65535,h.Immediate,l.Max,0],[A,k,h.Bottom,l.Top,B],[A,E,h.Bottom,l.Top,B]];function Dt(t){switch(t){case 1:return f.Toggle;case 2:return f.Clear;case 3:return f.Set;default:return f.Enable}}var ct=128,ht=64,_t=32,N=class{constructor(e,s){if(this.cpu=e,this.config=s,this.MAX=this.config.bits===16?65535:255,this.lastCycle=0,this.ocrA=0,this.nextOcrA=0,this.ocrB=0,this.nextOcrB=0,this.hasOCRC=this.config.OCRC>0,this.ocrC=0,this.nextOcrC=0,this.ocrUpdateMode=h.Immediate,this.tovUpdateMode=l.Max,this.icr=0,this.tcnt=0,this.tcntNext=0,this.tcntUpdated=!1,this.updateDivider=!1,this.countingUp=!0,this.divider=0,this.externalClockRisingEdge=!1,this.highByteTemp=0,this.OVF={address:this.config.ovfInterrupt,flagRegister:this.config.TIFR,flagMask:this.config.TOV,enableRegister:this.config.TIMSK,enableMask:this.config.TOIE},this.OCFA={address:this.config.compAInterrupt,flagRegister:this.config.TIFR,flagMask:this.config.OCFA,enableRegister:this.config.TIMSK,enableMask:this.config.OCIEA},this.OCFB={address:this.config.compBInterrupt,flagRegister:this.config.TIFR,flagMask:this.config.OCFB,enableRegister:this.config.TIMSK,enableMask:this.config.OCIEB},this.OCFC={address:this.config.compCInterrupt,flagRegister:this.config.TIFR,flagMask:this.config.OCFC,enableRegister:this.config.TIMSK,enableMask:this.config.OCIEC},this.count=(i=!0,a=!1)=>{let{divider:n,lastCycle:r,cpu:o}=this,{cycles:R}=o,T=R-r;if(n&&T>=n||a){let d=a?1:Math.floor(T/n);this.lastCycle+=d*n;let x=this.tcnt,{timerMode:c,TOP:S}=this,p=c===u||c===H,m=p?this.phasePwmCount(x,d):(x+d)%(S+1),g=x+d>S;if(this.tcntUpdated||(this.tcnt=m,p||this.timerUpdated(m,x)),!p){if(c===A&&g){let{compA:_,compB:b}=this;_&&this.updateCompPin(_,"A",!0),b&&this.updateCompPin(b,"B",!0)}this.ocrUpdateMode==h.Bottom&&g&&(this.ocrA=this.nextOcrA,this.ocrB=this.nextOcrB,this.ocrC=this.nextOcrC),g&&(this.tovUpdateMode==l.Top||S===this.MAX)&&o.setInterruptFlag(this.OVF)}}if(this.tcntUpdated&&(this.tcnt=this.tcntNext,this.tcntUpdated=!1,(this.tcnt===0&&this.ocrUpdateMode===h.Bottom||this.tcnt===this.TOP&&this.ocrUpdateMode===h.Top)&&(this.ocrA=this.nextOcrA,this.ocrB=this.nextOcrB,this.ocrC=this.nextOcrC)),this.updateDivider){let{CS:d}=this,{externalClockPin:x}=this.config,c=this.config.dividers[d];this.lastCycle=c?this.cpu.cycles:0,this.updateDivider=!1,this.divider=c,this.config.externalClockPort&&!this.externalClockPort&&(this.externalClockPort=this.cpu.gpioByPort[this.config.externalClockPort]),this.externalClockPort&&(this.externalClockPort.externalClockListeners[x]=null),c?o.addClockEvent(this.count,this.lastCycle+c-o.cycles):this.externalClockPort&&(d===v.FallingEdge||d===v.RisingEdge)&&(this.externalClockPort.externalClockListeners[x]=this.externalClockCallback,this.externalClockRisingEdge=d===v.RisingEdge);return}i&&n&&o.addClockEvent(this.count,this.lastCycle+n-o.cycles)},this.externalClockCallback=i=>{i===this.externalClockRisingEdge&&this.count(!1,!0)},this.updateWGMConfig(),this.cpu.readHooks[s.TCNT]=i=>(this.count(!1),this.config.bits===16&&(this.cpu.data[i+1]=this.tcnt>>8),this.cpu.data[i]=this.tcnt&255),this.cpu.writeHooks[s.TCNT]=i=>{this.tcntNext=this.highByteTemp<<8|i,this.countingUp=!0,this.tcntUpdated=!0,this.cpu.updateClockEvent(this.count,0),this.divider&&this.timerUpdated(this.tcntNext,this.tcntNext)},this.cpu.writeHooks[s.OCRA]=i=>{this.nextOcrA=this.highByteTemp<<8|i,this.ocrUpdateMode===h.Immediate&&(this.ocrA=this.nextOcrA)},this.cpu.writeHooks[s.OCRB]=i=>{this.nextOcrB=this.highByteTemp<<8|i,this.ocrUpdateMode===h.Immediate&&(this.ocrB=this.nextOcrB)},this.hasOCRC&&(this.cpu.writeHooks[s.OCRC]=i=>{this.nextOcrC=this.highByteTemp<<8|i,this.ocrUpdateMode===h.Immediate&&(this.ocrC=this.nextOcrC)}),this.config.bits===16){this.cpu.writeHooks[s.ICR]=n=>{this.icr=this.highByteTemp<<8|n};let i=n=>{this.highByteTemp=n},a=(n,r,o)=>(this.highByteTemp=n&this.ocrMask>>8,e.data[o]=this.highByteTemp,!0);this.cpu.writeHooks[s.TCNT+1]=i,this.cpu.writeHooks[s.OCRA+1]=a,this.cpu.writeHooks[s.OCRB+1]=a,this.hasOCRC&&(this.cpu.writeHooks[s.OCRC+1]=a),this.cpu.writeHooks[s.ICR+1]=i}e.writeHooks[s.TCCRA]=i=>(this.cpu.data[s.TCCRA]=i,this.updateWGMConfig(),!0),e.writeHooks[s.TCCRB]=i=>(s.TCCRC||(this.checkForceCompare(i),i&=~(ct|ht)),this.cpu.data[s.TCCRB]=i,this.updateDivider=!0,this.cpu.clearClockEvent(this.count),this.cpu.addClockEvent(this.count,0),this.updateWGMConfig(),!0),s.TCCRC&&(e.writeHooks[s.TCCRC]=i=>{this.checkForceCompare(i)}),e.writeHooks[s.TIFR]=i=>(this.cpu.data[s.TIFR]=i,this.cpu.clearInterruptByFlag(this.OVF,i),this.cpu.clearInterruptByFlag(this.OCFA,i),this.cpu.clearInterruptByFlag(this.OCFB,i),!0),e.writeHooks[s.TIMSK]=i=>{this.cpu.updateInterruptEnable(this.OVF,i),this.cpu.updateInterruptEnable(this.OCFA,i),this.cpu.updateInterruptEnable(this.OCFB,i)}}reset(){this.divider=0,this.lastCycle=0,this.ocrA=0,this.nextOcrA=0,this.ocrB=0,this.nextOcrB=0,this.ocrC=0,this.nextOcrC=0,this.icr=0,this.tcnt=0,this.tcntNext=0,this.tcntUpdated=!1,this.countingUp=!1,this.updateDivider=!0}get TCCRA(){return this.cpu.data[this.config.TCCRA]}get TCCRB(){return this.cpu.data[this.config.TCCRB]}get TIMSK(){return this.cpu.data[this.config.TIMSK]}get CS(){return this.TCCRB&7}get WGM(){let e=this.config.bits===16?24:8;return(this.TCCRB&e)>>1|this.TCCRA&3}get TOP(){switch(this.topValue){case E:return this.ocrA;case k:return this.icr;default:return this.topValue}}get ocrMask(){switch(this.topValue){case E:case k:return 65535;default:return this.topValue}}get debugTCNT(){return this.tcnt}updateWGMConfig(){let{config:e,WGM:s}=this,i=e.bits===16?kt:Bt,a=this.cpu.data[e.TCCRA],[n,r,o,R,T]=i[s];this.timerMode=n,this.topValue=r,this.ocrUpdateMode=o,this.tovUpdateMode=R;let d=n===A||n===u||n===H,x=this.compA;this.compA=a>>6&3,this.compA===1&&d&&!(T&B)&&(this.compA=0),!!x!=!!this.compA&&this.updateCompA(this.compA?f.Enable:f.None);let c=this.compB;if(this.compB=a>>4&3,this.compB===1&&d&&(this.compB=0),!!c!=!!this.compB&&this.updateCompB(this.compB?f.Enable:f.None),this.hasOCRC){let S=this.compC;this.compC=a>>2&3,this.compC===1&&d&&(this.compC=0),!!S!=!!this.compC&&this.updateCompC(this.compC?f.Enable:f.None)}}phasePwmCount(e,s){let{ocrA:i,ocrB:a,ocrC:n,hasOCRC:r,TOP:o,MAX:R,tcntUpdated:T}=this;for(!e&&!o&&(s=0,this.ocrUpdateMode===h.Top&&(this.ocrA=this.nextOcrA,this.ocrB=this.nextOcrB,this.ocrC=this.nextOcrC));s>0;)this.countingUp?(e++,e===o&&!T&&(this.countingUp=!1,this.ocrUpdateMode===h.Top&&(this.ocrA=this.nextOcrA,this.ocrB=this.nextOcrB,this.ocrC=this.nextOcrC))):(e--,!e&&!T&&(this.countingUp=!0,this.cpu.setInterruptFlag(this.OVF),this.ocrUpdateMode===h.Bottom&&(this.ocrA=this.nextOcrA,this.ocrB=this.nextOcrB,this.ocrC=this.nextOcrC))),T||(e===i&&(this.cpu.setInterruptFlag(this.OCFA),this.compA&&this.updateCompPin(this.compA,"A")),e===a&&(this.cpu.setInterruptFlag(this.OCFB),this.compB&&this.updateCompPin(this.compB,"B")),r&&e===n&&(this.cpu.setInterruptFlag(this.OCFC),this.compC&&this.updateCompPin(this.compC,"C"))),s--;return e&R}timerUpdated(e,s){let{ocrA:i,ocrB:a,ocrC:n,hasOCRC:r}=this,o=s>e;((s<i||o)&&e>=i||s<i&&o)&&(this.cpu.setInterruptFlag(this.OCFA),this.compA&&this.updateCompPin(this.compA,"A")),((s<a||o)&&e>=a||s<a&&o)&&(this.cpu.setInterruptFlag(this.OCFB),this.compB&&this.updateCompPin(this.compB,"B")),r&&((s<n||o)&&e>=n||s<n&&o)&&(this.cpu.setInterruptFlag(this.OCFC),this.compC&&this.updateCompPin(this.compC,"C"))}checkForceCompare(e){this.timerMode==D.FastPWM||this.timerMode==D.PWMPhaseCorrect||this.timerMode==D.PWMPhaseFrequencyCorrect||(e&ct&&this.updateCompPin(this.compA,"A"),e&ht&&this.updateCompPin(this.compB,"B"),this.config.compPortC&&e&_t&&this.updateCompPin(this.compC,"C"))}updateCompPin(e,s,i=!1){let a=f.None,n=e===3,r=this.countingUp===n;switch(this.timerMode){case tt:case L:a=Dt(e);break;case A:e===1?a=i?f.None:f.Toggle:a=n!==i?f.Set:f.Clear;break;case u:case H:e===1?a=f.Toggle:a=r?f.Set:f.Clear;break}a!==f.None&&(s==="A"?this.updateCompA(a):s==="B"?this.updateCompB(a):this.updateCompC(a))}updateCompA(e){let{compPortA:s,compPinA:i}=this.config,a=this.cpu.gpioByPort[s];a?.timerOverridePin(i,e)}updateCompB(e){let{compPortB:s,compPinB:i}=this.config,a=this.cpu.gpioByPort[s];a?.timerOverridePin(i,e)}updateCompC(e){let{compPortC:s,compPinC:i}=this.config,a=this.cpu.gpioByPort[s];a?.timerOverridePin(i,e)}};var bt=16,Mt=8,Wt=4;var Qt=Wt|bt|Mt;window.AVR={CPU:M,avrInstruction:q,AVRTimer:N,timer0Config:Q,timer1Config:Y,timer2Config:$,AVRIOPort:V,portBConfig:y,portCConfig:j,portDConfig:U,PinState:P,AVRADC:O,adcConfig:G,AVRClock:F,clockConfig:K};})();
 
 ;
-/* Voltio · motor eléctrico
+/* Ledly · motor eléctrico
    Análisis nodal. Fuentes como equivalentes de Norton; diodos, LEDs, zener,
    transistores NPN y comparadores con modelos lineales a tramos que se iteran
    hasta que sus estados son coherentes. Condensadores con Euler implícito. */
@@ -804,7 +872,7 @@ const Solver = (() => {
 if (typeof module !== 'undefined') module.exports = Solver;
 
 ;
-/* Voltio · símbolos de esquema. Cada símbolo de 2 terminales mide 60 de largo
+/* Ledly · símbolos de esquema. Cada símbolo de 2 terminales mide 60 de largo
    (terminales en x-30 y x+30) y se gira con rot (grados). */
 const Schem = (() => {
   const st = 'stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"';
@@ -896,7 +964,7 @@ const SCH = {
 const SKETCHES = {"blink": {"name": "Parpadeo (D13)", "hex": ":100000000C945C000C9494000C94BB000C9479004C\n:100010000C9479000C9479000C9479000C9479007C\n:100020000C9479000C9479000C9479000C9479006C\n:100030000C9479000C9479000C9479000C9479005C\n:100040000C94E3000C9479000C9479000C947900E2\n:100050000C9479000C9479000C9479000C9479003C\n:100060000C9479000C947900000000080002010053\n:100070000003040700000000000000000102040863\n:100080001020408001020408102001020408102002\n:10009000040404040404040402020202020203032E\n:1000A0000303030300000000250028002B000000CC\n:1000B0000000240027002A0011241FBECFEFD8E043\n:1000C000DEBFCDBF11E0A0E0B1E0E6EDF4E002C09C\n:1000D00005900D92A430B107D9F721E0A4E0B1E07A\n:1000E00001C01D92AD30B207E1F70E945A020C9494\n:1000F00069020C94000061E08DE00C94EF0161E076\n:100100008DE00E942B0268EE73E080E090E00E9498\n:10011000520160E08DE00E942B0268EE73E080E007\n:1001200090E00C94520108951F920F920FB60F9217\n:1001300011242F933F934F935F936F937F938F93EC\n:100140009F93AF93BF93EF93FF93E0910001F091E2\n:1001500001010995FF91EF91BF91AF919F918F910F\n:100160007F916F915F914F913F912F910F900FBEB3\n:100170000F901F9018951F920F920FB60F92112497\n:100180002F933F934F935F936F937F938F939F939F\n:10019000AF93BF93EF93FF93E0910201F0910301BE\n:1001A0000995FF91EF91BF91AF919F918F917F91B1\n:1001B0006F915F914F913F912F910F900FBE0F90D4\n:1001C0001F90189508951F920F920FB60F92112449\n:1001D0002F933F938F939F93AF93BF93809105018C\n:1001E00090910601A0910701B0910801309104019E\n:1001F00023E0230F2D3758F50196A11DB11D209343\n:1002000004018093050190930601A0930701B09328\n:1002100008018091090190910A01A0910B01B09110\n:100220000C010196A11DB11D8093090190930A0153\n:10023000A0930B01B0930C01BF91AF919F918F914F\n:100240003F912F910F900FBE0F901F90189526E8A9\n:10025000230F0296A11DB11DD2CF3FB7F894809114\n:10026000090190910A01A0910B01B0910C0126B5F2\n:10027000A89B05C02F3F19F00196A11DB11D3FBFDE\n:10028000BA2FA92F982F8827BC01CD01620F711DAD\n:10029000811D911D42E0660F771F881F991F4A95A7\n:1002A000D1F708958F929F92AF92BF92CF92DF9233\n:1002B000EF92FF926B017C010E942D014B015C01CA\n:1002C000C114D104E104F104E9F00E94E2000E94AB\n:1002D0002D01681979098A099B09683E73408105D7\n:1002E000910570F321E0C21AD108E108F10888EE07\n:1002F000880E83E0981EA11CB11CC114D104E10436\n:10030000F10429F7FF90EF90DF90CF90BF90AF906E\n:100310009F908F900895789484B5826084BD84B551\n:10032000816084BD85B5826085BD85B5816085BDF0\n:10033000EEE6F0E0808181608083E1E8F0E0108209\n:10034000808182608083808181608083E0E8F0E04A\n:10035000808181608083E1EBF0E080818460808334\n:10036000E0EBF0E0808181608083EAE7F0E080816B\n:1003700084608083808182608083808181608083CB\n:100380008081806880831092C1000895833081F05D\n:1003900028F4813099F08230A9F008958730A9F0CF\n:1003A0008830C9F08430B1F4809180008F7D03C023\n:1003B000809180008F7780938000089584B58F7737\n:1003C00084BD089584B58F7DFBCF8091B0008F7779\n:1003D0008093B00008958091B0008F7DF9CFCF93C6\n:1003E000DF9390E0FC01E458FF4F249180579F4F2A\n:1003F000FC0184918823C9F090E0880F991FFC01CB\n:10040000E255FF4FA591B491FC01EC55FF4FC5910A\n:10041000D49161110DC09FB7F8948C9120958223DF\n:100420008C938881282328839FBFDF91CF910895E3\n:10043000623051F49FB7F8943C91822F80958323CA\n:100440008C93E8812E2BEFCF8FB7F894EC912E2B65\n:100450002C938FBFEACF1F93CF93DF93282F30E0E9\n:10046000F901E859FF4F8491F901E458FF4FD49105\n:10047000F901E057FF4FC491CC23A9F0162F811149\n:100480000E94C601EC2FF0E0EE0FFF1FEC55FF4F6E\n:10049000A591B4918FB7F894EC91111108C0D09543\n:1004A000DE23DC938FBFDF91CF911F910895DE2B68\n:1004B000F8CF08950E948B010E9459020E947B0090\n:1004C000C0E0D0E00E947F002097E1F30E9400008E\n:0604D000F9CFF894FFCF04\n:0404D60093009300FC\n:00000001FF\n", "code": "// Parpadeo: el \"hola mundo\" de Arduino\nvoid setup() {\n  pinMode(13, OUTPUT);\n}\n\nvoid loop() {\n  digitalWrite(13, HIGH);  // enciende\n  delay(1000);\n  digitalWrite(13, LOW);   // apaga\n  delay(1000);\n}\n"}, "semaforo": {"name": "Semáforo (D10–D12)", "hex": ":100000000C945C000C94AF000C94D6000C94790016\n:100010000C9479000C9479000C9479000C9479007C\n:100020000C9479000C9479000C9479000C9479006C\n:100030000C9479000C9479000C9479000C9479005C\n:100040000C94FE000C9479000C9479000C947900C7\n:100050000C9479000C9479000C9479000C9479003C\n:100060000C9479000C947900000000080002010053\n:100070000003040700000000000000000102040863\n:100080001020408001020408102001020408102002\n:10009000040404040404040402020202020203032E\n:1000A0000303030300000000250028002B000000CC\n:1000B0000000240027002A0011241FBECFEFD8E043\n:1000C000DEBFCDBF11E0A0E0B1E0ECE0F5E002C0A2\n:1000D00005900D92A430B107D9F721E0A4E0B1E07A\n:1000E00001C01D92AD30B207E1F70E9475020C9479\n:1000F00084020C94000061E08CE00E940A0261E03E\n:100100008BE00E940A0261E08AE00C940A021F93CD\n:10011000CF93DF93182FEB0161E00E944602BE01EE\n:10012000DD0F880B990B0E946D0160E0812FDF913C\n:10013000CF911F910C94460268EB7BE08AE090E03F\n:100140000E94870068EE73E08BE090E00E948700D9\n:1001500068EB7BE08CE090E00C94870008951F92A0\n:100160000F920FB60F9211242F933F934F935F93EB\n:100170006F937F938F939F93AF93BF93EF93FF936F\n:10018000E0910001F09101010995FF91EF91BF917C\n:10019000AF919F918F917F916F915F914F913F911F\n:1001A0002F910F900FBE0F901F9018951F920F92D6\n:1001B0000FB60F9211242F933F934F935F936F933A\n:1001C0007F938F939F93AF93BF93EF93FF93E091B0\n:1001D0000201F09103010995FF91EF91BF91AF9159\n:1001E0009F918F917F916F915F914F913F912F914F\n:1001F0000F900FBE0F901F90189508951F920F92A9\n:100200000FB60F9211242F933F938F939F93AF9329\n:10021000BF938091050190910601A0910701B091D3\n:1002200008013091040123E0230F2D3758F5019682\n:10023000A11DB11D20930401809305019093060137\n:10024000A0930701B09308018091090190910A01E0\n:10025000A0910B01B0910C010196A11DB11D8093DD\n:10026000090190930A01A0930B01B0930C01BF9177\n:10027000AF919F918F913F912F910F900FBE0F9053\n:100280001F90189526E8230F0296A11DB11DD2CF0D\n:100290003FB7F8948091090190910A01A0910B0158\n:1002A000B0910C0126B5A89B05C02F3F19F001960F\n:1002B000A11DB11D3FBFBA2FA92F982F8827BC01C0\n:1002C000CD01620F711D811D911D42E0660F771FE8\n:1002D000881F991F4A95D1F708958F929F92AF92E8\n:1002E000BF92CF92DF92EF92FF926B017C010E944E\n:1002F00048014B015C01C114D104E104F104E9F0AF\n:100300000E94FD000E944801681979098A099B0929\n:10031000683E73408105910570F321E0C21AD1084F\n:10032000E108F10888EE880E83E0981EA11CB11C3C\n:10033000C114D104E104F10429F7FF90EF90DF909C\n:10034000CF90BF90AF909F908F900895789484B590\n:10035000826084BD84B5816084BD85B5826085BDC1\n:1003600085B5816085BDEEE6F0E0808181608083A7\n:10037000E1E8F0E01082808182608083808181608A\n:100380008083E0E8F0E0808181608083E1EBF0E051\n:10039000808184608083E0EBF0E0808181608083F5\n:1003A000EAE7F0E0808184608083808182608083DE\n:1003B0008081816080838081806880831092C10009\n:1003C0000895833081F028F4813099F08230A9F0CB\n:1003D00008958730A9F08830C9F08430B1F4809155\n:1003E00080008F7D03C0809180008F778093800094\n:1003F000089584B58F7784BD089584B58F7DFBCF34\n:100400008091B0008F778093B00008958091B00004\n:100410008F7DF9CFCF93DF9390E0FC01E458FF4F3D\n:10042000249180579F4FFC0184918823C9F090E06C\n:10043000880F991FFC01E255FF4FA591B491FC0173\n:10044000EC55FF4FC591D49161110DC09FB7F89441\n:100450008C91209582238C938881282328839FBFA9\n:10046000DF91CF910895623051F49FB7F8943C9199\n:10047000822F809583238C93E8812E2BEFCF8FB72B\n:10048000F894EC912E2B2C938FBFEACF1F93CF9330\n:10049000DF93282F30E0F901E859FF4F8491F901EB\n:1004A000E458FF4FD491F901E057FF4FC491CC239A\n:1004B000A9F0162F81110E94E101EC2FF0E0EE0F60\n:1004C000FF1FEC55FF4FA591B4918FB7F894EC91B5\n:1004D000111108C0D095DE23DC938FBFDF91CF913F\n:1004E0001F910895DE2BF8CF08950E94A6010E9467\n:1004F00074020E947B00C0E0D0E00E949C00209724\n:0C050000E1F30E940000F9CFF894FFCF57\n:04050C00AE00AE008F\n:00000001FF\n", "code": "// Semáforo: rojo (12), ámbar (11), verde (10)\nconst int ROJO = 12, AMBAR = 11, VERDE = 10;\n\nvoid setup() {\n  pinMode(ROJO, OUTPUT);\n  pinMode(AMBAR, OUTPUT);\n  pinMode(VERDE, OUTPUT);\n}\n\nvoid luz(int pin, int ms) {\n  digitalWrite(pin, HIGH);\n  delay(ms);\n  digitalWrite(pin, LOW);\n}\n\nvoid loop() {\n  luz(VERDE, 3000);\n  luz(AMBAR, 1000);\n  luz(ROJO, 3000);\n}\n"}, "boton": {"name": "Pulsador (D2 → D13)", "hex": ":100000000C9461000C9493000C94BA000C947E0044\n:100010000C947E000C947E000C947E000C947E0068\n:100020000C947E000C947E000C947E000C947E0058\n:100030000C947E000C947E000C947E000C947E0048\n:100040000C94E1000C947E000C947E000C947E00D5\n:100050000C947E000C947E000C947E000C947E0028\n:100060000C947E000C947E00000000080002010049\n:100070000003040700000000000000000102040863\n:100080001020408001020408102001020408102002\n:10009000040404040404040402020202020203032E\n:1000A00003030303000000002300260029000000D2\n:1000B0000000250028002B0000000000240027007D\n:1000C0002A0011241FBECFEFD8E0DEBFCDBF11E064\n:1000D000A0E0B1E0E8E6F4E002C005900D92A430A3\n:1000E000B107D9F721E0A4E0B1E001C01D92AD3025\n:1000F000B207E1F70E9423020C9432020C94000034\n:1001000062E082E00E948F0161E08DE00C948F013B\n:1001100082E00E94F90161E0892B09F060E08DE046\n:100120000C94CB0108951F920F920FB60F921124D9\n:100130002F933F934F935F936F937F938F939F93EF\n:10014000AF93BF93EF93FF93E0910001F091010112\n:100150000995FF91EF91BF91AF919F918F917F9101\n:100160006F915F914F913F912F910F900FBE0F9024\n:100170001F9018951F920F920FB60F9211242F9374\n:100180003F934F935F936F937F938F939F93AF931F\n:10019000BF93EF93FF93E0910201F0910301099562\n:1001A000FF91EF91BF91AF919F918F917F916F914F\n:1001B0005F914F913F912F910F900FBE0F901F9025\n:1001C00018951F920F920FB60F9211242F933F9301\n:1001D0008F939F93AF93BF938091050190910601F8\n:1001E000A0910701B09108013091040123E0230F91\n:1001F0002D3758F50196A11DB11D20930401809360\n:10020000050190930601A0930701B0930801809126\n:10021000090190910A01A0910B01B0910C01019686\n:10022000A11DB11D8093090190930A01A0930B01B8\n:10023000B0930C01BF91AF919F918F913F912F91FE\n:100240000F900FBE0F901F90189526E8230F02966F\n:10025000A11DB11DD2CF789484B5826084BD84B5D0\n:10026000816084BD85B5826085BD85B5816085BDB1\n:10027000EEE6F0E0808181608083E1E8F0E01082CA\n:10028000808182608083808181608083E0E8F0E00B\n:10029000808181608083E1EBF0E0808184608083F5\n:1002A000E0EBF0E0808181608083EAE7F0E080812C\n:1002B000846080838081826080838081816080838C\n:1002C0008081806880831092C1000895833081F01E\n:1002D00028F4813099F08230A9F008958730A9F090\n:1002E0008830C9F08430B1F4809180008F7D03C0E4\n:1002F000809180008F7780938000089584B58F77F8\n:1003000084BD089584B58F7DFBCF8091B0008F7739\n:100310008093B00008958091B0008F7DF9CFCF9386\n:10032000DF9390E0FC01E458FF4F249180579F4FEA\n:10033000FC0184918823C9F090E0880F991FFC018B\n:10034000E854FF4FA591B491FC01E255FF4FC591D0\n:10035000D49161110DC09FB7F8948C9120958223A0\n:100360008C938881282328839FBFDF91CF910895A4\n:10037000623051F49FB7F8943C91822F809583238B\n:100380008C93E8812E2BEFCF8FB7F894EC912E2B26\n:100390002C938FBFEACF1F93CF93DF93282F30E0AA\n:1003A000F901E859FF4F8491F901E458FF4FD491C6\n:1003B000F901E057FF4FC491CC23A9F0162F81110A\n:1003C0000E946601EC2FF0E0EE0FFF1FE255FF4F99\n:1003D000A591B4918FB7F894EC91111108C0D09504\n:1003E000DE23DC938FBFDF91CF911F910895DE2B29\n:1003F000F8CFCF93DF93282F30E0F901E859FF4F72\n:100400008491F901E458FF4FD491F901E057FF4F6F\n:10041000C491CC23A1F081110E946601EC2FF0E081\n:10042000EE0FFF1FEC55FF4FA591B491EC91ED231A\n:1004300081E090E009F480E0DF91CF91089580E0C1\n:1004400090E0FACF08950E942B010E9422020E94A0\n:100450008000C0E0D0E00E9488002097E1F30E9475\n:080460000000F9CFF894FFCF72\n:04046800920092006C\n:00000001FF\n", "code": "// Pulsador en el pin 2 (con pull-up interna) controla el LED del 13\nvoid setup() {\n  pinMode(2, INPUT_PULLUP);\n  pinMode(13, OUTPUT);\n}\n\nvoid loop() {\n  // Con pull-up, el pin lee LOW cuando el botón está pulsado\n  if (digitalRead(2) == LOW) {\n    digitalWrite(13, HIGH);\n  } else {\n    digitalWrite(13, LOW);\n  }\n}\n"}, "fade": {"name": "Fundido PWM (D9)", "hex": ":100000000C945C000C94A7000C94CE000C94790026\n:100010000C9479000C9479000C9479000C9479007C\n:100020000C9479000C9479000C9479000C9479006C\n:100030000C9479000C9479000C9479000C9479005C\n:100040000C94F6000C9479000C9479000C947900CF\n:100050000C9479000C9479000C9479000C9479003C\n:100060000C9479000C947900000000080002010053\n:100070000003040700000000000000000102040863\n:100080001020408001020408102001020408102002\n:10009000040404040404040402020202020203032E\n:1000A0000303030300000000250028002B000000CC\n:1000B0000000240027002A0011241FBECFEFD8E043\n:1000C000DEBFCDBF11E0A0E0B1E0E6EBF5E002C09D\n:1000D00005900D92A430B107D9F721E0A4E0B1E07A\n:1000E00001C01D92AD30B207E1F70E94CA020C9424\n:1000F000D9020C94000061E089E00C945F02CF9378\n:10010000DF93D0E0C0E0BE0189E00E94D9016EE13A\n:1001100070E080E090E00E9465012596C43081E0A7\n:10012000D80789F7CFEFD0E0BE0189E00E94D9015E\n:100130006EE170E080E090E00E9465012597CB3F82\n:100140008FEFD80789F7DF91CF91089508951F9217\n:100150000F920FB60F9211242F933F934F935F93FB\n:100160006F937F938F939F93AF93BF93EF93FF937F\n:10017000E0910001F09101010995FF91EF91BF918C\n:10018000AF919F918F917F916F915F914F913F912F\n:100190002F910F900FBE0F901F9018951F920F92E6\n:1001A0000FB60F9211242F933F934F935F936F934A\n:1001B0007F938F939F93AF93BF93EF93FF93E091C0\n:1001C0000201F09103010995FF91EF91BF91AF9169\n:1001D0009F918F917F916F915F914F913F912F915F\n:1001E0000F900FBE0F901F90189508951F920F92B9\n:1001F0000FB60F9211242F933F938F939F93AF933A\n:10020000BF938091050190910601A0910701B091E3\n:1002100008013091040123E0230F2D3758F5019692\n:10022000A11DB11D20930401809305019093060147\n:10023000A0930701B09308018091090190910A01F0\n:10024000A0910B01B0910C010196A11DB11D8093ED\n:10025000090190930A01A0930B01B0930C01BF9187\n:10026000AF919F918F913F912F910F900FBE0F9063\n:100270001F90189526E8230F0296A11DB11DD2CF1D\n:100280003FB7F8948091090190910A01A0910B0168\n:10029000B0910C0126B5A89B05C02F3F19F001961F\n:1002A000A11DB11D3FBFBA2FA92F982F8827BC01D0\n:1002B000CD01620F711D811D911D42E0660F771FF8\n:1002C000881F991F4A95D1F708958F929F92AF92F8\n:1002D000BF92CF92DF92EF92FF926B017C010E945E\n:1002E00040014B015C01C114D104E104F104E9F0C7\n:1002F0000E94F5000E944001681979098A099B094A\n:10030000683E73408105910570F321E0C21AD1085F\n:10031000E108F10888EE880E83E0981EA11CB11C4C\n:10032000C114D104E104F10429F7FF90EF90DF90AC\n:10033000CF90BF90AF909F908F900895789484B5A0\n:10034000826084BD84B5816084BD85B5826085BDD1\n:1003500085B5816085BDEEE6F0E0808181608083B7\n:10036000E1E8F0E01082808182608083808181609A\n:100370008083E0E8F0E0808181608083E1EBF0E061\n:10038000808184608083E0EBF0E080818160808305\n:10039000EAE7F0E0808184608083808182608083EE\n:1003A0008081816080838081806880831092C10019\n:1003B00008951F93CF93DF93182FEB0161E00E9404\n:1003C0005F02209739F460E0812FDF91CF911F9178\n:1003D0000C949B02CF3FD10511F461E0F5CFE12FE2\n:1003E000F0E0E859FF4FE491E33031F140F4E130BF\n:1003F000B1F0E230E1F0C038D1057CF7E4CFE7306E\n:1004000029F1E83059F1E430B1F780918000806241\n:1004100080938000D0938B00C0938A0004C084B581\n:10042000806884BDC7BDDF91CF911F91089584B5C9\n:10043000806284BDC8BDF7CF8091800080688093C2\n:100440008000D0938900C0938800EDCF8091B000E8\n:1004500080688093B000C093B300E5CF8091B00076\n:1004600080628093B000C093B400DDCF833081F010\n:1004700028F4813099F08230A9F008958730A9F0EE\n:100480008830C9F08430B1F4809180008F7D03C042\n:10049000809180008F7780938000089584B58F7756\n:1004A00084BD089584B58F7DFBCF8091B0008F7798\n:1004B0008093B00008958091B0008F7DF9CFCF93E5\n:1004C000DF9390E0FC01E458FF4F249180579F4F49\n:1004D000FC0184918823C9F090E0880F991FFC01EA\n:1004E000E255FF4FA591B491FC01EC55FF4FC5912A\n:1004F000D49161110DC09FB7F8948C9120958223FF\n:100500008C938881282328839FBFDF91CF91089502\n:10051000623051F49FB7F8943C91822F80958323E9\n:100520008C93E8812E2BEFCF8FB7F894EC912E2B84\n:100530002C938FBFEACF1F93CF93DF93282F30E008\n:10054000F901E859FF4F8491F901E458FF4FD49124\n:10055000F901E057FF4FC491CC23A9F0162F811168\n:100560000E943602EC2FF0E0EE0FFF1FEC55FF4F1C\n:10057000A591B4918FB7F894EC91111108C0D09562\n:10058000DE23DC938FBFDF91CF911F910895DE2B87\n:10059000F8CF08950E949E010E94C9020E947B002C\n:1005A000C0E0D0E00E947F002097E1F30E940000AD\n:0605B000F9CFF894FFCF23\n:0405B600A600A600F5\n:00000001FF\n", "code": "// Fundido con PWM en el pin 9\nvoid setup() {\n  pinMode(9, OUTPUT);\n}\n\nvoid loop() {\n  for (int b = 0; b <= 255; b += 5) { analogWrite(9, b); delay(30); }\n  for (int b = 255; b >= 0; b -= 5) { analogWrite(9, b); delay(30); }\n}\n"}, "pot": {"name": "Potenciómetro (A0 → D9)", "hex": ":100000000C945C000C9493000C94BA000C9479004E\n:100010000C9479000C9479000C9479000C9479007C\n:100020000C9479000C9479000C9479000C9479006C\n:100030000C9479000C9479000C9479000C9479005C\n:100040000C94E2000C9479000C9479000C947900E3\n:100050000C9479000C9479000C9479000C9479003C\n:100060000C9479000C947900000000080002010053\n:100070000003040700000000000000000102040863\n:100080001020408001020408102001020408102002\n:10009000040404040404040402020202020203032E\n:1000A0000303030300000000250028002B000000CC\n:1000B0000000240027002A0011241FBECFEFD8E043\n:1000C000DEBFCDBF11E0A0E0B1E0E4ECF5E002C09E\n:1000D00005900D92A630B107D9F721E0A6E0B1E076\n:1000E00001C01D92AF30B207E1F70E94D1020C941B\n:1000F000E0020C94000061E089E00C9466028EE05E\n:100100000E94C50197FD0396BC017595679575958D\n:10011000679589E00E94E0016AE070E080E090E08D\n:100120000C94510108951F920F920FB60F92112453\n:100130002F933F934F935F936F937F938F939F93EF\n:10014000AF93BF93EF93FF93E0910001F091010112\n:100150000995FF91EF91BF91AF919F918F917F9101\n:100160006F915F914F913F912F910F900FBE0F9024\n:100170001F9018951F920F920FB60F9211242F9374\n:100180003F934F935F936F937F938F939F93AF931F\n:10019000BF93EF93FF93E0910201F0910301099562\n:1001A000FF91EF91BF91AF919F918F917F916F914F\n:1001B0005F914F913F912F910F900FBE0F901F9025\n:1001C000189508951F920F920FB60F9211242F9336\n:1001D0003F938F939F93AF93BF938091070190912B\n:1001E0000801A0910901B0910A013091060123E0B4\n:1001F000230F2D3758F50196A11DB11D209306013F\n:100200008093070190930801A0930901B0930A011C\n:1002100080910B0190910C01A0910D01B0910E0104\n:100220000196A11DB11D80930B0190930C01A09329\n:100230000D01B0930E01BF91AF919F918F913F91AE\n:100240002F910F900FBE0F901F90189526E8230F47\n:100250000296A11DB11DD2CF3FB7F89480910B013A\n:1002600090910C01A0910D01B0910E0126B5A89BB3\n:1002700005C02F3F19F00196A11DB11D3FBFBA2F38\n:10028000A92F982F8827BC01CD01620F711D811DF8\n:10029000911D42E0660F771F881F991F4A95D1F77D\n:1002A00008958F929F92AF92BF92CF92DF92EF927A\n:1002B000FF926B017C010E942C014B015C01C11477\n:1002C000D104E104F104E9F00E94E1000E942C0154\n:1002D000681979098A099B09683E7340810591056F\n:1002E00070F321E0C21AD108E108F10888EE880E07\n:1002F00083E0981EA11CB11CC114D104E104F104D7\n:1003000029F7FF90EF90DF90CF90BF90AF909F9034\n:100310008F900895789484B5826084BD84B581609F\n:1003200084BD85B5826085BD85B5816085BDEEE6FD\n:10033000F0E0808181608083E1E8F0E010828081DC\n:1003400082608083808181608083E0E8F0E080814A\n:1003500081608083E1EBF0E0808184608083E0EB6A\n:10036000F0E0808181608083EAE7F0E08081846052\n:1003700080838081826080838081816080838081AE\n:10038000806880831092C10008958E3008F08E50EE\n:100390002091040190E4299F900111248770822B01\n:1003A00080937C0080917A00806480937A008091B1\n:1003B0007A0086FDFCCF80917800909179000895B5\n:1003C0001F93CF93DF93182FEB0161E00E94660229\n:1003D000209739F460E0812FDF91CF911F910C9429\n:1003E000A202CF3FD10511F461E0F5CFE12FF0E09B\n:1003F000E859FF4FE491E33031F140F4E130B1F0DE\n:10040000E230E1F0C038D1057CF7E4CFE73029F1E4\n:10041000E83059F1E430B1F7809180008062809338\n:100420008000D0938B00C0938A0004C084B580689C\n:1004300084BDC7BDDF91CF911F91089584B58062BF\n:1004400084BDC8BDF7CF8091800080688093800014\n:10045000D0938900C0938800EDCF8091B000806870\n:100460008093B000C093B300E5CF8091B00080626C\n:100470008093B000C093B400DDCF833081F028F4C6\n:10048000813099F08230A9F008958730A9F0883042\n:10049000C9F08430B1F4809180008F7D03C08091D9\n:1004A00080008F7780938000089584B58F7784BD16\n:1004B000089584B58F7DFBCF8091B0008F778093B6\n:1004C000B00008958091B0008F7DF9CFCF93DF9376\n:1004D00090E0FC01E458FF4F249180579F4FFC01AE\n:1004E00084918823C9F090E0880F991FFC01E255A0\n:1004F000FF4FA591B491FC01EC55FF4FC591D491EC\n:1005000061110DC09FB7F8948C91209582238C9334\n:100510008881282328839FBFDF91CF91089562307F\n:1005200051F49FB7F8943C91822F809583238C934C\n:10053000E8812E2BEFCF8FB7F894EC912E2B2C93D4\n:100540008FBFEACF1F93CF93DF93282F30E0F901BD\n:10055000E859FF4F8491F901E458FF4FD491F90114\n:10056000E057FF4FC491CC23A9F0162F81110E94B0\n:100570003D02EC2FF0E0EE0FFF1FEC55FF4FA59171\n:10058000B4918FB7F894EC91111108C0D095DE2387\n:10059000DC938FBFDF91CF911F910895DE2BF8CFB1\n:1005A00008950E948A010E94D0020E947B00C0E050\n:1005B000D0E00E947F002097E1F30E940000F9CF75\n:0405C000F894FFCFDD\n:0605C4009200920001000C\n:00000001FF\n", "code": "// El potenciómetro en A0 regula el brillo del LED en el pin 9\nvoid setup() {\n  pinMode(9, OUTPUT);\n}\n\nvoid loop() {\n  int lectura = analogRead(A0);      // 0..1023\n  analogWrite(9, lectura / 4);       // 0..255\n  delay(10);\n}\n"}, "coche": {"name": "Barrido con botón (D8–D12, D2)", "hex": ":100000000C9461000C94BB000C94E2000C947E00F4\n:100010000C947E000C947E000C947E000C947E0068\n:100020000C947E000C947E000C947E000C947E0058\n:100030000C947E000C947E000C947E000C947E0048\n:100040000C940A010C947E000C947E000C947E00AB\n:100050000C947E000C947E000C947E000C947E0028\n:100060000C947E000C947E00000000080002010049\n:100070000003040700000000000000000102040863\n:100080001020408001020408102001020408102002\n:10009000040404040404040402020202020203032E\n:1000A00003030303000000002300260029000000D2\n:1000B0000000250028002B0000000000240027007D\n:1000C0002A0011241FBECFEFD8E0DEBFCDBF11E064\n:1000D000A0E0B1E0E6E7F5E002C005900D92A430A3\n:1000E000B107D9F721E0A4E0B1E001C01D92AD3025\n:1000F000B207E1F70E94AA020C94B9020C94000026\n:10010000CF93C8E061E08C2F0E941602CF5FCD3004\n:10011000C9F762E082E0CF910C941602CF9382E09F\n:100120000E948002019721F1C8E061E08C2F0E94BB\n:10013000520268E770E080E090E00E94790160E0A0\n:100140008C2F0E945202CF5FCD3079F7CBE061E077\n:100150008C2F0E94520268E770E080E090E00E94DD\n:10016000790160E08C2F0E945202C150C83079F7AB\n:10017000CF91089508951F920F920FB60F921124F8\n:100180002F933F934F935F936F937F938F939F939F\n:10019000AF93BF93EF93FF93E0910001F0910101C2\n:1001A0000995FF91EF91BF91AF919F918F917F91B1\n:1001B0006F915F914F913F912F910F900FBE0F90D4\n:1001C0001F9018951F920F920FB60F9211242F9324\n:1001D0003F934F935F936F937F938F939F93AF93CF\n:1001E000BF93EF93FF93E0910201F0910301099512\n:1001F000FF91EF91BF91AF919F918F917F916F91FF\n:100200005F914F913F912F910F900FBE0F901F90D4\n:10021000189508951F920F920FB60F9211242F93E5\n:100220003F938F939F93AF93BF93809105019091DC\n:100230000601A0910701B09108013091040123E06B\n:10024000230F2D3758F50196A11DB11D20930401F0\n:100250008093050190930601A0930701B0930801D4\n:100260008091090190910A01A0910B01B0910C01BC\n:100270000196A11DB11D8093090190930A01A093DD\n:100280000B01B0930C01BF91AF919F918F913F9162\n:100290002F910F900FBE0F901F90189526E8230FF7\n:1002A0000296A11DB11DD2CF3FB7F89480910901EC\n:1002B00090910A01A0910B01B0910C0126B5A89B69\n:1002C00005C02F3F19F00196A11DB11D3FBFBA2FE8\n:1002D000A92F982F8827BC01CD01620F711D811DA8\n:1002E000911D42E0660F771F881F991F4A95D1F72D\n:1002F00008958F929F92AF92BF92CF92DF92EF922A\n:10030000FF926B017C010E9454014B015C01C114FE\n:10031000D104E104F104E9F00E9409010E945401B2\n:10032000681979098A099B09683E7340810591051E\n:1003300070F321E0C21AD108E108F10888EE880EB6\n:1003400083E0981EA11CB11CC114D104E104F10486\n:1003500029F7FF90EF90DF90CF90BF90AF909F90E4\n:100360008F900895789484B5826084BD84B581604F\n:1003700084BD85B5826085BD85B5816085BDEEE6AD\n:10038000F0E0808181608083E1E8F0E0108280818C\n:1003900082608083808181608083E0E8F0E08081FA\n:1003A00081608083E1EBF0E0808184608083E0EB1A\n:1003B000F0E0808181608083EAE7F0E08081846002\n:1003C000808380818260808380818160808380815E\n:1003D000806880831092C1000895833081F028F4F2\n:1003E000813099F08230A9F008958730A9F08830E3\n:1003F000C9F08430B1F4809180008F7D03C080917A\n:1004000080008F7780938000089584B58F7784BDB6\n:10041000089584B58F7DFBCF8091B0008F77809356\n:10042000B00008958091B0008F7DF9CFCF93DF9316\n:1004300090E0FC01E458FF4F249180579F4FFC014E\n:1004400084918823C9F090E0880F991FFC01E8543B\n:10045000FF4FA591B491FC01E255FF4FC591D49196\n:1004600061110DC09FB7F8948C91209582238C93D5\n:100470008881282328839FBFDF91CF910895623020\n:1004800051F49FB7F8943C91822F809583238C93ED\n:10049000E8812E2BEFCF8FB7F894EC912E2B2C9375\n:1004A0008FBFEACF1F93CF93DF93282F30E0F9015E\n:1004B000E859FF4F8491F901E458FF4FD491F901B5\n:1004C000E057FF4FC491CC23A9F0162F81110E9451\n:1004D000ED01EC2FF0E0EE0FFF1FE255FF4FA5916D\n:1004E000B4918FB7F894EC91111108C0D095DE2328\n:1004F000DC938FBFDF91CF911F910895DE2BF8CF52\n:10050000CF93DF93282F30E0F901E859FF4F849112\n:10051000F901E458FF4FD491F901E057FF4FC4911E\n:10052000CC23A1F081110E94ED01EC2FF0E0EE0F41\n:10053000FF1FEC55FF4FA591B491EC91ED2381E0A5\n:1005400090E009F480E0DF91CF91089580E090E0A1\n:10055000FACF08950E94B2010E94A9020E94800071\n:10056000C0E0D0E00E948E002097E1F30E940000DE\n:06057000F9CFF894FFCF63\n:04057600BA00BA000D\n:00000001FF\n", "code": "// Barrido de luces (pines 8 a 12) que se activa con el botón del pin 2\nvoid setup() {\n  for (int p = 8; p <= 12; p++) pinMode(p, OUTPUT);\n  pinMode(2, INPUT_PULLUP);\n}\n\nvoid loop() {\n  if (digitalRead(2) == HIGH) return;   // espera al botón\n  for (int p = 8; p <= 12; p++) { digitalWrite(p, HIGH); delay(120); digitalWrite(p, LOW); }\n  for (int p = 11; p >= 9; p--) { digitalWrite(p, HIGH); delay(120); digitalWrite(p, LOW); }\n}\n"}};
 
 ;
-/* Voltio · programas para el ESP32. El ESP32 no se emula instrucción a instrucción
+/* Ledly · programas para el ESP32. El ESP32 no se emula instrucción a instrucción
    (es un chip Xtensa de 240 MHz): cada programa se ejecuta como un modelo de su
    comportamiento con la misma lógica que el código que se muestra. */
 const ESP_SKETCHES = {
@@ -1099,7 +1167,7 @@ void loop() {
 };
 
 ;
-/* Voltio · vista 3D del montaje (three.js r128, cargado bajo demanda) */
+/* Ledly · vista 3D del montaje (three.js r128, cargado bajo demanda) */
 const View3D = (() => {
   let loading = null;
   function loadThree() {
@@ -1260,7 +1328,7 @@ const View3D = (() => {
 })();
 
 ;
-/* Voltio · simulador de protoboard */
+/* Ledly · simulador de protoboard */
 const Sim = (() => {
   const P = 20, COLS = 24, X0 = 30;
   const ROWS = ['+', '−', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', '+', '−'];
@@ -1930,7 +1998,7 @@ const Sim = (() => {
 })();
 
 ;
-/* Voltio · rutado de PCB a una cara: une cada par de pads sin cruzar pistas */
+/* Ledly · rutado de PCB a una cara: une cada par de pads sin cruzar pistas */
 const Route = (() => {
   const NETC = { VCC: '#E5484D', GND: '#3E8FCB', LED: '#F2A900', SW: '#2EA44F', OUT: '#9B59D0', CLK: '#F07D10' };
   const LEVELS = {
@@ -1988,7 +2056,7 @@ const Route = (() => {
 })();
 
 ;
-/* Voltio · efectos: sonidos sintetizados (sin archivos), partículas, confeti y pequeñas
+/* Ledly · efectos: sonidos sintetizados (sin archivos), partículas, confeti y pequeñas
    animaciones. Todo respeta prefers-reduced-motion y los interruptores de Perfil. */
 const Fx = (() => {
   let ac = null, master = null, on = true;
@@ -2147,7 +2215,7 @@ const Mascot = (() => {
 })();
 
 ;
-/* Voltio · ejercicios interactivos.
+/* Ledly · ejercicios interactivos.
    Cada widget: render(ex, el, ctx) → { check(): {ok, right?, msg?}, destroy?() }
    ctx.ready(bool) activa el botón Comprobar; ctx.done(result) para widgets que se corrigen solos. */
 const Widgets = (() => {
@@ -2640,6 +2708,73 @@ const Widgets = (() => {
     el.querySelectorAll('.opt').forEach(b => b.addEventListener('click', () => { el.querySelectorAll('.opt').forEach(x => x.setAttribute('aria-pressed', 'false')); b.setAttribute('aria-pressed', 'true'); sel = +b.dataset.i; ctx.ready(true); sfx('select'); }));
     return { check: () => ({ ok: sel === ex.a, right: 'el esquema marcado' }), lock: () => el.querySelectorAll('.opt').forEach(b => { b.disabled = true; if (+b.dataset.i === ex.a) b.classList.add('right'); else if (+b.dataset.i === sel) b.classList.add('wrong'); }) };
   }
+  /* ============ CALCULADORA ============ */
+  /* Debajo de las preguntas numéricas: para no tener que salir a la calculadora del móvil.
+     Entiende coma decimal, prefijos (p n µ m k M G: 4,7k = 4700), notación E (2,2E-6), paréntesis,
+     raíz, cuadrado, potencias (^) y π. No usa eval: tiene su propio analizador. */
+  const PREFIX = { p: 1e-12, n: 1e-9, 'µ': 1e-6, u: 1e-6, m: 1e-3, k: 1e3, M: 1e6, G: 1e9 };
+  function calcEval(src) {
+    const s = String(src).replace(/\s/g, '').replace(/×/g, '*').replace(/÷/g, '/').replace(/−/g, '-').replace(/,/g, '.');
+    let i = 0;
+    const peek = () => s[i], eat = c => { if (s[i] === c) { i++; return true; } return false; };
+    function number() {
+      const m = /^(\d+\.?\d*|\.\d+)(E[-+]?\d+)?/.exec(s.slice(i)); if (!m) throw 0;
+      i += m[0].length; let v = parseFloat(m[1]) * (m[2] ? Math.pow(10, +m[2].slice(1)) : 1);
+      if (PREFIX[s[i]] != null && !/[a-zA-Zµ]/.test(s[i + 1] || '')) v *= PREFIX[s[i++]];
+      return v;
+    }
+    function primary() {
+      if (eat('(')) { const v = expr(); eat(')'); return v; }
+      if (eat('π')) return Math.PI;
+      return number();
+    }
+    function postfix() { let v = primary(); for (;;) { if (eat('²')) v = v * v; else if (eat('^')) v = Math.pow(v, unary()); else return v; } }
+    function unary() { if (eat('-')) return -unary(); if (eat('+')) return unary(); if (eat('√')) return Math.sqrt(unary()); return postfix(); }
+    function term() { let v = unary(); for (;;) { if (eat('*')) v *= unary(); else if (eat('/')) v /= unary(); else if (peek() === '(' || peek() === 'π' || peek() === '√') v *= unary(); else return v; } }
+    function expr() { let v = term(); for (;;) { if (eat('+')) v += term(); else if (eat('-')) v -= term(); else return v; } }
+    const v = expr(); if (i < s.length || !isFinite(v)) throw 0; return v;
+  }
+  const SUPN = n => String(n).replace(/-/g, '⁻').replace(/\d/g, d => '⁰¹²³⁴⁵⁶⁷⁸⁹'[d]);
+  function calcFmt(v) {
+    if (v === 0) return '0';
+    const a = Math.abs(v);
+    if (a >= 1e-3 && a < 1e9) return String(+v.toPrecision(7)).replace('.', ',');
+    const e = Math.floor(Math.log10(a)); return String(+(v / 10 ** e).toPrecision(5)).replace('.', ',') + ' × 10' + SUPN(e);
+  }
+  const plain = v => String(+v.toPrecision(7)).replace('.', ',');
+  function calcPad(onUse) {
+    const box = document.createElement('div'); box.className = 'calc';
+    let open = true; try { open = localStorage.getItem('voltio-calc') !== '0'; } catch (e) { }
+    const KEYS = [['C', 'clr'], ['(', ''], [')', ''], ['⌫', 'del'], ['÷', 'op'],
+      ['7', 'n'], ['8', 'n'], ['9', 'n'], ['√', 'fn'], ['×', 'op'],
+      ['4', 'n'], ['5', 'n'], ['6', 'n'], ['x²', 'fn'], ['−', 'op'],
+      ['1', 'n'], ['2', 'n'], ['3', 'n'], ['π', 'fn'], ['+', 'op'],
+      ['0', 'n'], [',', 'n'], ['E', 'fn'], ['^', 'fn'], ['=', 'eq'],
+      ['n', 'pre'], ['µ', 'pre'], ['m', 'pre'], ['k', 'pre'], ['M', 'pre']];
+    box.innerHTML = `<button type="button" class="ctog" aria-expanded="${open}"><svg viewBox="0 0 24 24" width="18" height="18"><rect x="5" y="2" width="14" height="20" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 6h8M8 11h2M12 11h2M16 11h0M8 15h2M12 15h2M8 19h2M12 19h2M16 15v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>Calculadora</button>
+      <div class="cbody" ${open ? '' : 'hidden'}><div class="cdisp"><span class="cexpr"></span><b class="cres">0</b></div>
+      <div class="ckeys">${KEYS.map(([k, t]) => `<button type="button" class="ck ${t}" data-k="${k}">${k}</button>`).join('')}</div>
+      <button type="button" class="cuse" disabled>Usar como respuesta</button></div>`;
+    let ex = '', last = null;
+    const exE = box.querySelector('.cexpr'), resE = box.querySelector('.cres'), use = box.querySelector('.cuse');
+    const show = () => {
+      exE.textContent = ex.replace(/\*/g, '×').replace(/E/g, '·10^');
+      let v = null; try { if (ex) v = calcEval(ex); } catch (e) { }
+      last = v; resE.textContent = v == null ? (ex ? '…' : '0') : '= ' + calcFmt(v); resE.classList.toggle('dim', v == null);
+      use.disabled = v == null;
+    };
+    box.querySelector('.ctog').addEventListener('click', () => { open = !open; box.querySelector('.cbody').hidden = !open; box.querySelector('.ctog').setAttribute('aria-expanded', open); try { localStorage.setItem('voltio-calc', open ? '1' : '0'); } catch (e) { } sfx('tap'); });
+    box.querySelector('.ckeys').addEventListener('click', e => {
+      const b = e.target.closest('[data-k]'); if (!b) return; const k = b.dataset.k;
+      if (k === 'C') ex = ''; else if (k === '⌫') ex = ex.slice(0, -1);
+      else if (k === '=') { if (last != null) ex = plain(last).replace('-', '−'); }
+      else if (k === 'x²') ex += '²'; else if (k === '√') ex += '√'; else ex += k;
+      sfx('tick'); show();
+    });
+    use.addEventListener('click', () => { if (last == null) return; onUse(plain(last)); sfx('select'); Fx && Fx.anim && Fx.anim(use, 'pop'); });
+    show();
+    return box;
+  }
   function numw(ex, el, ctx) {
     el.innerHTML = `${ex.code ? `<pre class="code">${esc(ex.code)}</pre>` : ''}${ex.sch ? `<div class="schbox">${Schem.draw(SCH[ex.sch])}</div>` : ''}<label class="numin"><button type="button" class="pm" aria-label="Cambiar el signo">±</button><input inputmode="decimal" autocomplete="off" placeholder="Tu respuesta" aria-label="Respuesta en ${ex.u}"><span>${ex.u}</span></label>`;
     const inp = el.querySelector('input');
@@ -2648,8 +2783,10 @@ const Widgets = (() => {
     const parse = s => { s = String(s).trim().replace(/\s/g, '').replace('−', '-').replace(',', '.').replace(/[^\d.\-]/g, ''); return s === '' || s === '-' ? NaN : Number(s); };
     inp.addEventListener('input', () => ctx.ready(!isNaN(parse(inp.value))));
     inp.addEventListener('keydown', e => { if (e.key === 'Enter') ctx.submit(); });
-    setTimeout(() => inp.focus(), 50);
-    return { check: () => { const v = parse(inp.value), tol = ex.tol ?? Math.max(Math.abs(ex.a) * 0.01, 1e-9); return { ok: Math.abs(v - ex.a) <= tol, right: num(ex.a, 3) + ' ' + ex.u }; }, lock: () => inp.disabled = true };
+    // Calculadora debajo; en el móvil no se abre el teclado solo, para que se vea la calculadora.
+    el.appendChild(calcPad(v => { inp.value = v; inp.dispatchEvent(new Event('input')); }));
+    try { if (!matchMedia('(pointer: coarse)').matches) setTimeout(() => inp.focus(), 50); } catch (e) { }
+    return { check: () => { const v = parse(inp.value), tol = ex.tol ?? Math.max(Math.abs(ex.a) * 0.01, 1e-9); return { ok: Math.abs(v - ex.a) <= tol, right: num(ex.a, 3) + ' ' + ex.u }; }, lock: () => { inp.disabled = true; el.querySelectorAll('.calc button').forEach(x => x.disabled = true); } };
   }
   function resw(ex, el, ctx) { // leer bandas
     const bandsArr = ex.bands;
@@ -2859,11 +2996,11 @@ const Widgets = (() => {
   const UNGRADED = new Set(['info', 'explore', 'steps']);
   // Utilidades de dibujo para que las especialidades añadan sus propias visualizaciones (Object.assign(Widgets.VIZ, …)).
   const H = { esc, num, fR, fI, fV, st, batt, resBody, ledBulb, npnSym, flowPath, stackBar, hbar, heat, BANDHEX };
-  return { render, KIND, UNGRADED, SCENES, VIZ, IMG, H };
+  return { render, KIND, UNGRADED, SCENES, VIZ, IMG, H, calcEval };
 })();
 
 ;
-/* Voltio · cada concepto tiene varias formas de explicarse.
+/* Ledly · cada concepto tiene varias formas de explicarse.
    Si fallas un ejercicio, aparece la siguiente explicación y una pregunta para comprobarla. */
 const mcq = (q, o, e, x = {}) => ({ t: 'mc', q, o, a: 0, e, ...x });
 const CONCEPTS = {
@@ -3597,7 +3734,7 @@ const CONCEPTS = {
 };
 
 ;
-/* Voltio · generadores de ejercicios. Cada uno devuelve un ejercicio nuevo
+/* Ledly · generadores de ejercicios. Cada uno devuelve un ejercicio nuevo
    (mc o num) con valores distintos y distractores sacados de errores típicos. */
 const Gen = (() => {
   const pick = a => a[Math.floor(Math.random() * a.length)];
@@ -3815,7 +3952,7 @@ const Gen = (() => {
 })();
 
 ;
-/* Voltio · temario. Orden inspirado en Getting Started in Electronics (Mims),
+/* Ledly · temario. Orden inspirado en Getting Started in Electronics (Mims),
    profundidad de The Art of Electronics e ideas prácticas de Make: Electronics.
    Todo el texto y los ejercicios son originales. */
 const I = (text, x = {}) => ({ t: 'info', text, ...x });
@@ -3840,7 +3977,7 @@ const UNITS = [];
 const TRACKS = [];
 
 ;
-/* Voltio · curso base, módulo 0: Números para electrónica.
+/* Ledly · curso base, módulo 0: Números para electrónica.
    Sin ninguna unidad eléctrica: solo metros, gramos, segundos, litros y bytes.
    a1 enseña potencias de 10 y notación científica · a2 los prefijos (p…G) · a7 notación de ingeniería y cifras significativas. */
 (() => {
@@ -4114,7 +4251,7 @@ const TRACKS = [];
 })();
 
 ;
-/* Voltio · curso base, módulo 1: Qué es la electricidad.
+/* Ledly · curso base, módulo 1: Qué es la electricidad.
    b1 carga · b2 materiales · b3 corriente (A, mA, I = Q/t) · b4 tensión (V, masa, pilas en serie) ·
    b9 energía (J, W = Q·V, mAh, Wh) · b5 resistencia (Ω, R = ρ·L/S) · b7 pilas y fuentes (resistencia interna cualitativa).
    Aquí aún no hay ley de Ohm, ni potencia, ni LED, ni esquemas. */
@@ -4391,6 +4528,7 @@ const TRACKS = [];
   Object.assign(C, {
     ba_cellsum: { name: 'Pilas en serie', alts: [
       { title: 'Escalones que se apilan', text: 'Unir pilas en serie (el + de una con el − de la siguiente) es apilar escalones: las tensiones se suman. Tres pilas de 1,5 V dan 4,5 V. Si una va del revés, en vez de subir un escalón lo baja: se resta.', svg: S.stack, q: mcq('Tres pilas de 1,5 V en serie, una de ellas del revés. ¿Tensión total?', ['1,5 V', '4,5 V', '3 V', '0 V'], '1,5 + 1,5 − 1,5.') },
+      { title: 'El error típico', text: '5 pilas de 1,5 V con una del revés: mucha gente suma las 5 (7,5 V) y luego resta 1,5 V, y le sale 6 V. Pero la del revés nunca estuvo sumando: <b>4 empujan a favor</b> (6 V) y <b>1 empuja en contra</b> (−1,5 V) → <b>4,5 V</b>. Cada pila del revés anula a una buena: es como tener 3 pilas bien puestas.', svg: S.stack, q: mcq('6 pilas de 1,5 V en serie, una de ellas del revés. ¿Tensión total?', ['6 V', '7,5 V', '9 V', '4,5 V'], '5 a favor (7,5 V) y 1 en contra (−1,5 V): 6 V. Equivale a 4 pilas bien puestas.') },
       { title: 'Móntalas', text: 'Añade pilas y gira alguna. Cada pila bien puesta sube un escalón; cada una del revés lo baja.', tune: { viz: 'cells', params: { n: { label: 'Pilas', val: 3, min: 1, max: 6, step: 1, dec: 0 }, v: { val: 1.5, list: [1.5, 3.7], fixed: true }, rev: { label: 'Del revés (0 o 1)', val: 0, list: [0, 1], dec: 0 }, load: { val: 0, list: [0, 1], fixed: true } } }, q: mcq('Dos celdas de litio de 3,7 V en serie dan…', ['7,4 V', '3,7 V', '0 V', '1,85 V'], 'Se suman.') }
     ] }
   });
@@ -4453,8 +4591,11 @@ const TRACKS = [];
     return { ...pick(cases)(), h: 'Entre A, mA y µA hay saltos de 1000: prefijo más pequeño, número más grande.' };
   }, 'ba_ampconv');
   Gen.add('cellsSeries', () => {
-    const v = pick([1.5, 1.5, 3.7]), n = ri(2, 6), r = Math.random() < 0.4 ? ri(1, Math.floor(n / 2)) : 0, V = (n - 2 * r) * v;
-    return { ...N(`${n} pilas de ${fmt(v)} V en serie${r ? `, ${r === 1 ? 'una' : r} de ellas del revés` : ', todas bien puestas'}. ¿Tensión total?`, V, 'V', r ? `Las ${n - r} bien puestas suman ${fmt((n - r) * v)} V y las ${r} del revés restan ${fmt(r * v)} V: ${fmt(V)} V.` : `${n} × ${fmt(v)} = ${fmt(V)} V.`), h: 'Suma las que van bien y resta las que van del revés.' };
+    const v = pick([1.5, 1.5, 3.7]), n = ri(2, 6), r = Math.random() < 0.4 ? ri(1, Math.floor(n / 2)) : 0, V = (n - 2 * r) * v, g = n - r;
+    // La explicación ataca el error típico: creer que la del revés solo «no suma» o restarla a la suma de todas.
+    const e = r ? `De las ${n} pilas, ${g} empuja${g === 1 ? '' : 'n'} a favor (${g} × ${fmt(v)} = ${fmt(g * v)} V) y ${r === 1 ? 'una empuja' : r + ' empujan'} en contra (−${fmt(r * v)} V): ${fmt(g * v)} − ${fmt(r * v)} = ${fmt(V)} V. Ojo: la del revés no suma primero para luego restar; resta desde el principio. Por eso cada una del revés «anula» a una buena.`
+      : `${n} × ${fmt(v)} = ${fmt(V)} V.`;
+    return { ...N(`${n} pilas de ${fmt(v)} V en serie${r ? `, ${r === 1 ? 'una' : r} de ellas del revés` : ', todas bien puestas'}. ¿Tensión total?`, V, 'V', e), h: r ? 'Cuenta cuántas empujan a favor y cuántas en contra. Las del revés no forman parte de la suma: restan.' : 'En serie, las tensiones se suman.' };
   }, 'ba_cellsum');
   Gen.add('whBatt', () => {
     const mAh = pick([500, 1000, 2000, 2500, 3000, 5000, 10000]), V = pick([3.7, 7.4, 12, 1.2]), Wh = mAh / 1000 * V;
@@ -4673,7 +4814,7 @@ const TRACKS = [];
 })();
 
 ;
-/* Voltio · curso base, módulo 1b: Tu primer circuito.
+/* Ledly · curso base, módulo 1b: Tu primer circuito.
    b20 las piezas (LED, interruptor, pulsador, resistencia como pieza) · e1 símbolos · b6 abierto, cerrado y
    cortocircuito · e3 leer esquemas (uniones y cruces) · e4 convenciones (masa, etiquetas) · e5 protoboard ·
    e6 del esquema a la protoboard. Todavía sin ley de Ohm ni cálculo de la resistencia del LED. */
@@ -5090,7 +5231,7 @@ const TRACKS = [];
 })();
 
 ;
-/* Voltio · curso base, módulo 2: Ley de Ohm y potencia.
+/* Ledly · curso base, módulo 2: Ley de Ohm y potencia.
    a4 proporciones y porcentajes · c1 ley de Ohm (intuición) · a3 despejar · c2 calcular con Ohm · a6 estimar ·
    c3 gráficas V–I · c4 potencia · c5 potencia de una resistencia · b8 seguridad · c6 energía y consumo · a8 unidades.
    Aquí aún no hay circuitos en serie ni en paralelo, ni tolerancias, ni condensadores. */
@@ -5642,7 +5783,7 @@ const TRACKS = [];
 })();
 
 ;
-/* Voltio · curso base, módulo 4: Serie y paralelo.
+/* Ledly · curso base, módulo 4: Serie y paralelo.
    Enseña: serie (d1), ley de mallas (d5), resistencia de un LED (d20), resistencias reales: E12, colores y SMD (g1),
    tolerancia (d21), inversos y fórmula del paralelo (a5), paralelo (d2), ley de nudos (d4), mixtos y divisor de
    corriente (d3), divisor de tensión y su carga (d6), potenciómetros y sensores resistivos (g2).
@@ -6311,7 +6452,7 @@ const TRACKS = [];
 })();
 
 ;
-/* Voltio · curso base, módulo 5: El banco de trabajo: medir y soldar.
+/* Ledly · curso base, módulo 5: El banco de trabajo: medir y soldar.
    Enseña: el multímetro (partes y rangos f1, tensión f2, corriente f3, resistencia y continuidad f4, errores y
    exactitud f5, autorrango f6), la fuente de laboratorio CV/CC (f10) y soldar componentes de inserción (q6).
    Usa: serie, paralelo, Kirchhoff, divisor, tolerancia y colores (m3), Ohm y potencia (m2), protoboard (e5, e6).
@@ -6801,7 +6942,7 @@ const TRACKS = [];
 })();
 
 ;
-/* Voltio · curso base, módulo 6: Análisis de circuitos
+/* Ledly · curso base, módulo 6: Análisis de circuitos
    Lote 3. VIZ propias: nodal, thevenin, norton, maxPower, bridge. Generadores m5_*.
    Los conceptos de este módulo solo los usa este módulo: aquí se amplían o se crean. */
 (() => {
@@ -7210,7 +7351,7 @@ const TRACKS = [];
 })();
 
 ;
-/* Voltio · curso base, módulo 7: Condensadores y bobinas
+/* Ledly · curso base, módulo 7: Condensadores y bobinas
    Lote 3. VIZ propias: symLive, capQ, capLife, capComb, expCurve, coilKick, vldi (rc y rlCurrent ya existen).
    Generadores m6_*. Los conceptos que solo usa este módulo se amplían aquí; los compartidos no se tocan. */
 (() => {
@@ -7755,7 +7896,7 @@ const TRACKS = [];
 })();
 
 ;
-/* Voltio · curso base, módulo 8: Corriente alterna
+/* Ledly · curso base, módulo 8: Corriente alterna
    Lote 3. VIZ propias: sine, duty, scope, rms, xc, logAxis, db, rcFilter (scopeTrigger ya existe).
    Generadores m7_*. Los conceptos que solo usa este módulo se amplían o se crean aquí. */
 (() => {
@@ -8266,7 +8407,7 @@ const TRACKS = [];
 })();
 
 ;
-/* Voltio · curso base, módulo 9: Alterna a fondo
+/* Ledly · curso base, módulo 9: Alterna a fondo
    Lote 3. VIZ propias: xl, phasor, probeComp, riseTime, filter2, pfTriangle, xfmr (zTriangle y lcResonance ya existen).
    Generadores m7b_*. Los conceptos que solo usa este módulo se amplían o se crean aquí. */
 (() => {
@@ -8705,7 +8846,7 @@ const TRACKS = [];
 })();
 
 ;
-/* Voltio · curso base, módulo 10: Semiconductores y diodos.
+/* Ledly · curso base, módulo 10: Semiconductores y diodos.
    Orden: unión PN (i1) → diodo (i2) → hoja de datos (k2) → curva y modelos (i8) → tipos de diodo (i9)
    → rectificadores (i3) → filtrado y rizado (i4) → zener (i5) → recortadores y multiplicadores (i10) → LEDs a fondo (i6).
    Aquí aún NO se han visto transistores (m9), chips ni el 555 (m10), operacionales, reguladores ni microcontroladores. */
@@ -9412,7 +9553,7 @@ const TRACKS = [];
 })();
 
 ;
-/* Voltio · curso base, módulo 11: Transistores.
+/* Ledly · curso base, módulo 11: Transistores.
    Orden: BJT (j1) → zonas (j2) → resistencia de base (j3) → optoacopladores (i7) → Darlington y PNP (j4)
    → MOSFET (j6, j8) → carga de puerta y lado alto (j9) → calor (j10) → cargas inductivas y puente H (j7)
    → fuentes de corriente (j11) → amplificar (j5) → polarizar (j12).
@@ -10117,7 +10258,7 @@ const TRACKS = [];
 })();
 
 ;
-/* Voltio · curso base, módulo 12: Circuitos integrados y el 555.
+/* Ledly · curso base, módulo 12: Circuitos integrados y el 555.
    Orden: qué es un integrado (k1) → alimentación y desacoplo (k3) → pull-up y pull-down (k20)
    → 555 astable (k4) → 555 monoestable (k5) → trucos del 555 (k15).
    Aquí aún NO se han visto operacionales ni comparadores como lección (k6, k7: se explica en el sitio qué
@@ -10520,7 +10661,7 @@ const TRACKS = [];
 })();
 
 ;
-/* Voltio · curso base, módulo 13: Amplificadores operacionales
+/* Ledly · curso base, módulo 13: Amplificadores operacionales
    Orden: k6 (reglas de oro, no inversor, inversor, seguidor) → k10 (límites reales) → k11 (sumador y restador)
    → k7 (comparador) → s5 → k14 (Schmitt) → k12 (integrador) → k13 (filtros activos).
    Usa lo visto antes: divisor (d6), Wheatstone (d8), RC (g4), filtros RC y dB (h1, h5, h10), pull-up y colector abierto (k20).
@@ -10878,7 +11019,7 @@ const TRACKS = [];
 })();
 
 ;
-/* Voltio · curso base, módulo 14: Alimentación
+/* Ledly · curso base, módulo 14: Alimentación
    Orden: o1 (pilas) → sg5 → o5 (cargar litio) → k8 (reguladores: margen y LDO) → o2 (el calor del lineal)
    → o20 (LM317) → p8 → o3 (conmutados) → o4 (protección) → p14.
    Usa: b7, b9, c4, c6 (autonomía), d6, f10 (CV/CC), g9 (bobina), h20 (ciclo de trabajo), i2, i5, i9 (Schottky, TVS),
@@ -11257,7 +11398,7 @@ const TRACKS = [];
 })();
 
 ;
-/* Voltio · curso base, módulo 15: Lógica digital
+/* Ledly · curso base, módulo 15: Lógica digital
    Orden: l1 (binario) → l2 (hexadecimal) → l3 (puertas) → s6a, s6b → l4 (Boole) → l5 (combinacional)
    → k9 (chips lógicos) → l6 (biestables) → slatch → l7 (contadores y rebotes) → p6.
    Usa: a1 (potencias), d1/d2 (serie y paralelo de interruptores), b20, j4 (Darlington), k1–k4, k14 (Schmitt), k20 (pull-up).
@@ -11559,7 +11700,7 @@ const TRACKS = [];
 })();
 
 ;
-/* Voltio · curso base, módulo 16: Microcontroladores I: programar
+/* Ledly · curso base, módulo 16: Microcontroladores I: programar
    Orden: n1 (qué es) → n2 (primer programa) → n3 (salidas) → s7a → n15 (monitor serie) → n10 (variables)
    → n11 (cuentas) → n12 (decisiones y bucles) → n13 (funciones) → n14 (arrays) → s7b → p7.
    Convenciones (lotes 5 y 6): Uno por defecto, const int en mayúsculas para pines, Serial.begin(9600), comentarios en español.
@@ -11959,7 +12100,7 @@ const TRACKS = [];
 })();
 
 ;
-/* Voltio · curso base, módulo 17: Microcontroladores II: entradas y señales
+/* Ledly · curso base, módulo 17: Microcontroladores II: entradas y señales
    Lote 6. Este archivo trae sus propias visualizaciones (levels, pinFloat, ascii, sar, adcMap,
    alias, r2rLadder, pwmRC), sus generadores (mc2…) y los conceptos de sus lecciones. */
 (() => {
@@ -12544,7 +12685,7 @@ const TRACKS = [];
 })();
 
 ;
-/* Voltio · curso base, módulo 18: Microcontroladores III: tiempo y estados
+/* Ledly · curso base, módulo 18: Microcontroladores III: tiempo y estados
    Lote 6. Visualizaciones propias: millisTimeline, fsm, isrTimeline, ramBar. Generadores mc2…
    y conceptos de sus lecciones (mc_millis, mc_elapsed, mc_ulong, mc_tasks, mc_debounce, mc_edge,
    mc_fsm, mc_switch, mc_isr, mc_isrrules, mc_memwhere, mc_ram, mc_eeprom). */
@@ -12938,7 +13079,7 @@ const TRACKS = [];
 })();
 
 ;
-/* Voltio · curso base, módulo 19: Microcontroladores IV: buses, sensores y motores (puerta de las especialidades)
+/* Ledly · curso base, módulo 19: Microcontroladores IV: buses, sensores y motores (puerta de las especialidades)
    Lote 6. Visualizaciones propias: i2cBus, shift595, mux7seg, ultrasonic, mcHbridge, servoPulse, sleepAvg,
    mcuPicker, pcbLayers. Generadores mc2… y conceptos de sus lecciones. */
 (() => {
@@ -13607,7 +13748,7 @@ const TRACKS = [];
 })();
 
 ;
-/* Voltio · curso base, módulo 20: Alimentación a fondo (tras la puerta de las especialidades)
+/* Ledly · curso base, módulo 20: Alimentación a fondo (tras la puerta de las especialidades)
    Orden: o6 (dimensionar un buck) → o7 (supercondensadores y solar) → p13.
    Usa todo el curso base: o3 (buck), g9 (bobina), i4 (rizado), j8 (Rds(on)), g8 (½ · C · V²), o5 (cargador de litio),
    d11 (máxima potencia) y n30 (PCB). */
@@ -13761,7 +13902,7 @@ const TRACKS = [];
 })();
 
 ;
-/* Voltio · curso base, módulo 21: Diseño de PCB (tras las especialidades).
+/* Ledly · curso base, módulo 21: Diseño de PCB (tras las especialidades).
    Enseña: flujo de KiCad y netlist (q1), huellas (q2), colocación y desacoplo (q3), rutado y anchura de pistas (q4),
    planos de masa, retorno y cobre como disipador (q8), líneas de transmisión, RF y emisiones (q9), DRC, capas y
    Gerber (q5), BOM, pedido y montaje (q10), soldar SMD (q7).
@@ -14239,7 +14380,7 @@ const TRACKS = [];
 })();
 
 ;
-/* Voltio · comprobaciones de los retos de simulador y proyectos reales */
+/* Ledly · comprobaciones de los retos de simulador y proyectos reales */
 const CHECKS = (() => {
   const mA = x => Math.abs(x) * 1000;
   const lit = (api, c) => api.live[c.id] && !c.burnt && mA(api.live[c.id].I) >= 5 && mA(api.live[c.id].I) <= 25;
@@ -14857,7 +14998,7 @@ void loop() {
 };
 
 ;
-/* Voltio · especialidad: Arduino y AVR a fondo.
+/* Ledly · especialidad: Arduino y AVR a fondo.
    El ATmega328P registro a registro: puertos, temporizadores, interrupciones, periféricos,
    bajo consumo, el chip fuera de la placa y las herramientas de un profesional.
    Datos técnicos según la hoja de datos del ATmega328P; todo el texto y el código son originales. */
@@ -17854,7 +17995,7 @@ M8
 })();
 
 ;
-/* Voltio · especialidad: ESP32 a fondo. El chip, sus periféricos, FreeRTOS, la flash,
+/* Ledly · especialidad: ESP32 a fondo. El chip, sus periféricos, FreeRTOS, la flash,
    las radios a nivel de dispositivo (WiFi, BLE, ESP-NOW), el bajo consumo y ESP-IDF.
    Código para el núcleo Arduino-ESP32 3.x (basado en ESP-IDF 5) salvo que se indique. */
 (() => {
@@ -21831,7 +21972,7 @@ static_assert(sizeof(Mensaje) <= 250, "ESP-NOW admite 250 bytes");`,
 })();
 
 ;
-/* Voltio · especialidad: Raspberry Pi Pico (RP2040 y RP2350).
+/* Ledly · especialidad: Raspberry Pi Pico (RP2040 y RP2350).
    De Arduino a MicroPython, y de ahí al SDK en C, el PIO, el DMA, los dos núcleos, USB,
    WiFi/BLE, bajo consumo y tu propia placa. Texto, ejercicios, programas y proyectos originales. */
 (() => {
@@ -25655,7 +25796,7 @@ def uart_tx():
 })();
 
 ;
-/* Voltio · especialidad: STM32 y ARM Cortex-M. El flujo de trabajo profesional con
+/* Ledly · especialidad: STM32 y ARM Cortex-M. El flujo de trabajo profesional con
    microcontroladores de 32 bits: CubeMX, registros CMSIS, HAL/LL, relojes, NVIC,
    temporizadores, DMA, FreeRTOS y producto real. Todo el texto es original. */
 (() => {
@@ -28864,7 +29005,7 @@ void imu_paso(float gyro_dps, float ax, float az) {
 })();
 
 ;
-/* Voltio · especialidad: Internet de las cosas. El sistema completo, del sensor al panel:
+/* Ledly · especialidad: Internet de las cosas. El sistema completo, del sensor al panel:
    redes, HTTP, MQTT, datos, seguridad, energía, fiabilidad y plataformas locales
    (Home Assistant, ESPHome, Zigbee, Thread, LoRaWAN, NB-IoT). Prioriza lo local y la privacidad.
    Todo el texto, el código y los ejercicios son originales. */
@@ -32328,7 +32469,7 @@ exam: [
 })();
 
 ;
-/* Voltio · especialidad: Radio y radiofrecuencia.
+/* Ledly · especialidad: Radio y radiofrecuencia.
    Ondas y propagación, decibelios y balance de enlace, espectro y ley, circuitos de RF, líneas y antenas,
    modulación y receptores, módulos de radio con microcontroladores y escucha con SDR.
    Cada lección sigue el mismo camino: predice → explora → entiende con dibujos → ejemplo resuelto → practica → resumen.
@@ -35162,7 +35303,7 @@ exam: [
 })();
 
 ;
-/* Voltio · estudio: exámenes de nivel al final de cada módulo, repaso de temario por módulo
+/* Ledly · estudio: exámenes de nivel al final de cada módulo, repaso de temario por módulo
    y resumen semanal. Solo declara funciones: se usan en tiempo de ejecución desde app.js. */
 
 /* ===================== ESTADÍSTICAS DIARIAS ===================== */
@@ -35263,7 +35404,7 @@ function startExam(node) {
     rec.weak = [...new Set(answers.filter(a => !a.ok).map(a => a.ex.c).filter(Boolean))];
     S.exam[u.id] = rec;
     answers.filter(a => !a.ok).forEach(a => examMiss(a.ex, u));
-    const dr = dayRec(); dr.x.push([u.id, pct]); dr.min += Math.round((Date.now() - t0) / 60000);
+    const dr = dayRec(); dr.x.push([u.id, pct]);
     save();
     // Por concepto: aciertos y total
     const byC = {}; answers.forEach(a => { const c = a.ex.c || '?'; const b = byC[c] || (byC[c] = [0, 0]); b[1]++; if (a.ok) b[0]++; });
@@ -35364,10 +35505,10 @@ function weekStats(endDay) {
     agg.perDay.push(r ? r.xp : 0);
     if (h === 'done') agg.active++;
     if (!r) return;
-    agg.xp += r.xp; agg.min += r.min; agg.l.push(...r.l); agg.x.push(...r.x);
+    agg.xp += r.xp; agg.min += (r.min || 0) + (r.sec || 0) / 60; agg.l.push(...r.l); agg.x.push(...r.x);
     for (const [c, [o, k]] of Object.entries(r.c)) { const s = agg.c[c] || (agg.c[c] = [0, 0]); s[0] += o; s[1] += k; }
   });
-  agg.l = [...new Set(agg.l)];
+  agg.l = [...new Set(agg.l)]; agg.min = Math.round(agg.min);
   const cs = Object.entries(agg.c).filter(([c, [o, k]]) => CONCEPTS[c] && o + k >= 3).map(([c, [o, k]]) => ({ c, o, k, acc: o / (o + k) }));
   agg.best = cs.filter(x => x.acc >= 0.75).sort((a, b) => b.acc - a.acc || (b.o + b.k) - (a.o + a.k)).slice(0, 3);
   agg.hard = cs.filter(x => x.acc < 0.75).sort((a, b) => a.acc - b.acc || (b.o + b.k) - (a.o + a.k)).slice(0, 3);
@@ -35430,7 +35571,228 @@ function startWeekly() {
 }
 
 ;
-/* Voltio · aplicación (vistas, lecciones, repaso, retos, proyectos y laboratorio) */
+/* Ledly · el día a día: tiempo de práctica y objetivo diario, calentamiento al abrir la app cada
+   día y notificaciones locales (hora de practicar, recordatorios, racha en peligro, protector usado,
+   racha perdida y días para repararla). Solo declara funciones y un objeto: se usa desde app.js. */
+
+/* ===================== TIEMPO Y OBJETIVO DIARIO ===================== */
+const GOALS = [5, 10, 15, 20, 30];
+// Segundos de práctica activa de un día (lecciones, retos, exámenes, repasos…)
+const daySec = d => { const r = (S.wk || {})[d || today()]; return r ? (r.sec || 0) + (r.min || 0) * 60 : 0; };
+function addActiveTime(ms) {
+  if (!(ms > 3000)) return;
+  const r = dayRec(); r.sec = (r.sec || 0) + Math.round(Math.min(ms, 30 * 60000) / 1000); save();
+}
+// Celebración (una vez al día) al cumplir el objetivo de minutos
+function checkGoal() {
+  const t = today(); S.goalHit = S.goalHit || {};
+  if (S.goalHit[t] || daySec(t) < (S.goal || 10) * 60) return;
+  S.goalHit[t] = true; S.gems += 10; save(); header();
+  setTimeout(() => { Fx.sound('unlock'); Fx.confetti(110); Mascot.react('party'); Mascot.say(`Has practicado ${S.goal} minutos hoy. ¡Objetivo cumplido! +10 gemas.`, 'happy', 6000, '¡Objetivo diario!'); Fx.anim(document.getElementById('tGoal'), 'pop'); }, 450);
+}
+function goalRing(size = 22) {
+  const p = Math.min(1, daySec() / ((S.goal || 10) * 60)), R = 9, C = 2 * Math.PI * R;
+  return `<svg viewBox="0 0 24 24" width="${size}" height="${size}" class="gring ${p >= 1 ? 'full' : ''}" aria-hidden="true"><circle cx="12" cy="12" r="${R}" class="gbg"/><circle cx="12" cy="12" r="${R}" class="gfg" style="stroke-dasharray:${C};stroke-dashoffset:${C * (1 - p)}"/>${p >= 1 ? '<path d="M8 12.5l2.6 2.6L16 9.6" class="gok"/>' : ''}</svg>`;
+}
+function goalLine() {
+  const m = Math.floor(daySec() / 60), g = S.goal || 10;
+  return m >= g ? `Objetivo de hoy cumplido: ${m} de ${g} min` : `Hoy llevas ${m} de ${g} min`;
+}
+
+/* ===================== CALENTAMIENTO DIARIO ===================== */
+// Repaso espaciado por lección: S.seen[id] = { d: último repaso, k: repasos seguidos bien hechos }
+const SPACING = [1, 3, 7, 14, 30, 60];
+const QUICK = new Set(['mc', 'num', 'match', 'order', 'bits', 'pin', 'res', 'sym', 'pick', 'tap', 'truth']);
+function markSeen(id, ok) {
+  S.seen = S.seen || {}; const s = S.seen[id] || (S.seen[id] = { d: today(), k: 0 });
+  s.d = today(); s.k = ok ? Math.min(SPACING.length - 1, s.k + 1) : Math.max(0, s.k - 1);
+}
+function quickFrom(lesson) {
+  const gens = [...new Set(lesson.ex.filter(e => e.t === 'gen').map(e => e.g))];
+  if (gens.length && Math.random() < 0.6) { const g = gens[Math.floor(Math.random() * gens.length)]; return { t: 'gen', g, _key: 'gen:' + g, _l: lesson.id }; }
+  const list = lesson.ex.map((e, i) => ({ ...e, _idx: i, _key: lesson.id + ':' + i, _l: lesson.id })).filter(e => QUICK.has(e.t) && !e.predict && !e.live);
+  if (!list.length) return gens.length ? { t: 'gen', g: gens[0], _key: 'gen:' + gens[0], _l: lesson.id } : null;
+  return list[Math.floor(Math.random() * list.length)];
+}
+function resolveMiss(m) {
+  if (m.g) return { t: 'gen', g: m.g, _key: m.k };
+  if (m.x) { const u = unitById(m.x), e = u && u.exam && u.exam[m.i]; return e ? { ...e, _key: m.k } : null; }
+  const l = LESSON[m.l]; let e = l && l.ex[m.i];
+  if (l && (!e || Widgets.UNGRADED.has(e.t) || (m.q && e.q !== m.q))) { const j = m.q ? l.ex.findIndex(x => x.q === m.q) : -1; e = j >= 0 ? l.ex[j] : null; }
+  return e && QUICK.has(e.t) ? { ...e, _key: m.k, _l: m.l, c: e.c || m.c } : null;
+}
+/* Decide cuántas preguntas y cuáles. Mezcla tres fuentes:
+   · fallos pendientes (los más repetidos y antiguos primero);
+   · lecciones cuyo repaso espaciado ha vencido (1, 3, 7, 14, 30, 60 días según lo bien que vayan);
+   · conceptos flojos de las dos últimas semanas (menos del 70 % de aciertos).
+   Más preguntas si hay mucho pendiente o si llevas días sin entrar; menos si tu objetivo es corto.
+   Nunca más de 10 ni más de 2 de la misma lección. */
+function warmupPlan() {
+  const doneL = ALL.filter(n => n.kind === 'lesson' && S.done[n.id] === true);
+  if (!doneL.length) return null;
+  const t = today(), seen = S.seen || {};
+  const age = id => seen[id] ? diff(seen[id].d, t) : 999;
+  const misses = Object.values(S.miss).sort((a, b) => b.n - a.n || (a.t < b.t ? -1 : 1));
+  const due = doneL.map(l => { const s = seen[l.id], iv = SPACING[s ? s.k : 0]; return { l, over: age(l.id) / iv }; }).filter(x => x.over >= 1).sort((a, b) => b.over - a.over);
+  const acc = {}; for (let k = 0; k < 14; k++) { const r = (S.wk || {})[add(t, -k)]; if (r) for (const [c, [o, f]] of Object.entries(r.c)) { const a = acc[c] || (acc[c] = [0, 0]); a[0] += o; a[1] += f; } }
+  const weak = Object.entries(acc).filter(([c, [o, f]]) => o + f >= 3 && o / (o + f) < 0.7).sort((a, b) => a[1][0] / (a[1][0] + a[1][1]) - b[1][0] / (b[1][0] + b[1][1])).map(([c]) => c);
+  let away = 0; for (let k = 1; k <= 7; k++) { if (S.hist[add(t, -k)] === 'done') break; away++; }
+  let N = 3 + Math.min(3, misses.length) + Math.min(3, Math.ceil(due.length / 2)) + (weak.length ? 1 : 0) + (away >= 2 ? 2 : 0);
+  if ((S.goal || 10) <= 5) N = Math.min(N, 6);
+  N = Math.max(3, Math.min(10, N));
+  const out = [], perL = {}, keys = new Set();
+  const push = e => { if (!e || keys.has(e._key) || out.length >= N) return false; const l = e._l || 'x'; if ((perL[l] || 0) >= 2) return false; keys.add(e._key); perL[l] = (perL[l] || 0) + 1; out.push(e); return true; };
+  const quota = (k, frac) => Math.max(1, Math.round(N * frac));
+  let n = 0; for (const m of misses) { if (n >= quota('m', 0.4)) break; if (push(resolveMiss(m))) n++; }
+  n = 0; for (const { l } of due) { if (n >= quota('d', 0.4)) break; if (push(quickFrom(l))) n++; }
+  for (const c of weak) { if (out.length >= N) break; const l = doneL.find(x => x.ex.some(e => e.c === c && QUICK.has(e.t))); if (!l) continue; const list = l.ex.map((e, i) => ({ ...e, _idx: i, _key: l.id + ':' + i, _l: l.id })).filter(e => e.c === c && QUICK.has(e.t) && !e.predict && !e.live); push(list[Math.floor(Math.random() * list.length)]); }
+  // Relleno: lo más reciente primero, para afianzar lo de los últimos días
+  const recent = [...doneL].sort((a, b) => age(a.id) - age(b.id));
+  for (let pass = 0; pass < 3 && out.length < N; pass++) for (const l of recent) { if (out.length >= N) break; push(quickFrom(l)); }
+  if (out.length < 3) return null;
+  return { items: out.sort(() => Math.random() - 0.5), N: out.length, misses: misses.length, due: due.length, weak: weak.length, away };
+}
+const greeting = () => { const h = now().getHours(); return h < 6 ? '¡Qué madrugón!' : h < 14 ? '¡Buenos días!' : h < 21 ? '¡Buenas tardes!' : '¡Buenas noches!'; };
+function maybeWarmup() {
+  if (document.querySelector('.lesson') || S.warm === today()) return;
+  const plan = warmupPlan(); if (!plan) return;
+  S.warm = today(); save();
+  warmupSplash(plan);
+}
+/* Pantalla de bienvenida: Chispa se enciende (parpadea como un LED que arranca), suelta rayos y
+   presenta el calentamiento del día. */
+function warmupSplash(plan) {
+  const { L, close } = overlay(); Mascot.suspend(true);
+  const end = () => { Mascot.suspend(false); close(); };
+  const mins = Math.max(1, Math.round(plan.N * 0.4));
+  const why = plan.misses && plan.due ? 'Repasamos fallos pendientes y lo que toca no olvidar.' : plan.misses ? 'Volvemos sobre lo que se te resistió.' : plan.due ? 'Repasamos lo que ya toca refrescar para que no se olvide.' : 'Afianzamos lo último que has aprendido.';
+  const streakTxt = S.streak ? `Llevas <b>${S.streak} ${S.streak === 1 ? 'día' : 'días'}</b> de racha.` : repairAvailable() ? `Tu racha de ${S.lost.value} días aún se puede reparar.` : 'Hoy empieza una racha nueva.';
+  L.className = 'lesson splash';
+  L.innerHTML = `<div class="splin">
+    <div class="sbulb off"><svg viewBox="-60 -60 210 230" class="srays" aria-hidden="true">${Array.from({ length: 12 }, (_, k) => `<line x1="45" y1="-38" x2="45" y2="-52" transform="rotate(${k * 30} 45 50)"/>`).join('')}</svg>${chispa('happy', 150)}</div>
+    <h1 class="sgreet">${greeting()}</h1>
+    <p class="ssub">${streakTxt} ${goalLine()}.</p>
+    <div class="scard"><b>Calentamiento de hoy</b><span>${plan.N} preguntas rápidas · unos ${mins} min</span><small>${why} Sin explicaciones por el camino: al final ves cómo te ha ido.</small></div>
+    <button class="btn amber" id="wgo">¡Vamos!</button><button class="btn ghost" id="wno">Ahora no</button></div>`;
+  const b = L.querySelector('.sbulb');
+  setTimeout(() => { b.classList.add('flick'); Fx.sound('tick'); }, 350);
+  setTimeout(() => { b.classList.remove('flick', 'off'); b.classList.add('on'); Fx.sound('unlock'); Fx.burstAt(b, { n: 30, speed: 6 }); }, 1100);
+  L.querySelectorAll('.sgreet, .ssub, .scard, #wgo, #wno').forEach((x, k) => { x.style.animationDelay = (1.2 + k * 0.12) + 's'; x.classList.add('chipin'); });
+  L.querySelector('#wno').onclick = () => { Fx.sound('close'); end(); };
+  L.querySelector('#wgo').onclick = () => { end(); startWarmup(plan); };
+}
+/* El calentamiento: preguntas seguidas, sin explicaciones; solo ✓ o ✗ (y la respuesta buena) y a la siguiente. */
+function startWarmup(plan) {
+  plan = plan || warmupPlan(); if (!plan) { toast('Completa alguna lección para tener calentamiento'); return; }
+  const { L, close } = overlay();
+  let i = 0, ok = 0, combo = 0, w = null;
+  const results = [];
+  Mascot.provider = () => ({ title: 'Calentamiento', text: pickOne(['¡Tú puedes! Es solo para despertar las neuronas.', 'Sin prisa: lo importante es que lo pienses.', 'Si no sale, no pasa nada: lo apuntamos para repasarlo.']), mood: 'happy' });
+  const node = { id: 'warm', extra: true, warm: true, title: 'Calentamiento' };
+  function ask() {
+    if (w && w.destroy) w.destroy(); w = null;
+    if (i >= plan.items.length) {
+      S.warmDone = today(); save();
+      return finishScreen(L, () => { Mascot.provider = defaultTip; close(); }, node, { xp: 5 + 2 * ok, gems: 5 + ok, extra: `<div class="chip"><b>${ok}/${plan.items.length}</b><span>aciertos</span></div>${results.length ? `<div class="wres">${results.map(r => `<span class="${r ? 'ok' : 'no'}"></span>`).join('')}</div>` : ''}` });
+    }
+    let ex = plan.items[i];
+    if (ex.t === 'gen') { const g = Gen.make(ex.g); ex = plan.items[i] = { ...g, _key: ex._key, _gen: ex.g, _l: ex._l }; }
+    const title = ex.t === 'res' ? '¿Qué valor tiene esta resistencia?' : ex.q || '';
+    L.innerHTML = `<div class="lesson-in warmup"><div class="lbar"><button class="close" aria-label="Salir">×</button><div class="prog"><i style="width:${i / plan.items.length * 100}%"></i></div><span class="excount">${i + 1}/${plan.items.length}</span></div>
+      <div class="q"><div class="kind">Calentamiento · ${Widgets.KIND[ex.t]}</div>${title ? `<h2>${esc(title)}</h2>` : ''}<div class="wbox"></div></div>
+      <div class="foot"><button class="btn" id="chk" disabled>Comprobar</button></div></div>`;
+    L.querySelector('.close').onclick = () => { if (i === 0 || confirm('¿Dejar el calentamiento?')) { if (w && w.destroy) w.destroy(); Mascot.provider = defaultTip; close(); } };
+    Fx.anim(L.querySelector('.q'), 'enter');
+    const chk = L.querySelector('#chk'), wbox = L.querySelector('.wbox');
+    w = Widgets.render(ex, wbox, { ready: v => { chk.disabled = !v; }, submit: () => !chk.disabled && chk.click(), meterAuto: meterAutoOn() });
+    chk.onclick = () => {
+      const r = w.check(); w.lock && w.lock();
+      statAnswer(ex.c, !!r.ok); results.push(!!r.ok);
+      if (ex._l) markSeen(ex._l, !!r.ok);
+      if (r.ok) { ok++; combo++; recordHit(ex); Fx.sound('correct', combo - 1); Fx.burstAt(chk, { n: 14 }); Mascot.react('right'); }
+      else { combo = 0; recordMiss(ex, ex._l || null, ex.c); Fx.sound('wrong'); Fx.anim(wbox, 'shake'); Mascot.react('wrong'); }
+      save();
+      L.querySelector('.foot').innerHTML = `<div class="sheet mini ${r.ok ? 'ok' : 'bad'}" role="status"><div class="shead"><span class="sicon">${r.ok ? '✓' : '✗'}</span><h3>${r.ok ? pickOne(['¡Bien!', '¡Eso es!', '¡Correcto!']) : r.right ? 'Era: ' + esc(r.right) : 'Esta no'}</h3></div><button class="btn ${r.ok ? 'okb' : 'badb'}" id="nx">${i + 1 < plan.items.length ? 'Siguiente' : 'Ver resultado'}</button></div>`;
+      Fx.anim(L.querySelector('.sheet'), 'slideup');
+      const nx = L.querySelector('#nx'); nx.focus(); nx.onclick = () => { Fx.sound('tap'); i++; ask(); };
+    };
+  }
+  ask();
+}
+
+/* ===================== NOTIFICACIONES ===================== */
+/* Notificaciones locales con @capacitor/local-notifications. La app no puede ejecutarse en segundo
+   plano, así que cada vez que se abre, se cierra o practicas, se recalculan las de los próximos 7 días
+   suponiendo que no vuelves a entrar; al entrar, se rehacen. */
+const Notify = (() => {
+  const plugin = () => { try { const C = window.Capacitor; if (!C || !C.isNativePlatform || !C.isNativePlatform()) return null; return (C.Plugins && C.Plugins.LocalNotifications) || (C.registerPlugin && C.registerPlugin('LocalNotifications')) || null; } catch (e) { return null; } };
+  const ICON = { smallIcon: 'ic_stat_voltio', largeIcon: 'ic_notif_large', iconColor: '#FFB000', channelId: 'voltio' };
+  let chan = false;
+  async function channel(p) { if (chan) return; chan = true; try { await p.createChannel({ id: 'voltio', name: 'Práctica diaria', description: 'Tu hora de practicar, recordatorios y avisos de racha', importance: 4, visibility: 1, vibration: true, lights: true, lightColor: '#FFB000' }); } catch (e) { } }
+  async function permission(ask) {
+    const p = plugin(); if (!p) return 'web';
+    try { let r = await p.checkPermissions(); if (r.display !== 'granted' && ask) r = await p.requestPermissions(); return r.display; } catch (e) { return 'denied'; }
+  }
+  const hm = s => { const [h, m] = String(s || '19:00').split(':').map(Number); return [h || 0, m || 0]; };
+  // Fecha real de una hora de un día (respetando el desfase de días de las herramientas de prueba)
+  const at = (day, h, m) => { const d = parse(day); d.setHours(h, m, 0, 0); return new Date(d.getTime() - (S.offset || 0) * DAY); };
+  const dayName = d => parse(d).toLocaleDateString('es-ES', { weekday: 'long' });
+  const PRACTICE = [
+    ['¡Hora de practicar!', 'Chispa te espera con el calentamiento del día. Unos minutos y listo.'],
+    ['Tu rato de electrónica', 'Es tu hora. ¿Un par de lecciones para mantener la racha encendida?'],
+    ['¡A practicar!', 'Lo que se repasa a diario se queda para siempre. ¿Empezamos?'],
+    ['Chispa está encendida', 'Es tu hora de practicar. Hoy toca seguir sumando.']];
+  const LATER = [['¿Un ratito ahora?', 'Aún no has practicado hoy. Con 5 minutos basta para la racha.'], ['Se te ha pasado la hora', 'No pasa nada: todavía estás a tiempo de practicar hoy.'], ['Chispa te echa de menos', 'Una lección rápida y el día queda hecho.']];
+  /* Las notificaciones de los próximos 7 días, simulando qué pasaría con la racha si no entras. */
+  function plan() {
+    const list = [], [H, M] = hm(S.practiceAt), t = today(), nowReal = Date.now();
+    let n = S.streak, f = S.freezes, lost = repairAvailable() ? { ...S.lost } : null;
+    const practicedToday = S.hist[t] === 'done';
+    for (let d = 0; d < 7; d++) {
+      const D = add(t, d), base = 100 + d * 10;
+      let first = null;
+      if (d > 0 && (d > 1 || !practicedToday)) {
+        // Se evalúa el día anterior, que (en esta simulación) no has practicado
+        const prev = add(D, -1);
+        if (n > 0) {
+          if (f > 0) { f--; first = ['Protector de racha usado', `Ayer no practicaste, pero tu racha de ${n} ${n === 1 ? 'día' : 'días'} sigue a salvo. ${f ? `Te ${f === 1 ? 'queda 1 protector' : 'quedan ' + f + ' protectores'}.` : 'Era tu último protector: hoy no te lo saltes.'}`]; }
+          else { lost = { value: n, from: prev, expires: add(prev, REPAIR_DAYS) }; n = 0; first = ['Se apagó tu racha', `Has perdido tu racha de ${lost.value} días, pero tienes ${REPAIR_DAYS} días para repararla: con gemas o con 3 actividades en un día. ¡Aún estás a tiempo!`]; }
+        }
+      }
+      const repairLeft = lost && D <= lost.expires ? diff(D, lost.expires) + 1 : 0;
+      if (!first && repairLeft) first = [repairLeft === 1 ? 'Último día para reparar tu racha' : 'Aún puedes reparar tu racha', `Tu racha de ${lost.value} días se puede recuperar ${repairLeft === 1 ? 'solo hasta esta noche' : `durante ${repairLeft} días más`}. Entra y hazlo con 3 actividades o con gemas.`];
+      if (d === 0 && practicedToday) continue;
+      if (!first) first = PRACTICE[(parse(D).getDate() + d) % PRACTICE.length];
+      const push = (id, h, m, [title, body]) => { const when = at(D, h, m); if (when.getTime() > nowReal + 60000) list.push({ id, title, body, schedule: { at: when, allowWhileIdle: true }, ...ICON }); };
+      push(base + 1, H, M, first);
+      // Recordatorio unas horas después, si sigue siendo de día
+      // Recordatorios si se te pasa: hora y media después y, si queda día, tres horas después
+      const r1 = H * 60 + M + 90, r2 = H * 60 + M + 180;
+      if (r1 < 21 * 60) push(base + 2, Math.floor(r1 / 60), r1 % 60, LATER[(d + 1) % LATER.length]);
+      if (r2 < 21 * 60) push(base + 4, Math.floor(r2 / 60), r2 % 60, LATER[(d + 2) % LATER.length]);
+      // Aviso de noche: la racha se apaga a medianoche
+      if (H * 60 + M < 21 * 60) push(base + 3, 21, 30, n > 0 ? ['Tu racha está en peligro', `Tu racha de ${n} ${n === 1 ? 'día' : 'días'} se apaga a medianoche. ${f ? 'Tienes protector, pero mejor no gastarlo.' : 'No tienes protector: entra ahora y sálvala.'}`] : repairLeft === 1 ? ['Última oportunidad', `Esta noche termina el plazo para reparar tu racha de ${lost.value} días.`] : ['Aún estás a tiempo', `El ${dayName(D)} todavía no has practicado. Un ratito antes de dormir.`]);
+    }
+    return list;
+  }
+  async function schedule() {
+    const p = plugin(); if (!p) return;
+    try {
+      const pend = await p.getPending(); if (pend && pend.notifications && pend.notifications.length) await p.cancel({ notifications: pend.notifications.map(x => ({ id: x.id })) });
+      if (!S.notif || (await permission(false)) !== 'granted') return;
+      await channel(p);
+      const list = plan(); if (list.length) await p.schedule({ notifications: list });
+    } catch (e) { }
+  }
+  async function test() {
+    const p = plugin(); if (!p) return false;
+    try { await channel(p); await p.schedule({ notifications: [{ id: 99, title: '¡Así te avisará Chispa!', body: `Cada día a las ${S.practiceAt || '19:00'}, y te recordará si se te pasa.`, schedule: { at: new Date(Date.now() + 4000) }, ...ICON }] }); return true; } catch (e) { return false; }
+  }
+  return { available: () => !!plugin(), permission, schedule, test, plan };
+})();
+
+;
+/* Ledly · aplicación (vistas, lecciones, repaso, retos, proyectos y laboratorio) */
 /* Cada nodo pertenece a una secuencia: el curso base ('base') o una especialidad (su id).
    Dentro de cada secuencia el avance es lineal; las especialidades se abren al terminar GATE_UNIT. */
 const GATE_UNIT = 'm12';
@@ -35447,7 +35809,7 @@ const LESSON = Object.fromEntries(ALL.filter(n => n.kind === 'lesson').map(n => 
 const KEY = 'voltio-v1';
 const MILESTONES = [[3, 20], [7, 50], [14, 80], [30, 150], [50, 200], [100, 500], [365, 1000]];
 const FREEZE_PRICE = 100, FREEZE_MAX = 2, REPAIR_PRICE = 200, REPAIR_DAYS = 3, CHALLENGE_LESSONS = 3;
-function fresh() { return { v: 3, offset: 0, streak: 0, longest: 0, covered: null, hist: {}, freezes: 1, gems: 300, xp: 0, done: {}, perDay: {}, lost: null, miles: [], pending: [], circ: {}, chk: {}, labMode: 'battery', meterAuto: false, miss: {}, altIdx: {}, sound: true, mascot: true, exam: {}, wk: {} }; }
+function fresh() { return { v: 3, offset: 0, streak: 0, longest: 0, covered: null, hist: {}, freezes: 1, gems: 300, xp: 0, done: {}, perDay: {}, lost: null, miles: [], pending: [], circ: {}, chk: {}, labMode: 'battery', meterAuto: false, miss: {}, altIdx: {}, sound: true, mascot: true, exam: {}, wk: {}, goal: 10, practiceAt: '19:00', notif: false, warm: null, warmDone: null, seen: {}, goalHit: {} }; }
 let S;
 try { S = JSON.parse(localStorage.getItem(KEY)) || fresh(); } catch (e) { S = fresh(); }
 if (S.v !== 3) S = { ...fresh(), ...S, v: 3, done: {}, chk: {}, circ: {} };
@@ -35468,10 +35830,10 @@ async function loadNative() {
   try { const r = await NativePrefs.get({ key: KEY }); if (r && r.value) { const n = JSON.parse(r.value); if (!S.savedAt || (n.savedAt || 0) > S.savedAt) S = { ...fresh(), ...n }; } } catch (e) { }
 }
 /* Copia de seguridad: un código de texto que se copia y se pega */
-function exportCode() { return 'VOLTIO1:' + btoa(unescape(encodeURIComponent(JSON.stringify(S)))); }
+function exportCode() { return 'LEDLY1:' + btoa(unescape(encodeURIComponent(JSON.stringify(S)))); }
 function importCode(txt) {
-  const t = String(txt).trim(); if (!t.startsWith('VOLTIO1:')) throw new Error('El código no es de Voltio.');
-  const d = JSON.parse(decodeURIComponent(escape(atob(t.slice(8)))));
+  const t = String(txt).trim(), pre = ['LEDLY1:', 'VOLTIO1:'].find(p => t.startsWith(p)); if (!pre) throw new Error('El código no es de Ledly.');
+  const d = JSON.parse(decodeURIComponent(escape(atob(t.slice(pre.length)))));
   if (typeof d !== 'object' || d.v == null) throw new Error('El código está incompleto.');
   return d;
 }
@@ -35564,7 +35926,7 @@ let view = 'learn';
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 function vib(p) { try { navigator.vibrate && navigator.vibrate(p); } catch (e) { } }
 function toast(msg) { document.querySelectorAll('.toast').forEach(t => t.remove()); const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg; document.body.appendChild(t); setTimeout(() => t.remove(), 3200); }
-function header() { $('#tStreak').textContent = S.streak; $('#tGems').textContent = S.gems; $('#tFreeze').textContent = S.freezes; $('#tLed').classList.toggle('on', S.hist[today()] === 'done'); const n = Object.keys(S.miss).length; const b = $('#revBadge'); if (b) { b.textContent = n; b.hidden = !n; } }
+function header() { const g = $('#tGoal'); if (g) { g.innerHTML = goalRing(22); g.setAttribute('aria-label', goalLine()); } $('#tStreak').textContent = S.streak; $('#tGems').textContent = S.gems; $('#tFreeze').textContent = S.freezes; $('#tLed').classList.toggle('on', S.hist[today()] === 'done'); const n = Object.keys(S.miss).length; const b = $('#revBadge'); if (b) { b.textContent = n; b.hidden = !n; } }
 function ledSVG(on, size = 150) {
   const id = 'g' + Math.random().toString(36).slice(2, 7);
   return `<svg viewBox="0 0 150 150" width="${size}" height="${size}" aria-hidden="true"><defs><radialGradient id="${id}" cx="50%" cy="42%" r="55%"><stop offset="0" stop-color="${on ? '#FFE9A8' : '#9AA7BF'}"/><stop offset=".6" stop-color="${on ? '#FFB000' : '#5B6782'}"/><stop offset="1" stop-color="${on ? '#E08A00' : '#3B4660'}"/></radialGradient></defs>
@@ -35654,7 +36016,7 @@ function bindNodes() {
 function renderLearn() {
   let html = '';
   if (repairAvailable()) html += repairCard(true);
-  else if (S.hist[today()] !== 'done') html += `<div class="card hello"><div class="row">${chispa(S.streak ? 'happy' : 'think', 48)}<div class="grow"><h3>${S.streak > 0 ? 'Mantén encendida tu racha' : 'Enciende tu primera racha'}</h3><p style="margin:0">Completa una lección, un repaso o un reto hoy para ${S.streak > 0 ? 'llegar a ' + (S.streak + 1) + ' días' : 'empezar'}.</p></div></div></div>`;
+  html += dayCard();
   const nm = Object.keys(S.miss).length;
   if (S.wkSeen !== weekKey() && Object.keys(S.wk || {}).some(d => d < weekKey() && d >= add(weekKey(), -7))) html += `<button class="card revcta weekcta" id="wkcta"><span class="revn">${chispa('happy', 34)}</span><span><b>Tu resumen semanal está listo</b><br><small>Lo que has aprendido, lo que más te ha costado y cómo vas</small></span></button>`;
   if (nm) html += `<button class="card revcta" id="revcta"><span class="revn">${nm}</span><span><b>Repasa tus fallos</b><br><small>Con explicaciones distintas a la primera vez</small></span></button>`;
@@ -35669,6 +36031,7 @@ function renderLearn() {
   bindCarousel();
   const rc = $('#revcta'); rc && (rc.onclick = () => startReview());
   const wc = $('#wkcta'); wc && (wc.onclick = () => startWeekly());
+  const wu = $('#warmgo'); wu && (wu.onclick = () => startWarmup());
   bindRepair();
   if (firstOpen && (!renderLearn.scrolled || justDone)) { renderLearn.scrolled = true; const el = main.querySelector(`[data-node="${firstOpen.id}"]`); el && setTimeout(() => el.scrollIntoView({ block: 'center', behavior: justDone ? 'smooth' : 'auto' }), 60); }
   if (justDone) { setTimeout(() => { Fx.sound('step'); Fx.burstAt(main.querySelector('.node.just-open'), { n: 18 }); }, 700); justDone = null; }
@@ -35829,6 +36192,13 @@ function renderProfile() {
    <div class="kv"><div><b>${S.xp}</b><span>XP total</span></div><div><b>${done}/${total}</b><span>Pasos completados</span></div><div><b>${S.streak}</b><span>Racha actual</span></div><div><b>${Object.keys(S.miss).length}</b><span>Por repasar</span></div></div>
    <div class="card"><h3>Módulos</h3>${UNITS.map((u, ui) => { const d = u.nodes.filter(n => S.done[n.id]).length; return `<div class="mprog" style="--uc:${unitColor(ui)}"><span>${ui}. ${esc(u.title)}</span><div class="uprog"><i style="width:${d / u.nodes.length * 100}%"></i></div><small>${d}/${u.nodes.length}</small></div>`; }).join('')}</div>
    ${TRACKS.length ? `<div class="card"><h3>Especialidades</h3>${tracksOpen() ? '' : `<p>Se abren al terminar Microcontroladores (${gateLeft() === 1 ? 'te falta 1 paso' : 'te faltan ' + gateLeft() + ' pasos'}).</p>`}${TRACKS.map(t => { const s = trackStats(t); return `<button class="mprog trow" data-track="${t.id}" style="--uc:${t.color}"><span>${esc(t.title)}<small>${esc(s.rank)} · ${s.pd}/${s.pt} proyectos</small></span><div class="uprog"><i style="width:${s.nodes.length ? s.done / s.nodes.length * 100 : 0}%"></i></div><small>${s.done}/${s.nodes.length}</small></button>`; }).join('')}</div>` : ''}
+   <div class="card"><h3>Tu día</h3><p>Cuánto quieres practicar cada día y a qué hora te aviso.</p>
+    <div class="seg goalseg">${GOALS.map(g => `<button data-goal="${g}" aria-pressed="${(S.goal || 10) === g}">${g} min</button>`).join('')}</div>
+    <p class="small" style="margin:8px 0 12px">${goalLine()}.</p>
+    <label class="timerow"><span>Hora de practicar</span><input type="time" id="ptime" value="${S.practiceAt || '19:00'}"></label>
+    <label class="switch"><input type="checkbox" id="pnotif" ${S.notif ? 'checked' : ''}><span>Notificaciones: tu hora, recordatorios y avisos de racha</span></label>
+    <p class="small" id="pnmsg" style="margin:6px 0 0">${Notify.available() ? 'Si se te pasa la hora, Chispa te lo recordará durante el día; también te avisará si usas un protector o pierdes la racha.' : 'Las notificaciones funcionan en la app instalada en el móvil.'}</p>
+    ${Notify.available() ? '<button class="btn ghost" id="ptest" style="margin-top:10px">Probar una notificación</button>' : ''}</div>
    <div class="card"><h3>Sonido y mascota</h3><label class="switch"><input type="checkbox" id="psound" ${S.sound ? 'checked' : ''}><span>Sonidos</span></label><label class="switch"><input type="checkbox" id="pmascot" ${S.mascot ? 'checked' : ''}><span>Chispa en pantalla (tócala para pedir pistas)</span></label></div>
    <div class="card"><h3>Multímetro</h3><p>${autoUnlocked ? 'Ya dominas el multímetro manual. Puedes pasar al automático en el resto de ejercicios.' : 'Completa la lección “Multímetro automático” del módulo 5 para desbloquear el autorrango.'}</p>
     <label class="switch"><input type="checkbox" id="mauto" ${S.meterAuto && autoUnlocked ? 'checked' : ''} ${autoUnlocked ? '' : 'disabled'}><span>Usar multímetro automático</span></label></div>
@@ -35840,6 +36210,13 @@ function renderProfile() {
    <div class="card"><h3>Sobre el temario</h3><p style="margin:0">El orden sigue la progresión de <i>Getting Started in Electronics</i> (Forrest Mims III), con la profundidad de <i>The Art of Electronics</i> e ideas prácticas de <i>Make: Electronics</i>. Las explicaciones, ejercicios y simulaciones son originales.</p></div>`;
   main.querySelectorAll('[data-track]').forEach(x => x.onclick = () => { curTrack = x.dataset.track; go('track'); });
   $('#wkgo').onclick = () => startWeekly();
+  main.querySelectorAll('[data-goal]').forEach(b => b.onclick = () => { S.goal = +b.dataset.goal; save(); Fx.sound('select'); header(); render(); checkGoal(); });
+  $('#ptime').onchange = e => { S.practiceAt = e.target.value || '19:00'; save(); Notify.schedule(); toast('Te avisaré a las ' + S.practiceAt); };
+  $('#pnotif').onchange = async e => {
+    if (e.target.checked) { const r = await Notify.permission(true); if (r !== 'granted' && r !== 'web') { e.target.checked = false; $('#pnmsg').textContent = 'Android no ha dado permiso para notificaciones. Actívalo en Ajustes del sistema → Apps → Ledly → Notificaciones.'; return; } }
+    S.notif = e.target.checked; save(); Notify.schedule(); Fx.sound('select');
+  };
+  const pt = $('#ptest'); pt && (pt.onclick = async () => { const r = await Notify.permission(true); if (r !== 'granted') { toast('Primero da permiso de notificaciones'); return; } toast((await Notify.test()) ? 'En unos segundos te llega una de prueba' : 'No se pudo programar'); });
   $('#psound').onchange = e => { S.sound = e.target.checked; Fx.setSound(S.sound); save(); Fx.sound('select'); };
   $('#pmascot').onchange = e => { S.mascot = e.target.checked; Mascot.setEnabled(S.mascot); save(); };
   const m = $('#mauto'); m && m.addEventListener('change', () => { S.meterAuto = m.checked; save(); toast(m.checked ? 'Multímetro automático activado' : 'Multímetro manual activado'); });
@@ -35857,8 +36234,8 @@ function backupModal(mode) {
   const bg = document.createElement('div'); bg.className = 'modal-bg';
   const exp = mode === 'export', code = exp ? exportCode() : '';
   bg.innerHTML = `<div class="modal" role="dialog" aria-modal="true"><h2>${exp ? 'Exportar progreso' : 'Importar progreso'}</h2>
-    <p>${exp ? 'Copia este código y pégalo en “Importar progreso” en la otra versión de Voltio.' : 'Pega aquí el código que exportaste. Sustituirá el progreso actual de este dispositivo.'}</p>
-    <textarea class="bkta" ${exp ? 'readonly' : 'placeholder="VOLTIO1:…"'} aria-label="Código de progreso">${exp ? code : ''}</textarea>
+    <p>${exp ? 'Copia este código y pégalo en “Importar progreso” en la otra versión de Ledly.' : 'Pega aquí el código que exportaste. Sustituirá el progreso actual de este dispositivo.'}</p>
+    <textarea class="bkta" ${exp ? 'readonly' : 'placeholder="LEDLY1:…"'} aria-label="Código de progreso">${exp ? code : ''}</textarea>
     <p class="small bkmsg" aria-live="polite"></p>
     ${exp ? `<button class="btn amber" data-b="copy">Copiar código</button>${navigator.share ? '<button class="btn ghost" data-b="share">Compartir</button>' : ''}` : '<button class="btn amber" data-b="imp">Importar</button>'}
     <button class="btn ghost" data-b="close">Cerrar</button></div>`;
@@ -35868,7 +36245,7 @@ function backupModal(mode) {
     const a = b.dataset.b;
     if (a === 'close') bg.remove();
     if (a === 'copy') { try { await navigator.clipboard.writeText(code); msg.textContent = 'Copiado. Ahora pégalo en la otra versión.'; } catch (e) { ta.focus(); ta.select(); msg.textContent = 'Selecciona el texto y cópialo a mano.'; } }
-    if (a === 'share') { try { await navigator.share({ title: 'Progreso de Voltio', text: code }); } catch (e) { } }
+    if (a === 'share') { try { await navigator.share({ title: 'Progreso de Ledly', text: code }); } catch (e) { } }
     if (a === 'imp') {
       try { const d = importCode(ta.value); if (!confirm(`¿Sustituir el progreso de este dispositivo? Se cargará una racha de ${d.streak || 0} días y ${Object.keys(d.done || {}).length} pasos completados.`)) return; S = { ...fresh(), ...d }; save(); flushSave(); bg.remove(); evaluate(); go('learn'); toast('Progreso importado'); }
       catch (e) { msg.textContent = e.message || 'No se pudo leer el código.'; }
@@ -35891,7 +36268,8 @@ function flush() {
 function overlay() {
   const L = document.createElement('div'); L.className = 'lesson'; document.body.appendChild(L); document.body.style.overflow = 'hidden';
   Fx.sound('open'); Mascot.place(); sessionStart = Date.now();
-  return { L, close() { L.remove(); document.body.style.overflow = ''; Mascot.provider = defaultTip; Mascot.place(); render(); } };
+  const t0 = sessionStart;
+  return { L, close() { L.remove(); document.body.style.overflow = ''; Mascot.provider = defaultTip; Mascot.place(); if (!L.classList.contains('splash')) addActiveTime(Date.now() - t0); render(); checkGoal(); Notify.schedule(); } };
 }
 function finishScreen(L, close, node, { xp, gems, extra = '', perfect = false }) {
   const graded = !node.extra;
@@ -35899,13 +36277,14 @@ function finishScreen(L, close, node, { xp, gems, extra = '', perfect = false })
   if (graded && !first) gems = Math.round(gems / 3);
   const wasOpen = tracksOpen();
   S.xp += xp; S.gems += gems; if (graded) S.done[node.id] = true;
-  const dr = dayRec(); dr.xp += xp; dr.min += Math.round((Date.now() - sessionStart) / 60000); if (graded && node.kind === 'lesson' && !dr.l.includes(node.id)) dr.l.push(node.id);
+  const dr = dayRec(); dr.xp += xp; if (graded && node.kind === 'lesson' && !dr.l.includes(node.id)) dr.l.push(node.id);
+  if (node.kind === 'lesson' && !node.extra) markSeen(node.id, true);
   save();
   const before = S.streak, r = practicedToday(), lt = S.perDay[today()];
   if (graded) justDone = node.id;
   L.innerHTML = `<div class="lesson-in finish"><div class="center"><div class="fchispa">${chispa('happy', 92)}</div>${perfect ? '<div class="perfect">¡Sin fallos! +5 XP</div>' : ''}
     <div class="streakpill">${ledSVG(true, 34)}<b>${S.streak}</b> ${S.streak === 1 ? 'día' : 'días'}</div>
-    <h1>${r.extended ? (before === 0 ? '¡Racha encendida!' : '¡' + S.streak + ' días seguidos!') : esc(node.review ? 'Repaso completado' : node.extra ? 'Práctica completada' : node.kind === 'project' ? 'Proyecto completado' : node.kind === 'lesson' ? 'Lección completada' : 'Reto superado')}</h1>
+    <h1>${r.extended ? (before === 0 ? '¡Racha encendida!' : '¡' + S.streak + ' días seguidos!') : esc(node.warm ? 'Calentamiento hecho' : node.review ? 'Repaso completado' : node.extra ? 'Práctica completada' : node.kind === 'project' ? 'Proyecto completado' : node.kind === 'lesson' ? 'Lección completada' : 'Reto superado')}</h1>
     <p>${r.extended ? 'Has practicado hoy. Vuelve mañana para que siga creciendo.' : 'Tu racha de hoy ya estaba asegurada.'}${repairAvailable() && lt <= CHALLENGE_LESSONS ? ' Reto de recuperación: ' + lt + '/' + CHALLENGE_LESSONS + '.' : ''}</p>
     <div class="chips"><div class="chip"><b data-cu="${xp}">+0</b><span>XP</span></div><div class="chip gemchip"><b data-cu="${gems}">+0</b><span>gemas</span></div>${extra}</div>
     ${r.newMiles.map(([n, g]) => `<p><b>Hito de ${n} días:</b> +${g} gemas</p>`).join('')}${node.id === 'f6' ? '<p><b>Desbloqueado:</b> multímetro automático (actívalo en Perfil).</p>' : ''}${!wasOpen && tracksOpen() && TRACKS.length ? `<div class="unlocked"><b>¡Especialidades desbloqueadas!</b><span>${TRACKS.map(t => esc(t.short || t.title)).join(' · ')}</span><small>Las tienes en el carrusel, debajo de Microcontroladores.</small></div>` : ''}</div>
@@ -36078,6 +36457,10 @@ function defaultTip() {
   return { title: 'Chispa', text: pickOne(TIPS), mood: 'happy' };
 }
 let justDone = null, sessionStart = Date.now();
+function dayCard() {
+  const plan = S.warmDone !== today() && ALL.some(n => n.kind === 'lesson' && S.done[n.id] === true);
+  return `<div class="card daycard"><div class="row"><span class="dring">${goalRing(46)}</span><div class="grow"><h3>${goalLine()}</h3><p style="margin:0">${S.hist[today()] !== 'done' ? (S.streak ? `Practica hoy para llegar a ${S.streak + 1} días de racha. ` : 'Completa una actividad para encender tu racha. ') : ''}${S.warmDone === today() ? 'Calentamiento hecho. ¡A por la siguiente lección!' : plan ? 'Empieza con el calentamiento: preguntas rápidas de lo que ya sabes.' : 'Cada minuto de lección cuenta para tu objetivo.'}</p></div></div>${plan ? '<button class="btn amber" id="warmgo" style="margin-top:12px">Calentamiento de hoy</button>' : ''}</div>`;
+}
 
 /* ===================== RETO DE SIMULADOR ===================== */
 function startSim(node) {
@@ -36175,9 +36558,9 @@ function renderLab() {
 }
 
 /* ===================== ARRANQUE ===================== */
-(async () => { await loadNative(); evaluate(); pruneStats(); Fx.setSound(S.sound !== false); Mascot.mount(); Mascot.setEnabled(S.mascot !== false); Mascot.provider = defaultTip; render(); flush(); setTimeout(() => S.mascot !== false && S.hist[today()] !== 'done' && Mascot.say(defaultTip().text, 'happy', 5000, '¡Hola!'), 900); })();
+(async () => { await loadNative(); evaluate(); pruneStats(); Fx.setSound(S.sound !== false); Mascot.mount(); Mascot.setEnabled(S.mascot !== false); Mascot.provider = defaultTip; render(); flush(); Notify.schedule(); setTimeout(() => { if (!S.pending.length) maybeWarmup(); if (!document.querySelector('.lesson') && S.mascot !== false && S.hist[today()] !== 'done') Mascot.say(defaultTip().text, 'happy', 5000, '¡Hola!'); }, 700); })();
 document.addEventListener('click', e => { if (e.target.closest('.nav button, .node, .tcard, .backlink, .modal .btn, .cbtn, .seg button')) Fx.sound('tap'); }, true);
-document.addEventListener('visibilitychange', () => { if (document.hidden) { flushSave(); return; } evaluate(); if (!document.querySelector('.lesson')) render(); flush(); });
+document.addEventListener('visibilitychange', () => { if (document.hidden) { flushSave(); Notify.schedule(); return; } evaluate(); if (!document.querySelector('.lesson')) render(); flush(); Notify.schedule(); setTimeout(maybeWarmup, 400); });
 window.addEventListener('pagehide', flushSave);
 /* Botón atrás de Android: cierra la ventana abierta antes de salir de la app */
 (() => {
@@ -36191,7 +36574,7 @@ window.addEventListener('pagehide', flushSave);
       if (view !== 'learn') { go('learn'); return; }
       flushSave(); App.exitApp();
     });
-    App.addListener('pause', flushSave);
+    App.addListener('pause', () => { flushSave(); Notify.schedule(); });
   } catch (e) { }
 })();
 </script>

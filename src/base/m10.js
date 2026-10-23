@@ -1,4 +1,4 @@
-/* Voltio · curso base, módulo 12: Circuitos integrados y el 555.
+/* Ledly · curso base, módulo 12: Circuitos integrados y el 555.
    Orden: qué es un integrado (k1) → alimentación y desacoplo (k3) → pull-up y pull-down (k20)
    → 555 astable (k4) → 555 monoestable (k5) → trucos del 555 (k15).
    Aquí aún NO se han visto operacionales ni comparadores como lección (k6, k7: se explica en el sitio qué

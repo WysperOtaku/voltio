@@ -1,4 +1,4 @@
-/* Voltio · vista 3D del montaje (three.js r128, cargado bajo demanda) */
+/* Ledly · vista 3D del montaje (three.js r128, cargado bajo demanda) */
 const View3D = (() => {
   let loading = null;
   function loadThree() {

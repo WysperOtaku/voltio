@@ -1,4 +1,4 @@
-/* Voltio · símbolos de esquema. Cada símbolo de 2 terminales mide 60 de largo
+/* Ledly · símbolos de esquema. Cada símbolo de 2 terminales mide 60 de largo
    (terminales en x-30 y x+30) y se gira con rot (grados). */
 const Schem = (() => {
   const st = 'stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"';

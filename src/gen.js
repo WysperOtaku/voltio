@@ -1,4 +1,4 @@
-/* Voltio · generadores de ejercicios. Cada uno devuelve un ejercicio nuevo
+/* Ledly · generadores de ejercicios. Cada uno devuelve un ejercicio nuevo
    (mc o num) con valores distintos y distractores sacados de errores típicos. */
 const Gen = (() => {
   const pick = a => a[Math.floor(Math.random() * a.length)];

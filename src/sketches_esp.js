@@ -1,4 +1,4 @@
-/* Voltio · programas para el ESP32. El ESP32 no se emula instrucción a instrucción
+/* Ledly · programas para el ESP32. El ESP32 no se emula instrucción a instrucción
    (es un chip Xtensa de 240 MHz): cada programa se ejecuta como un modelo de su
    comportamiento con la misma lógica que el código que se muestra. */
 const ESP_SKETCHES = {

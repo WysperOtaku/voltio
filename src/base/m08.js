@@ -1,4 +1,4 @@
-/* Voltio · curso base, módulo 10: Semiconductores y diodos.
+/* Ledly · curso base, módulo 10: Semiconductores y diodos.
    Orden: unión PN (i1) → diodo (i2) → hoja de datos (k2) → curva y modelos (i8) → tipos de diodo (i9)
    → rectificadores (i3) → filtrado y rizado (i4) → zener (i5) → recortadores y multiplicadores (i10) → LEDs a fondo (i6).
    Aquí aún NO se han visto transistores (m9), chips ni el 555 (m10), operacionales, reguladores ni microcontroladores. */

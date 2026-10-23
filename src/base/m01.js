@@ -1,4 +1,4 @@
-/* Voltio · curso base, módulo 1: Qué es la electricidad.
+/* Ledly · curso base, módulo 1: Qué es la electricidad.
    b1 carga · b2 materiales · b3 corriente (A, mA, I = Q/t) · b4 tensión (V, masa, pilas en serie) ·
    b9 energía (J, W = Q·V, mAh, Wh) · b5 resistencia (Ω, R = ρ·L/S) · b7 pilas y fuentes (resistencia interna cualitativa).
    Aquí aún no hay ley de Ohm, ni potencia, ni LED, ni esquemas. */
@@ -275,6 +275,7 @@
   Object.assign(C, {
     ba_cellsum: { name: 'Pilas en serie', alts: [
       { title: 'Escalones que se apilan', text: 'Unir pilas en serie (el + de una con el − de la siguiente) es apilar escalones: las tensiones se suman. Tres pilas de 1,5 V dan 4,5 V. Si una va del revés, en vez de subir un escalón lo baja: se resta.', svg: S.stack, q: mcq('Tres pilas de 1,5 V en serie, una de ellas del revés. ¿Tensión total?', ['1,5 V', '4,5 V', '3 V', '0 V'], '1,5 + 1,5 − 1,5.') },
+      { title: 'El error típico', text: '5 pilas de 1,5 V con una del revés: mucha gente suma las 5 (7,5 V) y luego resta 1,5 V, y le sale 6 V. Pero la del revés nunca estuvo sumando: <b>4 empujan a favor</b> (6 V) y <b>1 empuja en contra</b> (−1,5 V) → <b>4,5 V</b>. Cada pila del revés anula a una buena: es como tener 3 pilas bien puestas.', svg: S.stack, q: mcq('6 pilas de 1,5 V en serie, una de ellas del revés. ¿Tensión total?', ['6 V', '7,5 V', '9 V', '4,5 V'], '5 a favor (7,5 V) y 1 en contra (−1,5 V): 6 V. Equivale a 4 pilas bien puestas.') },
       { title: 'Móntalas', text: 'Añade pilas y gira alguna. Cada pila bien puesta sube un escalón; cada una del revés lo baja.', tune: { viz: 'cells', params: { n: { label: 'Pilas', val: 3, min: 1, max: 6, step: 1, dec: 0 }, v: { val: 1.5, list: [1.5, 3.7], fixed: true }, rev: { label: 'Del revés (0 o 1)', val: 0, list: [0, 1], dec: 0 }, load: { val: 0, list: [0, 1], fixed: true } } }, q: mcq('Dos celdas de litio de 3,7 V en serie dan…', ['7,4 V', '3,7 V', '0 V', '1,85 V'], 'Se suman.') }
     ] }
   });
@@ -337,8 +338,11 @@
     return { ...pick(cases)(), h: 'Entre A, mA y µA hay saltos de 1000: prefijo más pequeño, número más grande.' };
   }, 'ba_ampconv');
   Gen.add('cellsSeries', () => {
-    const v = pick([1.5, 1.5, 3.7]), n = ri(2, 6), r = Math.random() < 0.4 ? ri(1, Math.floor(n / 2)) : 0, V = (n - 2 * r) * v;
-    return { ...N(`${n} pilas de ${fmt(v)} V en serie${r ? `, ${r === 1 ? 'una' : r} de ellas del revés` : ', todas bien puestas'}. ¿Tensión total?`, V, 'V', r ? `Las ${n - r} bien puestas suman ${fmt((n - r) * v)} V y las ${r} del revés restan ${fmt(r * v)} V: ${fmt(V)} V.` : `${n} × ${fmt(v)} = ${fmt(V)} V.`), h: 'Suma las que van bien y resta las que van del revés.' };
+    const v = pick([1.5, 1.5, 3.7]), n = ri(2, 6), r = Math.random() < 0.4 ? ri(1, Math.floor(n / 2)) : 0, V = (n - 2 * r) * v, g = n - r;
+    // La explicación ataca el error típico: creer que la del revés solo «no suma» o restarla a la suma de todas.
+    const e = r ? `De las ${n} pilas, ${g} empuja${g === 1 ? '' : 'n'} a favor (${g} × ${fmt(v)} = ${fmt(g * v)} V) y ${r === 1 ? 'una empuja' : r + ' empujan'} en contra (−${fmt(r * v)} V): ${fmt(g * v)} − ${fmt(r * v)} = ${fmt(V)} V. Ojo: la del revés no suma primero para luego restar; resta desde el principio. Por eso cada una del revés «anula» a una buena.`
+      : `${n} × ${fmt(v)} = ${fmt(V)} V.`;
+    return { ...N(`${n} pilas de ${fmt(v)} V en serie${r ? `, ${r === 1 ? 'una' : r} de ellas del revés` : ', todas bien puestas'}. ¿Tensión total?`, V, 'V', e), h: r ? 'Cuenta cuántas empujan a favor y cuántas en contra. Las del revés no forman parte de la suma: restan.' : 'En serie, las tensiones se suman.' };
   }, 'ba_cellsum');
   Gen.add('whBatt', () => {
     const mAh = pick([500, 1000, 2000, 2500, 3000, 5000, 10000]), V = pick([3.7, 7.4, 12, 1.2]), Wh = mAh / 1000 * V;

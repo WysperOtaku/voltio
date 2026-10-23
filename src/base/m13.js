@@ -1,4 +1,4 @@
-/* Voltio · curso base, módulo 20: Alimentación a fondo (tras la puerta de las especialidades)
+/* Ledly · curso base, módulo 20: Alimentación a fondo (tras la puerta de las especialidades)
    Orden: o6 (dimensionar un buck) → o7 (supercondensadores y solar) → p13.
    Usa todo el curso base: o3 (buck), g9 (bobina), i4 (rizado), j8 (Rds(on)), g8 (½ · C · V²), o5 (cargador de litio),
    d11 (máxima potencia) y n30 (PCB). */

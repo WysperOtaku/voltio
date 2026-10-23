@@ -1,4 +1,4 @@
-/* Voltio · temario. Orden inspirado en Getting Started in Electronics (Mims),
+/* Ledly · temario. Orden inspirado en Getting Started in Electronics (Mims),
    profundidad de The Art of Electronics e ideas prácticas de Make: Electronics.
    Todo el texto y los ejercicios son originales. */
 const I = (text, x = {}) => ({ t: 'info', text, ...x });

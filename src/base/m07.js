@@ -1,4 +1,4 @@
-/* Voltio · curso base, módulo 8: Corriente alterna
+/* Ledly · curso base, módulo 8: Corriente alterna
    Lote 3. VIZ propias: sine, duty, scope, rms, xc, logAxis, db, rcFilter (scopeTrigger ya existe).
    Generadores m7_*. Los conceptos que solo usa este módulo se amplían o se crean aquí. */
 (() => {

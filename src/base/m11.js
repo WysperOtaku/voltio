@@ -1,4 +1,4 @@
-/* Voltio · curso base, módulo 15: Lógica digital
+/* Ledly · curso base, módulo 15: Lógica digital
    Orden: l1 (binario) → l2 (hexadecimal) → l3 (puertas) → s6a, s6b → l4 (Boole) → l5 (combinacional)
    → k9 (chips lógicos) → l6 (biestables) → slatch → l7 (contadores y rebotes) → p6.
    Usa: a1 (potencias), d1/d2 (serie y paralelo de interruptores), b20, j4 (Darlington), k1–k4, k14 (Schmitt), k20 (pull-up).

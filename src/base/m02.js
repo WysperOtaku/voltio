@@ -1,4 +1,4 @@
-/* Voltio · curso base, módulo 2: Ley de Ohm y potencia.
+/* Ledly · curso base, módulo 2: Ley de Ohm y potencia.
    a4 proporciones y porcentajes · c1 ley de Ohm (intuición) · a3 despejar · c2 calcular con Ohm · a6 estimar ·
    c3 gráficas V–I · c4 potencia · c5 potencia de una resistencia · b8 seguridad · c6 energía y consumo · a8 unidades.
    Aquí aún no hay circuitos en serie ni en paralelo, ni tolerancias, ni condensadores. */

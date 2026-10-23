@@ -1,4 +1,4 @@
-/* Voltio · curso base, módulo 0: Números para electrónica.
+/* Ledly · curso base, módulo 0: Números para electrónica.
    Sin ninguna unidad eléctrica: solo metros, gramos, segundos, litros y bytes.
    a1 enseña potencias de 10 y notación científica · a2 los prefijos (p…G) · a7 notación de ingeniería y cifras significativas. */
 (() => {

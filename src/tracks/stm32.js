@@ -1,4 +1,4 @@
-/* Voltio · especialidad: STM32 y ARM Cortex-M. El flujo de trabajo profesional con
+/* Ledly · especialidad: STM32 y ARM Cortex-M. El flujo de trabajo profesional con
    microcontroladores de 32 bits: CubeMX, registros CMSIS, HAL/LL, relojes, NVIC,
    temporizadores, DMA, FreeRTOS y producto real. Todo el texto es original. */
 (() => {

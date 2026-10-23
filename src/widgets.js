@@ -1,4 +1,4 @@
-/* Voltio · ejercicios interactivos.
+/* Ledly · ejercicios interactivos.
    Cada widget: render(ex, el, ctx) → { check(): {ok, right?, msg?}, destroy?() }
    ctx.ready(bool) activa el botón Comprobar; ctx.done(result) para widgets que se corrigen solos. */
 const Widgets = (() => {
@@ -491,6 +491,73 @@ const Widgets = (() => {
     el.querySelectorAll('.opt').forEach(b => b.addEventListener('click', () => { el.querySelectorAll('.opt').forEach(x => x.setAttribute('aria-pressed', 'false')); b.setAttribute('aria-pressed', 'true'); sel = +b.dataset.i; ctx.ready(true); sfx('select'); }));
     return { check: () => ({ ok: sel === ex.a, right: 'el esquema marcado' }), lock: () => el.querySelectorAll('.opt').forEach(b => { b.disabled = true; if (+b.dataset.i === ex.a) b.classList.add('right'); else if (+b.dataset.i === sel) b.classList.add('wrong'); }) };
   }
+  /* ============ CALCULADORA ============ */
+  /* Debajo de las preguntas numéricas: para no tener que salir a la calculadora del móvil.
+     Entiende coma decimal, prefijos (p n µ m k M G: 4,7k = 4700), notación E (2,2E-6), paréntesis,
+     raíz, cuadrado, potencias (^) y π. No usa eval: tiene su propio analizador. */
+  const PREFIX = { p: 1e-12, n: 1e-9, 'µ': 1e-6, u: 1e-6, m: 1e-3, k: 1e3, M: 1e6, G: 1e9 };
+  function calcEval(src) {
+    const s = String(src).replace(/\s/g, '').replace(/×/g, '*').replace(/÷/g, '/').replace(/−/g, '-').replace(/,/g, '.');
+    let i = 0;
+    const peek = () => s[i], eat = c => { if (s[i] === c) { i++; return true; } return false; };
+    function number() {
+      const m = /^(\d+\.?\d*|\.\d+)(E[-+]?\d+)?/.exec(s.slice(i)); if (!m) throw 0;
+      i += m[0].length; let v = parseFloat(m[1]) * (m[2] ? Math.pow(10, +m[2].slice(1)) : 1);
+      if (PREFIX[s[i]] != null && !/[a-zA-Zµ]/.test(s[i + 1] || '')) v *= PREFIX[s[i++]];
+      return v;
+    }
+    function primary() {
+      if (eat('(')) { const v = expr(); eat(')'); return v; }
+      if (eat('π')) return Math.PI;
+      return number();
+    }
+    function postfix() { let v = primary(); for (;;) { if (eat('²')) v = v * v; else if (eat('^')) v = Math.pow(v, unary()); else return v; } }
+    function unary() { if (eat('-')) return -unary(); if (eat('+')) return unary(); if (eat('√')) return Math.sqrt(unary()); return postfix(); }
+    function term() { let v = unary(); for (;;) { if (eat('*')) v *= unary(); else if (eat('/')) v /= unary(); else if (peek() === '(' || peek() === 'π' || peek() === '√') v *= unary(); else return v; } }
+    function expr() { let v = term(); for (;;) { if (eat('+')) v += term(); else if (eat('-')) v -= term(); else return v; } }
+    const v = expr(); if (i < s.length || !isFinite(v)) throw 0; return v;
+  }
+  const SUPN = n => String(n).replace(/-/g, '⁻').replace(/\d/g, d => '⁰¹²³⁴⁵⁶⁷⁸⁹'[d]);
+  function calcFmt(v) {
+    if (v === 0) return '0';
+    const a = Math.abs(v);
+    if (a >= 1e-3 && a < 1e9) return String(+v.toPrecision(7)).replace('.', ',');
+    const e = Math.floor(Math.log10(a)); return String(+(v / 10 ** e).toPrecision(5)).replace('.', ',') + ' × 10' + SUPN(e);
+  }
+  const plain = v => String(+v.toPrecision(7)).replace('.', ',');
+  function calcPad(onUse) {
+    const box = document.createElement('div'); box.className = 'calc';
+    let open = true; try { open = localStorage.getItem('voltio-calc') !== '0'; } catch (e) { }
+    const KEYS = [['C', 'clr'], ['(', ''], [')', ''], ['⌫', 'del'], ['÷', 'op'],
+      ['7', 'n'], ['8', 'n'], ['9', 'n'], ['√', 'fn'], ['×', 'op'],
+      ['4', 'n'], ['5', 'n'], ['6', 'n'], ['x²', 'fn'], ['−', 'op'],
+      ['1', 'n'], ['2', 'n'], ['3', 'n'], ['π', 'fn'], ['+', 'op'],
+      ['0', 'n'], [',', 'n'], ['E', 'fn'], ['^', 'fn'], ['=', 'eq'],
+      ['n', 'pre'], ['µ', 'pre'], ['m', 'pre'], ['k', 'pre'], ['M', 'pre']];
+    box.innerHTML = `<button type="button" class="ctog" aria-expanded="${open}"><svg viewBox="0 0 24 24" width="18" height="18"><rect x="5" y="2" width="14" height="20" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 6h8M8 11h2M12 11h2M16 11h0M8 15h2M12 15h2M8 19h2M12 19h2M16 15v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>Calculadora</button>
+      <div class="cbody" ${open ? '' : 'hidden'}><div class="cdisp"><span class="cexpr"></span><b class="cres">0</b></div>
+      <div class="ckeys">${KEYS.map(([k, t]) => `<button type="button" class="ck ${t}" data-k="${k}">${k}</button>`).join('')}</div>
+      <button type="button" class="cuse" disabled>Usar como respuesta</button></div>`;
+    let ex = '', last = null;
+    const exE = box.querySelector('.cexpr'), resE = box.querySelector('.cres'), use = box.querySelector('.cuse');
+    const show = () => {
+      exE.textContent = ex.replace(/\*/g, '×').replace(/E/g, '·10^');
+      let v = null; try { if (ex) v = calcEval(ex); } catch (e) { }
+      last = v; resE.textContent = v == null ? (ex ? '…' : '0') : '= ' + calcFmt(v); resE.classList.toggle('dim', v == null);
+      use.disabled = v == null;
+    };
+    box.querySelector('.ctog').addEventListener('click', () => { open = !open; box.querySelector('.cbody').hidden = !open; box.querySelector('.ctog').setAttribute('aria-expanded', open); try { localStorage.setItem('voltio-calc', open ? '1' : '0'); } catch (e) { } sfx('tap'); });
+    box.querySelector('.ckeys').addEventListener('click', e => {
+      const b = e.target.closest('[data-k]'); if (!b) return; const k = b.dataset.k;
+      if (k === 'C') ex = ''; else if (k === '⌫') ex = ex.slice(0, -1);
+      else if (k === '=') { if (last != null) ex = plain(last).replace('-', '−'); }
+      else if (k === 'x²') ex += '²'; else if (k === '√') ex += '√'; else ex += k;
+      sfx('tick'); show();
+    });
+    use.addEventListener('click', () => { if (last == null) return; onUse(plain(last)); sfx('select'); Fx && Fx.anim && Fx.anim(use, 'pop'); });
+    show();
+    return box;
+  }
   function numw(ex, el, ctx) {
     el.innerHTML = `${ex.code ? `<pre class="code">${esc(ex.code)}</pre>` : ''}${ex.sch ? `<div class="schbox">${Schem.draw(SCH[ex.sch])}</div>` : ''}<label class="numin"><button type="button" class="pm" aria-label="Cambiar el signo">±</button><input inputmode="decimal" autocomplete="off" placeholder="Tu respuesta" aria-label="Respuesta en ${ex.u}"><span>${ex.u}</span></label>`;
     const inp = el.querySelector('input');
@@ -499,8 +566,10 @@ const Widgets = (() => {
     const parse = s => { s = String(s).trim().replace(/\s/g, '').replace('−', '-').replace(',', '.').replace(/[^\d.\-]/g, ''); return s === '' || s === '-' ? NaN : Number(s); };
     inp.addEventListener('input', () => ctx.ready(!isNaN(parse(inp.value))));
     inp.addEventListener('keydown', e => { if (e.key === 'Enter') ctx.submit(); });
-    setTimeout(() => inp.focus(), 50);
-    return { check: () => { const v = parse(inp.value), tol = ex.tol ?? Math.max(Math.abs(ex.a) * 0.01, 1e-9); return { ok: Math.abs(v - ex.a) <= tol, right: num(ex.a, 3) + ' ' + ex.u }; }, lock: () => inp.disabled = true };
+    // Calculadora debajo; en el móvil no se abre el teclado solo, para que se vea la calculadora.
+    el.appendChild(calcPad(v => { inp.value = v; inp.dispatchEvent(new Event('input')); }));
+    try { if (!matchMedia('(pointer: coarse)').matches) setTimeout(() => inp.focus(), 50); } catch (e) { }
+    return { check: () => { const v = parse(inp.value), tol = ex.tol ?? Math.max(Math.abs(ex.a) * 0.01, 1e-9); return { ok: Math.abs(v - ex.a) <= tol, right: num(ex.a, 3) + ' ' + ex.u }; }, lock: () => { inp.disabled = true; el.querySelectorAll('.calc button').forEach(x => x.disabled = true); } };
   }
   function resw(ex, el, ctx) { // leer bandas
     const bandsArr = ex.bands;
@@ -710,5 +779,5 @@ const Widgets = (() => {
   const UNGRADED = new Set(['info', 'explore', 'steps']);
   // Utilidades de dibujo para que las especialidades añadan sus propias visualizaciones (Object.assign(Widgets.VIZ, …)).
   const H = { esc, num, fR, fI, fV, st, batt, resBody, ledBulb, npnSym, flowPath, stackBar, hbar, heat, BANDHEX };
-  return { render, KIND, UNGRADED, SCENES, VIZ, IMG, H };
+  return { render, KIND, UNGRADED, SCENES, VIZ, IMG, H, calcEval };
 })();

@@ -1,4 +1,4 @@
-/* Voltio · efectos: sonidos sintetizados (sin archivos), partículas, confeti y pequeñas
+/* Ledly · efectos: sonidos sintetizados (sin archivos), partículas, confeti y pequeñas
    animaciones. Todo respeta prefers-reduced-motion y los interruptores de Perfil. */
 const Fx = (() => {
   let ac = null, master = null, on = true;

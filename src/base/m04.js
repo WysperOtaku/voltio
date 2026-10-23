@@ -1,4 +1,4 @@
-/* Voltio · curso base, módulo 5: El banco de trabajo: medir y soldar.
+/* Ledly · curso base, módulo 5: El banco de trabajo: medir y soldar.
    Enseña: el multímetro (partes y rangos f1, tensión f2, corriente f3, resistencia y continuidad f4, errores y
    exactitud f5, autorrango f6), la fuente de laboratorio CV/CC (f10) y soldar componentes de inserción (q6).
    Usa: serie, paralelo, Kirchhoff, divisor, tolerancia y colores (m3), Ohm y potencia (m2), protoboard (e5, e6).

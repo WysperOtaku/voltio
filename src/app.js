@@ -1,4 +1,4 @@
-/* Voltio · aplicación (vistas, lecciones, repaso, retos, proyectos y laboratorio) */
+/* Ledly · aplicación (vistas, lecciones, repaso, retos, proyectos y laboratorio) */
 /* Cada nodo pertenece a una secuencia: el curso base ('base') o una especialidad (su id).
    Dentro de cada secuencia el avance es lineal; las especialidades se abren al terminar GATE_UNIT. */
 const GATE_UNIT = 'm12';
@@ -15,7 +15,7 @@ const LESSON = Object.fromEntries(ALL.filter(n => n.kind === 'lesson').map(n => 
 const KEY = 'voltio-v1';
 const MILESTONES = [[3, 20], [7, 50], [14, 80], [30, 150], [50, 200], [100, 500], [365, 1000]];
 const FREEZE_PRICE = 100, FREEZE_MAX = 2, REPAIR_PRICE = 200, REPAIR_DAYS = 3, CHALLENGE_LESSONS = 3;
-function fresh() { return { v: 3, offset: 0, streak: 0, longest: 0, covered: null, hist: {}, freezes: 1, gems: 300, xp: 0, done: {}, perDay: {}, lost: null, miles: [], pending: [], circ: {}, chk: {}, labMode: 'battery', meterAuto: false, miss: {}, altIdx: {}, sound: true, mascot: true, exam: {}, wk: {} }; }
+function fresh() { return { v: 3, offset: 0, streak: 0, longest: 0, covered: null, hist: {}, freezes: 1, gems: 300, xp: 0, done: {}, perDay: {}, lost: null, miles: [], pending: [], circ: {}, chk: {}, labMode: 'battery', meterAuto: false, miss: {}, altIdx: {}, sound: true, mascot: true, exam: {}, wk: {}, goal: 10, practiceAt: '19:00', notif: false, warm: null, warmDone: null, seen: {}, goalHit: {} }; }
 let S;
 try { S = JSON.parse(localStorage.getItem(KEY)) || fresh(); } catch (e) { S = fresh(); }
 if (S.v !== 3) S = { ...fresh(), ...S, v: 3, done: {}, chk: {}, circ: {} };
@@ -36,10 +36,10 @@ async function loadNative() {
   try { const r = await NativePrefs.get({ key: KEY }); if (r && r.value) { const n = JSON.parse(r.value); if (!S.savedAt || (n.savedAt || 0) > S.savedAt) S = { ...fresh(), ...n }; } } catch (e) { }
 }
 /* Copia de seguridad: un código de texto que se copia y se pega */
-function exportCode() { return 'VOLTIO1:' + btoa(unescape(encodeURIComponent(JSON.stringify(S)))); }
+function exportCode() { return 'LEDLY1:' + btoa(unescape(encodeURIComponent(JSON.stringify(S)))); }
 function importCode(txt) {
-  const t = String(txt).trim(); if (!t.startsWith('VOLTIO1:')) throw new Error('El código no es de Voltio.');
-  const d = JSON.parse(decodeURIComponent(escape(atob(t.slice(8)))));
+  const t = String(txt).trim(), pre = ['LEDLY1:', 'VOLTIO1:'].find(p => t.startsWith(p)); if (!pre) throw new Error('El código no es de Ledly.');
+  const d = JSON.parse(decodeURIComponent(escape(atob(t.slice(pre.length)))));
   if (typeof d !== 'object' || d.v == null) throw new Error('El código está incompleto.');
   return d;
 }
@@ -132,7 +132,7 @@ let view = 'learn';
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 function vib(p) { try { navigator.vibrate && navigator.vibrate(p); } catch (e) { } }
 function toast(msg) { document.querySelectorAll('.toast').forEach(t => t.remove()); const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg; document.body.appendChild(t); setTimeout(() => t.remove(), 3200); }
-function header() { $('#tStreak').textContent = S.streak; $('#tGems').textContent = S.gems; $('#tFreeze').textContent = S.freezes; $('#tLed').classList.toggle('on', S.hist[today()] === 'done'); const n = Object.keys(S.miss).length; const b = $('#revBadge'); if (b) { b.textContent = n; b.hidden = !n; } }
+function header() { const g = $('#tGoal'); if (g) { g.innerHTML = goalRing(22); g.setAttribute('aria-label', goalLine()); } $('#tStreak').textContent = S.streak; $('#tGems').textContent = S.gems; $('#tFreeze').textContent = S.freezes; $('#tLed').classList.toggle('on', S.hist[today()] === 'done'); const n = Object.keys(S.miss).length; const b = $('#revBadge'); if (b) { b.textContent = n; b.hidden = !n; } }
 function ledSVG(on, size = 150) {
   const id = 'g' + Math.random().toString(36).slice(2, 7);
   return `<svg viewBox="0 0 150 150" width="${size}" height="${size}" aria-hidden="true"><defs><radialGradient id="${id}" cx="50%" cy="42%" r="55%"><stop offset="0" stop-color="${on ? '#FFE9A8' : '#9AA7BF'}"/><stop offset=".6" stop-color="${on ? '#FFB000' : '#5B6782'}"/><stop offset="1" stop-color="${on ? '#E08A00' : '#3B4660'}"/></radialGradient></defs>
@@ -222,7 +222,7 @@ function bindNodes() {
 function renderLearn() {
   let html = '';
   if (repairAvailable()) html += repairCard(true);
-  else if (S.hist[today()] !== 'done') html += `<div class="card hello"><div class="row">${chispa(S.streak ? 'happy' : 'think', 48)}<div class="grow"><h3>${S.streak > 0 ? 'Mantén encendida tu racha' : 'Enciende tu primera racha'}</h3><p style="margin:0">Completa una lección, un repaso o un reto hoy para ${S.streak > 0 ? 'llegar a ' + (S.streak + 1) + ' días' : 'empezar'}.</p></div></div></div>`;
+  html += dayCard();
   const nm = Object.keys(S.miss).length;
   if (S.wkSeen !== weekKey() && Object.keys(S.wk || {}).some(d => d < weekKey() && d >= add(weekKey(), -7))) html += `<button class="card revcta weekcta" id="wkcta"><span class="revn">${chispa('happy', 34)}</span><span><b>Tu resumen semanal está listo</b><br><small>Lo que has aprendido, lo que más te ha costado y cómo vas</small></span></button>`;
   if (nm) html += `<button class="card revcta" id="revcta"><span class="revn">${nm}</span><span><b>Repasa tus fallos</b><br><small>Con explicaciones distintas a la primera vez</small></span></button>`;
@@ -237,6 +237,7 @@ function renderLearn() {
   bindCarousel();
   const rc = $('#revcta'); rc && (rc.onclick = () => startReview());
   const wc = $('#wkcta'); wc && (wc.onclick = () => startWeekly());
+  const wu = $('#warmgo'); wu && (wu.onclick = () => startWarmup());
   bindRepair();
   if (firstOpen && (!renderLearn.scrolled || justDone)) { renderLearn.scrolled = true; const el = main.querySelector(`[data-node="${firstOpen.id}"]`); el && setTimeout(() => el.scrollIntoView({ block: 'center', behavior: justDone ? 'smooth' : 'auto' }), 60); }
   if (justDone) { setTimeout(() => { Fx.sound('step'); Fx.burstAt(main.querySelector('.node.just-open'), { n: 18 }); }, 700); justDone = null; }
@@ -397,6 +398,13 @@ function renderProfile() {
    <div class="kv"><div><b>${S.xp}</b><span>XP total</span></div><div><b>${done}/${total}</b><span>Pasos completados</span></div><div><b>${S.streak}</b><span>Racha actual</span></div><div><b>${Object.keys(S.miss).length}</b><span>Por repasar</span></div></div>
    <div class="card"><h3>Módulos</h3>${UNITS.map((u, ui) => { const d = u.nodes.filter(n => S.done[n.id]).length; return `<div class="mprog" style="--uc:${unitColor(ui)}"><span>${ui}. ${esc(u.title)}</span><div class="uprog"><i style="width:${d / u.nodes.length * 100}%"></i></div><small>${d}/${u.nodes.length}</small></div>`; }).join('')}</div>
    ${TRACKS.length ? `<div class="card"><h3>Especialidades</h3>${tracksOpen() ? '' : `<p>Se abren al terminar Microcontroladores (${gateLeft() === 1 ? 'te falta 1 paso' : 'te faltan ' + gateLeft() + ' pasos'}).</p>`}${TRACKS.map(t => { const s = trackStats(t); return `<button class="mprog trow" data-track="${t.id}" style="--uc:${t.color}"><span>${esc(t.title)}<small>${esc(s.rank)} · ${s.pd}/${s.pt} proyectos</small></span><div class="uprog"><i style="width:${s.nodes.length ? s.done / s.nodes.length * 100 : 0}%"></i></div><small>${s.done}/${s.nodes.length}</small></button>`; }).join('')}</div>` : ''}
+   <div class="card"><h3>Tu día</h3><p>Cuánto quieres practicar cada día y a qué hora te aviso.</p>
+    <div class="seg goalseg">${GOALS.map(g => `<button data-goal="${g}" aria-pressed="${(S.goal || 10) === g}">${g} min</button>`).join('')}</div>
+    <p class="small" style="margin:8px 0 12px">${goalLine()}.</p>
+    <label class="timerow"><span>Hora de practicar</span><input type="time" id="ptime" value="${S.practiceAt || '19:00'}"></label>
+    <label class="switch"><input type="checkbox" id="pnotif" ${S.notif ? 'checked' : ''}><span>Notificaciones: tu hora, recordatorios y avisos de racha</span></label>
+    <p class="small" id="pnmsg" style="margin:6px 0 0">${Notify.available() ? 'Si se te pasa la hora, Chispa te lo recordará durante el día; también te avisará si usas un protector o pierdes la racha.' : 'Las notificaciones funcionan en la app instalada en el móvil.'}</p>
+    ${Notify.available() ? '<button class="btn ghost" id="ptest" style="margin-top:10px">Probar una notificación</button>' : ''}</div>
    <div class="card"><h3>Sonido y mascota</h3><label class="switch"><input type="checkbox" id="psound" ${S.sound ? 'checked' : ''}><span>Sonidos</span></label><label class="switch"><input type="checkbox" id="pmascot" ${S.mascot ? 'checked' : ''}><span>Chispa en pantalla (tócala para pedir pistas)</span></label></div>
    <div class="card"><h3>Multímetro</h3><p>${autoUnlocked ? 'Ya dominas el multímetro manual. Puedes pasar al automático en el resto de ejercicios.' : 'Completa la lección “Multímetro automático” del módulo 5 para desbloquear el autorrango.'}</p>
     <label class="switch"><input type="checkbox" id="mauto" ${S.meterAuto && autoUnlocked ? 'checked' : ''} ${autoUnlocked ? '' : 'disabled'}><span>Usar multímetro automático</span></label></div>
@@ -408,6 +416,13 @@ function renderProfile() {
    <div class="card"><h3>Sobre el temario</h3><p style="margin:0">El orden sigue la progresión de <i>Getting Started in Electronics</i> (Forrest Mims III), con la profundidad de <i>The Art of Electronics</i> e ideas prácticas de <i>Make: Electronics</i>. Las explicaciones, ejercicios y simulaciones son originales.</p></div>`;
   main.querySelectorAll('[data-track]').forEach(x => x.onclick = () => { curTrack = x.dataset.track; go('track'); });
   $('#wkgo').onclick = () => startWeekly();
+  main.querySelectorAll('[data-goal]').forEach(b => b.onclick = () => { S.goal = +b.dataset.goal; save(); Fx.sound('select'); header(); render(); checkGoal(); });
+  $('#ptime').onchange = e => { S.practiceAt = e.target.value || '19:00'; save(); Notify.schedule(); toast('Te avisaré a las ' + S.practiceAt); };
+  $('#pnotif').onchange = async e => {
+    if (e.target.checked) { const r = await Notify.permission(true); if (r !== 'granted' && r !== 'web') { e.target.checked = false; $('#pnmsg').textContent = 'Android no ha dado permiso para notificaciones. Actívalo en Ajustes del sistema → Apps → Ledly → Notificaciones.'; return; } }
+    S.notif = e.target.checked; save(); Notify.schedule(); Fx.sound('select');
+  };
+  const pt = $('#ptest'); pt && (pt.onclick = async () => { const r = await Notify.permission(true); if (r !== 'granted') { toast('Primero da permiso de notificaciones'); return; } toast((await Notify.test()) ? 'En unos segundos te llega una de prueba' : 'No se pudo programar'); });
   $('#psound').onchange = e => { S.sound = e.target.checked; Fx.setSound(S.sound); save(); Fx.sound('select'); };
   $('#pmascot').onchange = e => { S.mascot = e.target.checked; Mascot.setEnabled(S.mascot); save(); };
   const m = $('#mauto'); m && m.addEventListener('change', () => { S.meterAuto = m.checked; save(); toast(m.checked ? 'Multímetro automático activado' : 'Multímetro manual activado'); });
@@ -425,8 +440,8 @@ function backupModal(mode) {
   const bg = document.createElement('div'); bg.className = 'modal-bg';
   const exp = mode === 'export', code = exp ? exportCode() : '';
   bg.innerHTML = `<div class="modal" role="dialog" aria-modal="true"><h2>${exp ? 'Exportar progreso' : 'Importar progreso'}</h2>
-    <p>${exp ? 'Copia este código y pégalo en “Importar progreso” en la otra versión de Voltio.' : 'Pega aquí el código que exportaste. Sustituirá el progreso actual de este dispositivo.'}</p>
-    <textarea class="bkta" ${exp ? 'readonly' : 'placeholder="VOLTIO1:…"'} aria-label="Código de progreso">${exp ? code : ''}</textarea>
+    <p>${exp ? 'Copia este código y pégalo en “Importar progreso” en la otra versión de Ledly.' : 'Pega aquí el código que exportaste. Sustituirá el progreso actual de este dispositivo.'}</p>
+    <textarea class="bkta" ${exp ? 'readonly' : 'placeholder="LEDLY1:…"'} aria-label="Código de progreso">${exp ? code : ''}</textarea>
     <p class="small bkmsg" aria-live="polite"></p>
     ${exp ? `<button class="btn amber" data-b="copy">Copiar código</button>${navigator.share ? '<button class="btn ghost" data-b="share">Compartir</button>' : ''}` : '<button class="btn amber" data-b="imp">Importar</button>'}
     <button class="btn ghost" data-b="close">Cerrar</button></div>`;
@@ -436,7 +451,7 @@ function backupModal(mode) {
     const a = b.dataset.b;
     if (a === 'close') bg.remove();
     if (a === 'copy') { try { await navigator.clipboard.writeText(code); msg.textContent = 'Copiado. Ahora pégalo en la otra versión.'; } catch (e) { ta.focus(); ta.select(); msg.textContent = 'Selecciona el texto y cópialo a mano.'; } }
-    if (a === 'share') { try { await navigator.share({ title: 'Progreso de Voltio', text: code }); } catch (e) { } }
+    if (a === 'share') { try { await navigator.share({ title: 'Progreso de Ledly', text: code }); } catch (e) { } }
     if (a === 'imp') {
       try { const d = importCode(ta.value); if (!confirm(`¿Sustituir el progreso de este dispositivo? Se cargará una racha de ${d.streak || 0} días y ${Object.keys(d.done || {}).length} pasos completados.`)) return; S = { ...fresh(), ...d }; save(); flushSave(); bg.remove(); evaluate(); go('learn'); toast('Progreso importado'); }
       catch (e) { msg.textContent = e.message || 'No se pudo leer el código.'; }
@@ -459,7 +474,8 @@ function flush() {
 function overlay() {
   const L = document.createElement('div'); L.className = 'lesson'; document.body.appendChild(L); document.body.style.overflow = 'hidden';
   Fx.sound('open'); Mascot.place(); sessionStart = Date.now();
-  return { L, close() { L.remove(); document.body.style.overflow = ''; Mascot.provider = defaultTip; Mascot.place(); render(); } };
+  const t0 = sessionStart;
+  return { L, close() { L.remove(); document.body.style.overflow = ''; Mascot.provider = defaultTip; Mascot.place(); if (!L.classList.contains('splash')) addActiveTime(Date.now() - t0); render(); checkGoal(); Notify.schedule(); } };
 }
 function finishScreen(L, close, node, { xp, gems, extra = '', perfect = false }) {
   const graded = !node.extra;
@@ -467,13 +483,14 @@ function finishScreen(L, close, node, { xp, gems, extra = '', perfect = false })
   if (graded && !first) gems = Math.round(gems / 3);
   const wasOpen = tracksOpen();
   S.xp += xp; S.gems += gems; if (graded) S.done[node.id] = true;
-  const dr = dayRec(); dr.xp += xp; dr.min += Math.round((Date.now() - sessionStart) / 60000); if (graded && node.kind === 'lesson' && !dr.l.includes(node.id)) dr.l.push(node.id);
+  const dr = dayRec(); dr.xp += xp; if (graded && node.kind === 'lesson' && !dr.l.includes(node.id)) dr.l.push(node.id);
+  if (node.kind === 'lesson' && !node.extra) markSeen(node.id, true);
   save();
   const before = S.streak, r = practicedToday(), lt = S.perDay[today()];
   if (graded) justDone = node.id;
   L.innerHTML = `<div class="lesson-in finish"><div class="center"><div class="fchispa">${chispa('happy', 92)}</div>${perfect ? '<div class="perfect">¡Sin fallos! +5 XP</div>' : ''}
     <div class="streakpill">${ledSVG(true, 34)}<b>${S.streak}</b> ${S.streak === 1 ? 'día' : 'días'}</div>
-    <h1>${r.extended ? (before === 0 ? '¡Racha encendida!' : '¡' + S.streak + ' días seguidos!') : esc(node.review ? 'Repaso completado' : node.extra ? 'Práctica completada' : node.kind === 'project' ? 'Proyecto completado' : node.kind === 'lesson' ? 'Lección completada' : 'Reto superado')}</h1>
+    <h1>${r.extended ? (before === 0 ? '¡Racha encendida!' : '¡' + S.streak + ' días seguidos!') : esc(node.warm ? 'Calentamiento hecho' : node.review ? 'Repaso completado' : node.extra ? 'Práctica completada' : node.kind === 'project' ? 'Proyecto completado' : node.kind === 'lesson' ? 'Lección completada' : 'Reto superado')}</h1>
     <p>${r.extended ? 'Has practicado hoy. Vuelve mañana para que siga creciendo.' : 'Tu racha de hoy ya estaba asegurada.'}${repairAvailable() && lt <= CHALLENGE_LESSONS ? ' Reto de recuperación: ' + lt + '/' + CHALLENGE_LESSONS + '.' : ''}</p>
     <div class="chips"><div class="chip"><b data-cu="${xp}">+0</b><span>XP</span></div><div class="chip gemchip"><b data-cu="${gems}">+0</b><span>gemas</span></div>${extra}</div>
     ${r.newMiles.map(([n, g]) => `<p><b>Hito de ${n} días:</b> +${g} gemas</p>`).join('')}${node.id === 'f6' ? '<p><b>Desbloqueado:</b> multímetro automático (actívalo en Perfil).</p>' : ''}${!wasOpen && tracksOpen() && TRACKS.length ? `<div class="unlocked"><b>¡Especialidades desbloqueadas!</b><span>${TRACKS.map(t => esc(t.short || t.title)).join(' · ')}</span><small>Las tienes en el carrusel, debajo de Microcontroladores.</small></div>` : ''}</div>
@@ -646,6 +663,10 @@ function defaultTip() {
   return { title: 'Chispa', text: pickOne(TIPS), mood: 'happy' };
 }
 let justDone = null, sessionStart = Date.now();
+function dayCard() {
+  const plan = S.warmDone !== today() && ALL.some(n => n.kind === 'lesson' && S.done[n.id] === true);
+  return `<div class="card daycard"><div class="row"><span class="dring">${goalRing(46)}</span><div class="grow"><h3>${goalLine()}</h3><p style="margin:0">${S.hist[today()] !== 'done' ? (S.streak ? `Practica hoy para llegar a ${S.streak + 1} días de racha. ` : 'Completa una actividad para encender tu racha. ') : ''}${S.warmDone === today() ? 'Calentamiento hecho. ¡A por la siguiente lección!' : plan ? 'Empieza con el calentamiento: preguntas rápidas de lo que ya sabes.' : 'Cada minuto de lección cuenta para tu objetivo.'}</p></div></div>${plan ? '<button class="btn amber" id="warmgo" style="margin-top:12px">Calentamiento de hoy</button>' : ''}</div>`;
+}
 
 /* ===================== RETO DE SIMULADOR ===================== */
 function startSim(node) {
@@ -743,9 +764,9 @@ function renderLab() {
 }
 
 /* ===================== ARRANQUE ===================== */
-(async () => { await loadNative(); evaluate(); pruneStats(); Fx.setSound(S.sound !== false); Mascot.mount(); Mascot.setEnabled(S.mascot !== false); Mascot.provider = defaultTip; render(); flush(); setTimeout(() => S.mascot !== false && S.hist[today()] !== 'done' && Mascot.say(defaultTip().text, 'happy', 5000, '¡Hola!'), 900); })();
+(async () => { await loadNative(); evaluate(); pruneStats(); Fx.setSound(S.sound !== false); Mascot.mount(); Mascot.setEnabled(S.mascot !== false); Mascot.provider = defaultTip; render(); flush(); Notify.schedule(); setTimeout(() => { if (!S.pending.length) maybeWarmup(); if (!document.querySelector('.lesson') && S.mascot !== false && S.hist[today()] !== 'done') Mascot.say(defaultTip().text, 'happy', 5000, '¡Hola!'); }, 700); })();
 document.addEventListener('click', e => { if (e.target.closest('.nav button, .node, .tcard, .backlink, .modal .btn, .cbtn, .seg button')) Fx.sound('tap'); }, true);
-document.addEventListener('visibilitychange', () => { if (document.hidden) { flushSave(); return; } evaluate(); if (!document.querySelector('.lesson')) render(); flush(); });
+document.addEventListener('visibilitychange', () => { if (document.hidden) { flushSave(); Notify.schedule(); return; } evaluate(); if (!document.querySelector('.lesson')) render(); flush(); Notify.schedule(); setTimeout(maybeWarmup, 400); });
 window.addEventListener('pagehide', flushSave);
 /* Botón atrás de Android: cierra la ventana abierta antes de salir de la app */
 (() => {
@@ -759,6 +780,6 @@ window.addEventListener('pagehide', flushSave);
       if (view !== 'learn') { go('learn'); return; }
       flushSave(); App.exitApp();
     });
-    App.addListener('pause', flushSave);
+    App.addListener('pause', () => { flushSave(); Notify.schedule(); });
   } catch (e) { }
 })();

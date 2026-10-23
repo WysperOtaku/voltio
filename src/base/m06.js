@@ -1,4 +1,4 @@
-/* Voltio · curso base, módulo 7: Condensadores y bobinas
+/* Ledly · curso base, módulo 7: Condensadores y bobinas
    Lote 3. VIZ propias: symLive, capQ, capLife, capComb, expCurve, coilKick, vldi (rc y rlCurrent ya existen).
    Generadores m6_*. Los conceptos que solo usa este módulo se amplían aquí; los compartidos no se tocan. */
 (() => {

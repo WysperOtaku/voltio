@@ -4,15 +4,16 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#14213D">
-<title>Voltio</title>
+<title>Ledly</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Atkinson+Hyperlegible:wght@400;700&family=Righteous&display=swap" rel="stylesheet">
 <style>/*CSS*/</style>
 </head>
 <body>
 <div class="app">
   <header class="top">
-    <div class="brand"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M13 2L5 14h6l-1 8 8-12h-6z" fill="var(--led)"/></svg>Voltio</div>
+    <div class="brand"><span class="logo" role="img" aria-label="Ledly">Le<svg class="logo-d" viewBox="0 0 62 100" aria-hidden="true"><defs><radialGradient id="lgb" cx="35%" cy="35%" r="75%"><stop offset="0" stop-color="#FFE9A8"/><stop offset=".5" stop-color="#FFC233"/><stop offset="1" stop-color="#FF9F00"/></radialGradient></defs><path d="M43 46h3q6 0 6 -6V5" class="lgleg"/><path d="M43 65h9q7 0 7 -7V15" class="lgleg"/><path d="M36 31H27a24.5 24.5 0 0 0 0 49h9z" fill="url(#lgb)"/><rect x="34.5" y="27" width="9.5" height="57" rx="3" fill="#E08A00"/><path d="M11 49a15 15 0 0 1 11 -11" stroke="#fff" stroke-opacity=".75" stroke-width="4.5" fill="none" stroke-linecap="round"/></svg>ly</span></div>
+    <button class="stat goalstat" data-go="profile" id="tGoal" aria-label="Objetivo diario"></button>
     <button class="stat" data-go="streak" aria-label="Racha"><span class="mini-led" id="tLed"></span><span id="tStreak">0</span></button>
     <button class="stat" data-go="streak" data-anchor="shop" aria-label="Protectores"><span class="ice"></span><span id="tFreeze">0</span></button>
     <button class="stat" data-go="streak" data-anchor="shop" aria-label="Gemas"><span class="gem"></span><span id="tGems">0</span></button>

@@ -1,4 +1,4 @@
-/* Voltio · estudio: exámenes de nivel al final de cada módulo, repaso de temario por módulo
+/* Ledly · estudio: exámenes de nivel al final de cada módulo, repaso de temario por módulo
    y resumen semanal. Solo declara funciones: se usan en tiempo de ejecución desde app.js. */
 
 /* ===================== ESTADÍSTICAS DIARIAS ===================== */
@@ -99,7 +99,7 @@ function startExam(node) {
     rec.weak = [...new Set(answers.filter(a => !a.ok).map(a => a.ex.c).filter(Boolean))];
     S.exam[u.id] = rec;
     answers.filter(a => !a.ok).forEach(a => examMiss(a.ex, u));
-    const dr = dayRec(); dr.x.push([u.id, pct]); dr.min += Math.round((Date.now() - t0) / 60000);
+    const dr = dayRec(); dr.x.push([u.id, pct]);
     save();
     // Por concepto: aciertos y total
     const byC = {}; answers.forEach(a => { const c = a.ex.c || '?'; const b = byC[c] || (byC[c] = [0, 0]); b[1]++; if (a.ok) b[0]++; });
@@ -200,10 +200,10 @@ function weekStats(endDay) {
     agg.perDay.push(r ? r.xp : 0);
     if (h === 'done') agg.active++;
     if (!r) return;
-    agg.xp += r.xp; agg.min += r.min; agg.l.push(...r.l); agg.x.push(...r.x);
+    agg.xp += r.xp; agg.min += (r.min || 0) + (r.sec || 0) / 60; agg.l.push(...r.l); agg.x.push(...r.x);
     for (const [c, [o, k]] of Object.entries(r.c)) { const s = agg.c[c] || (agg.c[c] = [0, 0]); s[0] += o; s[1] += k; }
   });
-  agg.l = [...new Set(agg.l)];
+  agg.l = [...new Set(agg.l)]; agg.min = Math.round(agg.min);
   const cs = Object.entries(agg.c).filter(([c, [o, k]]) => CONCEPTS[c] && o + k >= 3).map(([c, [o, k]]) => ({ c, o, k, acc: o / (o + k) }));
   agg.best = cs.filter(x => x.acc >= 0.75).sort((a, b) => b.acc - a.acc || (b.o + b.k) - (a.o + a.k)).slice(0, 3);
   agg.hard = cs.filter(x => x.acc < 0.75).sort((a, b) => a.acc - b.acc || (b.o + b.k) - (a.o + a.k)).slice(0, 3);

@@ -1,4 +1,4 @@
-/* Voltio · cada concepto tiene varias formas de explicarse.
+/* Ledly · cada concepto tiene varias formas de explicarse.
    Si fallas un ejercicio, aparece la siguiente explicación y una pregunta para comprobarla. */
 const mcq = (q, o, e, x = {}) => ({ t: 'mc', q, o, a: 0, e, ...x });
 const CONCEPTS = {

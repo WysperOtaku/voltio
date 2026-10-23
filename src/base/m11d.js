@@ -1,4 +1,4 @@
-/* Voltio · curso base, módulo 18: Microcontroladores III: tiempo y estados
+/* Ledly · curso base, módulo 18: Microcontroladores III: tiempo y estados
    Lote 6. Visualizaciones propias: millisTimeline, fsm, isrTimeline, ramBar. Generadores mc2…
    y conceptos de sus lecciones (mc_millis, mc_elapsed, mc_ulong, mc_tasks, mc_debounce, mc_edge,
    mc_fsm, mc_switch, mc_isr, mc_isrrules, mc_memwhere, mc_ram, mc_eeprom). */

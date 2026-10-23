@@ -1,4 +1,4 @@
-/* Voltio · especialidad: Radio y radiofrecuencia.
+/* Ledly · especialidad: Radio y radiofrecuencia.
    Ondas y propagación, decibelios y balance de enlace, espectro y ley, circuitos de RF, líneas y antenas,
    modulación y receptores, módulos de radio con microcontroladores y escucha con SDR.
    Cada lección sigue el mismo camino: predice → explora → entiende con dibujos → ejemplo resuelto → practica → resumen.

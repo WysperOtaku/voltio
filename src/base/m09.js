@@ -1,4 +1,4 @@
-/* Voltio · curso base, módulo 11: Transistores.
+/* Ledly · curso base, módulo 11: Transistores.
    Orden: BJT (j1) → zonas (j2) → resistencia de base (j3) → optoacopladores (i7) → Darlington y PNP (j4)
    → MOSFET (j6, j8) → carga de puerta y lado alto (j9) → calor (j10) → cargas inductivas y puente H (j7)
    → fuentes de corriente (j11) → amplificar (j5) → polarizar (j12).

@@ -1,4 +1,4 @@
-/* Voltio · simulador de protoboard */
+/* Ledly · simulador de protoboard */
 const Sim = (() => {
   const P = 20, COLS = 24, X0 = 30;
   const ROWS = ['+', '−', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', '+', '−'];

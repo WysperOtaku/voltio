@@ -1,4 +1,4 @@
-/* Voltio · comprobaciones de los retos de simulador y proyectos reales */
+/* Ledly · comprobaciones de los retos de simulador y proyectos reales */
 const CHECKS = (() => {
   const mA = x => Math.abs(x) * 1000;
   const lit = (api, c) => api.live[c.id] && !c.burnt && mA(api.live[c.id].I) >= 5 && mA(api.live[c.id].I) <= 25;

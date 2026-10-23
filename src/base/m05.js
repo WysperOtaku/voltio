@@ -1,4 +1,4 @@
-/* Voltio · curso base, módulo 6: Análisis de circuitos
+/* Ledly · curso base, módulo 6: Análisis de circuitos
    Lote 3. VIZ propias: nodal, thevenin, norton, maxPower, bridge. Generadores m5_*.
    Los conceptos de este módulo solo los usa este módulo: aquí se amplían o se crean. */
 (() => {

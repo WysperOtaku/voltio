@@ -1,4 +1,4 @@
-/* Voltio · curso base, módulo 1b: Tu primer circuito.
+/* Ledly · curso base, módulo 1b: Tu primer circuito.
    b20 las piezas (LED, interruptor, pulsador, resistencia como pieza) · e1 símbolos · b6 abierto, cerrado y
    cortocircuito · e3 leer esquemas (uniones y cruces) · e4 convenciones (masa, etiquetas) · e5 protoboard ·
    e6 del esquema a la protoboard. Todavía sin ley de Ohm ni cálculo de la resistencia del LED. */

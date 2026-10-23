@@ -1,4 +1,4 @@
-/* Voltio · curso base, módulo 13: Amplificadores operacionales
+/* Ledly · curso base, módulo 13: Amplificadores operacionales
    Orden: k6 (reglas de oro, no inversor, inversor, seguidor) → k10 (límites reales) → k11 (sumador y restador)
    → k7 (comparador) → s5 → k14 (Schmitt) → k12 (integrador) → k13 (filtros activos).
    Usa lo visto antes: divisor (d6), Wheatstone (d8), RC (g4), filtros RC y dB (h1, h5, h10), pull-up y colector abierto (k20).

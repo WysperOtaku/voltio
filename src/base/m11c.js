@@ -1,4 +1,4 @@
-/* Voltio · curso base, módulo 17: Microcontroladores II: entradas y señales
+/* Ledly · curso base, módulo 17: Microcontroladores II: entradas y señales
    Lote 6. Este archivo trae sus propias visualizaciones (levels, pinFloat, ascii, sar, adcMap,
    alias, r2rLadder, pwmRC), sus generadores (mc2…) y los conceptos de sus lecciones. */
 (() => {

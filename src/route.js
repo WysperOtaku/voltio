@@ -1,4 +1,4 @@
-/* Voltio · rutado de PCB a una cara: une cada par de pads sin cruzar pistas */
+/* Ledly · rutado de PCB a una cara: une cada par de pads sin cruzar pistas */
 const Route = (() => {
   const NETC = { VCC: '#E5484D', GND: '#3E8FCB', LED: '#F2A900', SW: '#2EA44F', OUT: '#9B59D0', CLK: '#F07D10' };
   const LEVELS = {

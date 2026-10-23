@@ -1,4 +1,4 @@
-/* Voltio · curso base, módulo 4: Serie y paralelo.
+/* Ledly · curso base, módulo 4: Serie y paralelo.
    Enseña: serie (d1), ley de mallas (d5), resistencia de un LED (d20), resistencias reales: E12, colores y SMD (g1),
    tolerancia (d21), inversos y fórmula del paralelo (a5), paralelo (d2), ley de nudos (d4), mixtos y divisor de
    corriente (d3), divisor de tensión y su carga (d6), potenciómetros y sensores resistivos (g2).

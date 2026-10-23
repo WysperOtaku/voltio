@@ -1,4 +1,4 @@
-/* Voltio · curso base, módulo 9: Alterna a fondo
+/* Ledly · curso base, módulo 9: Alterna a fondo
    Lote 3. VIZ propias: xl, phasor, probeComp, riseTime, filter2, pfTriangle, xfmr (zTriangle y lcResonance ya existen).
    Generadores m7b_*. Los conceptos que solo usa este módulo se amplían o se crean aquí. */
 (() => {

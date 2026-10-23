@@ -1,4 +1,4 @@
-/* Voltio · curso base, módulo 19: Microcontroladores IV: buses, sensores y motores (puerta de las especialidades)
+/* Ledly · curso base, módulo 19: Microcontroladores IV: buses, sensores y motores (puerta de las especialidades)
    Lote 6. Visualizaciones propias: i2cBus, shift595, mux7seg, ultrasonic, mcHbridge, servoPulse, sleepAvg,
    mcuPicker, pcbLayers. Generadores mc2… y conceptos de sus lecciones. */
 (() => {

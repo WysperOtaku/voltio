@@ -1,4 +1,4 @@
-/* Voltio · motor eléctrico
+/* Ledly · motor eléctrico
    Análisis nodal. Fuentes como equivalentes de Norton; diodos, LEDs, zener,
    transistores NPN y comparadores con modelos lineales a tramos que se iteran
    hasta que sus estados son coherentes. Condensadores con Euler implícito. */

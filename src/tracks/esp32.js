@@ -1,4 +1,4 @@
-/* Voltio · especialidad: ESP32 a fondo. El chip, sus periféricos, FreeRTOS, la flash,
+/* Ledly · especialidad: ESP32 a fondo. El chip, sus periféricos, FreeRTOS, la flash,
    las radios a nivel de dispositivo (WiFi, BLE, ESP-NOW), el bajo consumo y ESP-IDF.
    Código para el núcleo Arduino-ESP32 3.x (basado en ESP-IDF 5) salvo que se indique. */
 (() => {

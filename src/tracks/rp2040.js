@@ -1,4 +1,4 @@
-/* Voltio · especialidad: Raspberry Pi Pico (RP2040 y RP2350).
+/* Ledly · especialidad: Raspberry Pi Pico (RP2040 y RP2350).
    De Arduino a MicroPython, y de ahí al SDK en C, el PIO, el DMA, los dos núcleos, USB,
    WiFi/BLE, bajo consumo y tu propia placa. Texto, ejercicios, programas y proyectos originales. */
 (() => {

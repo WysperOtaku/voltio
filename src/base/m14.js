@@ -1,4 +1,4 @@
-/* Voltio · curso base, módulo 21: Diseño de PCB (tras las especialidades).
+/* Ledly · curso base, módulo 21: Diseño de PCB (tras las especialidades).
    Enseña: flujo de KiCad y netlist (q1), huellas (q2), colocación y desacoplo (q3), rutado y anchura de pistas (q4),
    planos de masa, retorno y cobre como disipador (q8), líneas de transmisión, RF y emisiones (q9), DRC, capas y
    Gerber (q5), BOM, pedido y montaje (q10), soldar SMD (q7).
