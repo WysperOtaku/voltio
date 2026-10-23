@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Icono pequeño de las notificaciones: Chispa en diagonal, en silueta blanca (Android la tiñe).
+     Ojos y sonrisa recortados con evenOdd. Se escala y gira alrededor del centro del LED. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24">
+    <group android:pivotX="45" android:pivotY="58" android:scaleX="0.205" android:scaleY="0.205"
+        android:rotation="45" android:translateX="-33.5" android:translateY="-46.5">
+        <path android:fillColor="#FFFFFFFF" android:fillType="evenOdd"
+            android:pathData="M14,76 L14,42 A31,31 0 0,1 76,42 L76,76 Z
+                M27,47 A6,6.6 0 1,0 39,47 A6,6.6 0 1,0 27,47 Z
+                M51,47 A6,6.6 0 1,0 63,47 A6,6.6 0 1,0 51,47 Z
+                M33,56 Q45,70 57,56 Q45,63 33,56 Z" />
+        <path android:fillColor="#FFFFFFFF" android:pathData="M8,72 L82,72 L82,84 L8,84 Z" />
+        <path android:fillColor="#FFFFFFFF" android:pathData="M29,84 L37,84 L37,112 L29,112 Z M53,84 L61,84 L61,106 L53,106 Z" />
+    </group>
+</vector>
